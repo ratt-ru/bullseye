@@ -39,8 +39,19 @@ namespace imaging {
 		      grid automatically.
      grid_no_pixels: number of pixels per polarization grid (nx * ny)
      convolution_weight: convolution weight to be applied to each polarization
-     */
+    */
     inline void grid_polarization_terms(std::size_t term_flat_index, std::size_t grid_no_pixels, convolution_base_type convolution_weight) __restrict__ {
+      throw std::exception("Undefined behaviour");
+    }
+    /**
+     Serves as proxy to future implementations. All gridding policies must support gridding the conjugate as descussed on Synthesis Imaging II, pg. 25-56. 
+     Subsequent headers should conform to the following:
+     term_flat_index: flat index of the individual polarization grids. Subsequent implementations should offset this index to the correct
+		      grid automatically.
+     grid_no_pixels: number of pixels per polarization grid (nx * ny)
+     convolution_weight: convolution weight to be applied to each polarization
+    */
+    inline void grid_polarization_conjugate_terms(std::size_t term_flat_index, std::size_t grid_no_pixels, convolution_base_type convolution_weight) __restrict__ {
       throw std::exception("Undefined behaviour");
     }
   };
@@ -66,6 +77,7 @@ namespace imaging {
       const weights_base_type * __restrict__ _pol_weights;
       const bool * __restrict__ _flags;
       std::complex<visibility_base_type> _visibility;
+      std::complex<visibility_base_type> _conj_visibility;
       std::size_t _no_polarizations_in_data;
       std::size_t _polarization_index;
   public:
@@ -105,9 +117,13 @@ namespace imaging {
 	*/
 	_phase_transform_term.transform(_visibility,uvw);
 	_visibility *= weight * (int)(!flag); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
+	_conj_visibility = conj(_visibility);
       }
       inline void grid_polarization_terms(std::size_t term_flat_index, std::size_t grid_no_pixels, convolution_base_type convolution_weight) __restrict__ {
 	_output_grids[term_flat_index] += convolution_weight * _visibility;
+      }
+      inline void grid_polarization_conjugate_terms(std::size_t term_flat_index, std::size_t grid_no_pixels, convolution_base_type convolution_weight) __restrict__ {
+	_output_grids[term_flat_index] += convolution_weight * _conj_visibility;
       }
   };
   
@@ -127,6 +143,7 @@ namespace imaging {
       const polarization_weights_2x2<weights_base_type> * __restrict__ _pol_weights;
       const polarization_weights_2x2<bool>* __restrict__ _flags;
       jones_2x2<visibility_base_type> _visibility_polarizations;
+      jones_2x2<visibility_base_type> _conj_visibility_polarizations;
   public:
       /**
        Arguements:
@@ -161,6 +178,7 @@ namespace imaging {
 	for (std::size_t i = 0; i < 4; ++i){
 	  _phase_transform_term.transform(_visibility_polarizations._polarizations[i],uvw);
 	  _visibility_polarizations._polarizations[i] *= weights._weights[i] * (int)(!flags._weights[i]); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
+	  _conj_visibility_polarizations._polarizations[i] = conj(_visibility_polarizations._polarizations[i]);
 	}
       }
       __attribute__((optimize("unroll-loops")))
@@ -168,6 +186,13 @@ namespace imaging {
 	for (std::size_t i = 0; i < 4; ++i){
 	  std::size_t grid_offset = i * grid_no_pixels;
 	  _output_grids[grid_offset + term_flat_index] += convolution_weight * _visibility_polarizations._polarizations[i];
+	}
+      }
+      __attribute__((optimize("unroll-loops")))
+      inline void grid_polarization_conjugate_terms(std::size_t term_flat_index, std::size_t grid_no_pixels, convolution_base_type convolution_weight) __restrict__ {
+	for (std::size_t i = 0; i < 4; ++i){
+	  std::size_t grid_offset = i * grid_no_pixels;
+	  _output_grids[grid_offset + term_flat_index] += convolution_weight * _conj_visibility_polarizations._polarizations[i];
 	}
       }
   };

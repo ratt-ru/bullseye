@@ -5,14 +5,17 @@
 #include <complex>
 #include <string>
 #include <casa/Quanta/Quantum.h>
+#include <cmath>
 
 #include "python2.7/Python.h"
 #include "numpy/arrayobject.h"
+
 #include "uvw_coord.h"
 #include "baseline_transform_policies.h"
 #include "phase_transform_policies.h"
 #include "polarization_gridding_policies.h"
-#include <cmath>
+#include "convolution_policies.h"
+
 
 //Enable this if you want some progress printed out:
 #define GRIDDER_PRINT_PROGRESS
@@ -28,12 +31,8 @@ namespace imaging {
 		cellx,celly: size of the cells (in arcsec)
 		timestamp_count, baseline_count, channel_count, polarization_term_count: (integral counts as specified)
 		reference_wavelengths: associated wavelength of each channel used to sample visibilities (wavelength = speed_of_light / channel_frequency)
-		conv: precomputed convolution FIR of size (conv_support x conv_oversample)^2, flat-indexed
-		conv_support, conv_oversample: integral numbers
-		polarization_index: index of the polarization correlation term currently being gridded
-			PRECONDITIONS:
+			PRECONDITION:
 			1. timestamp_count x baseline_count x channel_count x polarization_term_count <= ||visibilities||
-			2. (conv_support x conv_oversample)^2 == ||conv||
 	*/
 	template  <typename visibility_base_type, typename uvw_base_type, 
 		   typename reference_wavelengths_base_type, typename convolution_base_type,
@@ -47,28 +46,21 @@ namespace imaging {
 											     phase_transform_policy<visibility_base_type, 
 														    uvw_base_type, 
 														    transform_disable_phase_rotation>,
-											     gridding_4_pol> >
-	void grid(polarization_gridding_policy_type active_polarization_gridding_policy,
+											     gridding_4_pol>,
+		  typename convolution_policy_type = convolution_policy<convolution_base_type, uvw_base_type, baseline_transformation_policy_type, convolution_precomputed_fir> >
+	void grid(polarization_gridding_policy_type & __restrict__ active_polarization_gridding_policy,
 		  const baseline_transformation_policy_type & __restrict__ active_baseline_transform_policy,
+		  const convolution_policy_type & __restrict__ active_convolution_policy,
 		  const uvw_coord<uvw_base_type> * __restrict__ uvw_coords,
 		  std::size_t nx, std::size_t ny, casa::Quantity cellx, casa::Quantity celly,
 		  std::size_t timestamp_count, std::size_t baseline_count, std::size_t channel_count,
-		  const reference_wavelengths_base_type *__restrict__ reference_wavelengths,
-		  const convolution_base_type * __restrict__ conv, std::size_t conv_support, std::size_t conv_oversample)
-	{
+		  const reference_wavelengths_base_type *__restrict__ reference_wavelengths){
 		/*
 		Scale the UVW coords so that we can image only a limited section of sky (same scaling as used in AIPS++ 
 		(casarest package) and by implication lwimager).
 		*/
                 uvw_base_type u_scale=nx*cellx.getValue("rad");
                 uvw_base_type v_scale=ny*celly.getValue("rad");
-		std::size_t grid_u_centre=nx/2;
-                std::size_t grid_v_centre=ny/2;
-		std::size_t grid_size_in_pixels=nx*ny;
-		std::size_t conv_dim_size = (conv_support * conv_oversample);
-		std::size_t conv_dim_centre = conv_dim_size / 2;
-		uvw_base_type u_conv_scale = 1/uvw_base_type(conv_oversample); //convolution pixel is oversample times smaller than scaled grid cell size
-		uvw_base_type v_conv_scale = 1/uvw_base_type(conv_oversample);
 		
 		#ifdef GRIDDER_PRINT_PROGRESS
 		//give some indication of progress:
@@ -112,39 +104,18 @@ namespace imaging {
 				uvw._u = uvw._u*u_scale;
 				uvw._v = uvw._v*v_scale;
 				
-				/*
-				compute the distance the u,v coordinate is from the bin center, scaled by the oversampling factor
-				(size of the jump in imaging space):
+				/*				
+				On page 25-26 of Synthesis Imaging II Thompson notes that the correlator output is a measure of the visibility at two points on the
+				uv grid. This corresponds to the baseline and the reversed baseline direction: b and -b. The latter represents the complex conjugate of the visibility
+				on b. Rather than running though all the visibilities twice we compute uvw, -uvw, V and V*. We should be able to save ourselves some compuation on phase
+				shifts, etc by so doing. All gridder policies must reflect this and support gridding both the complex visibility and its conjugate. 
 				*/
-				uvw_base_type frac_u = conv_oversample*(uvw._u - (uvw_base_type)(int64_t)uvw._u); 
-				uvw_base_type frac_v = conv_oversample*(uvw._v - (uvw_base_type)(int64_t)uvw._v); 
- 				uvw._u += grid_u_centre;
- 				uvw._v += grid_v_centre;
+				uvw_coord<uvw_base_type> uvw_neg = uvw;
+				uvw_neg._u *= -1;
+				uvw_neg._v *= -1;
 				
-				/*
-				now "convolve" with filter:
-				*/
-				for (std::size_t conv_v = 0; conv_v < conv_dim_size; ++conv_v){
-					std::size_t grid_v = uvw._v + (conv_v - conv_dim_centre)*v_conv_scale;
-					if (grid_v >= ny) continue;
-					
-					std::size_t offset_conv_v = frac_v + conv_v;
-					for (std::size_t conv_u = 0; conv_u < conv_dim_size; ++conv_u){
-						std::size_t grid_u = uvw._u + (conv_u - conv_dim_centre)*u_conv_scale;
-						if (grid_u >= nx) continue;
-						
-						std::size_t offset_conv_u = frac_u + conv_u;	
-						std::size_t conv_flat_index = ((offset_conv_v)*conv_dim_size + offset_conv_u); //flatten convolution index
-						//by definition the convolution FIR is 0 outside the support region:
-						visibility_base_type conv_weight = (visibility_base_type) ( (offset_conv_u < conv_dim_size && 
-													     offset_conv_v < conv_dim_size) ? conv[conv_flat_index] : 0);
-						std::size_t grid_flat_index = ((grid_v)*nx+(grid_u)); //flatten grid index
-						/*
-						 The policy must add the weighted visibility to the correct grid if multiple polarizations are involved:
-						 */
-						active_polarization_gridding_policy.grid_polarization_terms(grid_flat_index,grid_size_in_pixels,conv_weight);
-					}
-				}
+				active_convolution_policy.convolve(uvw, &polarization_gridding_policy_type::grid_polarization_terms);
+				active_convolution_policy.convolve(uvw_neg, &polarization_gridding_policy_type::grid_polarization_conjugate_terms);
                         }
                 }
                 
@@ -299,6 +270,9 @@ static PyObject * grid (PyObject *self, PyObject *args) {
 			typedef imaging::polarization_gridding_policy<visibility_base_type, uvw_base_type, 
 								      polarization_weights_base_type, convolution_base_type, grid_base_type,
 								      phase_transform_policy_type, gridding_single_pol> polarization_gridding_policy_type;
+			typedef imaging::convolution_policy<convolution_base_type,uvw_base_type,
+							    polarization_gridding_policy_type, convolution_precomputed_fir> convolution_policy_type;
+			
 			baseline_transform_policy_type uvw_transform; //standard: no uvw rotation
 			phase_transform_policy_type phase_transform; //standard: no phase rotation
 			polarization_gridding_policy_type polarization_policy(phase_transform,
@@ -307,18 +281,20 @@ static PyObject * grid (PyObject *self, PyObject *args) {
 									      (polarization_weights_base_type*)(polarization_weights->data),
 									      (bool*)(flags->data),
 									      number_of_polarization_terms,polarization_index);
+			convolution_policy_type convolution_policy(facet_nx,facet_ny,conv_support,conv_oversample,
+								   (convolution_base_type*)conv->data, polarization_policy);
 			imaging::grid<visibility_base_type,uvw_base_type,
 				      reference_wavelengths_base_type,convolution_base_type,
 				      polarization_weights_base_type,grid_base_type,
 				      baseline_transform_policy_type,
-				      polarization_gridding_policy_type>
-							     (polarization_policy,uvw_transform,
+				      polarization_gridding_policy_type,
+				      convolution_policy_type>
+							     (polarization_policy,uvw_transform,convolution_policy,
                                         	     	      (uvw_coord<uvw_base_type>*)uvw_coords->data,
 	                                             	      facet_nx,facet_ny,
         	                                     	      casa::Quantity(facet_cell_size_x,"arcsec"),casa::Quantity(facet_cell_size_y,"arcsec"),
                 	                             	      timestamp_count,baseline_count,channel_count,
-                        	                     	      (reference_wavelengths_base_type*)reference_wavelengths->data,
-						     	      (convolution_base_type*)conv->data,conv_support,conv_oversample);
+                        	                     	      (reference_wavelengths_base_type*)reference_wavelengths->data);
 		return Py_BuildValue("O",output_grid);	
 	} else {
 		//construct return array
@@ -341,6 +317,9 @@ static PyObject * grid (PyObject *self, PyObject *args) {
 			typedef imaging::polarization_gridding_policy<visibility_base_type, uvw_base_type, 
 								      polarization_weights_base_type, convolution_base_type, grid_base_type,
 								      phase_transform_policy_type, gridding_single_pol> polarization_gridding_policy_type;
+			typedef imaging::convolution_policy<convolution_base_type,uvw_base_type,
+							    polarization_gridding_policy_type,convolution_precomputed_fir> convolution_policy_type;
+			
 			baseline_transform_policy_type uvw_transform(0,0,casa::Quantity(phase_centre_ra,"arcsec"),casa::Quantity(phase_centre_dec,"arcsec"),
 								     casa::Quantity(new_phase_ra,"arcsec"),casa::Quantity(new_phase_dec,"arcsec")); //lm faceting
 			phase_transform_policy_type phase_transform(casa::Quantity(phase_centre_ra,"arcsec"),casa::Quantity(phase_centre_dec,"arcsec"),
@@ -352,18 +331,19 @@ static PyObject * grid (PyObject *self, PyObject *args) {
 									      (polarization_weights_base_type*)(polarization_weights->data),
 									      (bool*)(flags->data),
 									      number_of_polarization_terms,polarization_index);
-							      
+			convolution_policy_type convolution_policy(facet_nx,facet_ny,conv_support,conv_oversample,
+								   (convolution_base_type*)conv->data, polarization_policy);
 			imaging::grid<visibility_base_type,uvw_base_type,
 				      reference_wavelengths_base_type,convolution_base_type,
 				      polarization_weights_base_type,grid_base_type,
 				      baseline_transform_policy_type,
-				      polarization_gridding_policy_type>(polarization_policy,uvw_transform,
+				      polarization_gridding_policy_type,
+				      convolution_policy_type>(polarization_policy,uvw_transform,convolution_policy,
 									  (uvw_coord<uvw_base_type>*)uvw_coords->data,
 									  facet_nx,facet_ny,
 									  casa::Quantity(facet_cell_size_x,"arcsec"),casa::Quantity(facet_cell_size_y,"arcsec"),
 									  timestamp_count,baseline_count,channel_count,
-									  (reference_wavelengths_base_type*)reference_wavelengths->data,
-									  (convolution_base_type*)conv->data,conv_support,conv_oversample);
+									  (reference_wavelengths_base_type*)reference_wavelengths->data);
 			printf(" <DONE>\n");	
 		}
 	
