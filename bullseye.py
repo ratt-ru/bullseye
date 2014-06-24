@@ -1,7 +1,7 @@
 #!/usr/bin/python
 import matplotlib
 import pylab
-pylab.ion() #don't start closing other GTK windows!!
+#pylab.ion() #don't start closing other GTK windows!!
 from gi.repository import Gtk
 from viewcontrollers import frmMain
 

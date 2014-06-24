@@ -57,23 +57,34 @@ class frmMain:
 		self._polarization = int(model.get_value(itr,1))
 
 		pol_label = ["XX","XY","YX","YY"]
-		conv_FIR = convolution_filter.convolution_filter(conv_support,conv_oversample)._conv_FIR.astype(np.float32)
+		conv = convolution_filter.convolution_filter(conv_support,conv_support,conv_oversample,self._img_size_l,self._img_size_m)
 		print("GRIDDING POLARIZATION %s..." % pol_label[self._polarization]),
                 g = libimaging.grid(self._data_set._arr_data,self._data_set._arr_uvw,
-                                    conv_FIR,conv_support,conv_oversample,
+                                    conv._conv_FIR.astype(np.float32),conv_support,conv_oversample,
                                     self._data_set._no_timestamps,self._data_set._no_baselines,self._data_set._no_channels,self._data_set._no_polarization_correlations,
                                     self._polarization,self._data_set._chan_wavelengths,self._data_set._arr_flaged,self._data_set._arr_weights,
                                     self._data_set._phase_centre[0,0],self._data_set._phase_centre[0,1],
                                     None,self._img_size_l,self._img_size_m,self._img_cell_l,self._img_cell_m)
                 print " <DONE>"
-                g = fft_utils.ifft2(g[0,:,:])
-                i = pylab.imshow(np.real(g),interpolation="nearest",cmap = pylab.get_cmap('hot'),extent=[0, self._img_size_l-1, 0, self._img_size_m-1])
+                g = np.real(fft_utils.ifft2(g[0,:,:]))/conv._F_detaper
+                i = pylab.imshow(g,interpolation="nearest",cmap = pylab.get_cmap('hot'),extent=[0, self._img_size_l-1, 0, self._img_size_m-1])
 		pylab.close("all")
 		i.write_png(self.IMAGE_TMP_FILE_NAME,noscale=True)		
 		self._low_res_image = cairo.ImageSurface.create_from_png(self.IMAGE_TMP_FILE_NAME)
 	 	self._builder.get_object("cvsLowRes").queue_draw()
 		self.__change_visibilities()
-        	
+		'''
+		pylab.figure()
+		pylab.title("CONVOLUTION F")
+		pylab.imshow(conv._conv_FIR,cmap=pylab.get_cmap("hot"))
+		pylab.colorbar()
+		pylab.figure()
+		pylab.title("DETAPERER F")
+		pylab.imshow(conv._F_detaper,cmap=pylab.get_cmap("hot"))
+		pylab.colorbar()
+		pylab.show(block=True)
+		'''
+
 	def on_cvsLowRes_draw(self,widget,cr):
 		if self._low_res_image != None:
 			rect = self._builder.get_object("cvsLowRes").get_allocation()
@@ -151,7 +162,7 @@ class frmMain:
 			itr = model.iter_next(itr)
 			conv_support = int(model.get_value(itr,1))
 			itr = model.iter_next(itr)
-			conv_oversampling = int(model.get_value(itr,1))
+			conv_oversample = int(model.get_value(itr,1))
 			
 			rect = self._builder.get_object("cvsLowRes").get_allocation()
                         img_height = self._low_res_image.get_height()
@@ -161,14 +172,15 @@ class frmMain:
 				
 			facet_centres = np.array([[facet_ra,facet_dec]],dtype=np.float32)
 			pol_label = ["XX","XY","YX","YY"]
-			conv_FIR = convolution_filter.convolution_filter(conv_support,conv_oversampling)._conv_FIR.astype(np.float32)						
+			conv = convolution_filter.convolution_filter(conv_support,conv_support,conv_oversample,facet_size_l,facet_size_m)
                 	g = libimaging.grid(self._data_set._arr_data,self._data_set._arr_uvw,
-                                    conv_FIR,conv_support,conv_oversampling,
+                                    conv._conv_FIR.astype(np.float32),conv_support,conv_oversample,
                                     self._data_set._no_timestamps,self._data_set._no_baselines,self._data_set._no_channels,self._data_set._no_polarization_correlations,
                                     self._polarization,self._data_set._chan_wavelengths,self._data_set._arr_flaged,self._data_set._arr_weights,
                                     self._data_set._phase_centre[0,0],self._data_set._phase_centre[0,1],
                                     facet_centres,facet_size_l,facet_size_m,facet_cell_l,facet_cell_m)
-                	g = fft_utils.ifft2(g[0,:,:])		
+                	g = fft_utils.ifft2(g[0,:,:])/conv._F_detaper
+			
 	        	pylab.figure()
 			pylab.imshow(np.real(g),interpolation="nearest",cmap = pylab.get_cmap('hot'),extent=[0, facet_size_l-1, 0, facet_size_m-1])
 			pylab.colorbar()

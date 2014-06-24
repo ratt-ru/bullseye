@@ -5,39 +5,52 @@ Created on Mar 20, 2014
 '''
 import numpy as np
 import math
+import fft_utils
+
+def gausian(u,v,grid_max_u,grid_max_v):
+  du = 1.0 / grid_max_u
+  dv = 1.0 / grid_max_v  
+    
+  return ((1.0/(0.750*du*math.sqrt(math.pi))*math.exp(-(u/0.750*du)**2)) *
+	  (1.0/(0.750*dv*math.sqrt(math.pi))*math.exp(-(v/0.750*dv)**2)))
+      
+def gausian_fourier(l,m,grid_max_u,grid_max_v):
+  du = 1.0 / grid_max_u
+  dv = 1.0 / grid_max_v  
+    
+  return ((math.exp(-(math.pi*0.750*du*l)**2)) *
+	  (math.exp(-(math.pi*0.750*dv*m)**2)))
+
 class convolution_filter(object):
     '''
     classdocs
     '''
-    def __init__(self, convolution_fir_support, oversampling_factor):
+    def __init__(self, convolution_fir_support_u,convolution_fir_support_v, oversampling_factor, grid_size_l, grid_size_m):
         '''
         Constructor
         '''
         print("CREATING CONVOLUTION FILTER... "),
-	convolution_size = convolution_fir_support * oversampling_factor
-        convolution_centre = convolution_size / 2
-	self._conv_FIR = np.zeros([convolution_size,convolution_size])
-        for vi in range(0,convolution_size):
-            for ui in range(0,convolution_size):
-                self._conv_FIR[vi,ui] = self.__gausian_sinc((ui-convolution_centre)*(convolution_fir_support/float(convolution_size)),
-                                                           (vi-convolution_centre)*(convolution_fir_support/float(convolution_size)),
-                                                           convolution_fir_support,convolution_fir_support)
+	convolution_size_u = convolution_fir_support_u * oversampling_factor
+	convolution_size_v = convolution_fir_support_v * oversampling_factor
+        convolution_centre_u = convolution_size_u / 2
+        convolution_centre_v = convolution_size_v / 2
+	self._conv_FIR = np.zeros([convolution_size_u,convolution_size_v])
+        for vi in range(0,convolution_size_v):
+            for ui in range(0,convolution_size_u):
+                self._conv_FIR[ui,vi] = gausian((ui - convolution_centre_u)/float(convolution_size_u)*convolution_fir_support_u,
+                                                (vi - convolution_centre_v)/float(convolution_size_v)*convolution_fir_support_v,
+                                                grid_size_l,grid_size_m)
         print " <DONE>"
-    def __sinc2D(self,x,y):
-    	px = math.pi*x+0.000001
-    	py = math.pi*y+0.000001
-    	return (math.sin(px)*math.sin(py))/(px*py)
-
-    def __gausian_sinc(self,u,v,grid_max_u,grid_max_v):
-    	u = u+0.000001
-    	v = v+0.000001
-    	du = 1.0 / grid_max_u
-    	dv = 1.0 / grid_max_v  
-    
-    	return ((math.sin(np.pi*u/(1.55*du))/(np.pi*u))*math.exp(-(u/(2.52*du))**2)*
-            	(math.sin(np.pi*v/(1.55*dv))/(np.pi*v))*math.exp(-(v/(2.52*dv))**2))
-
-    def __rect_func(self,u,v,grid_max_u,grid_max_v):
-    	du = 1.0 / grid_max_u
-    	dv = 1.0 / grid_max_v
-    	return ((1/du)*(1.0 if abs(u/du) <= 0.5 else 0.0)) * ((1/dv)*(1.0 if abs(v/dv) <= 0.5 else 0.0))
+        
+        print("CREATING DETAPERER... "),
+	
+        detaper_centre_l = grid_size_l / 2
+        detaper_centre_m = grid_size_m / 2
+	
+	self._F_detaper = np.zeros([grid_size_l,grid_size_m])
+	for mi in range(0,grid_size_m):
+	  for li in range(0,grid_size_l):
+            self._F_detaper[li,mi] = gausian_fourier((li - detaper_centre_l)/float(detaper_centre_l)*convolution_fir_support_u, 
+						     (mi - detaper_centre_m)/float(detaper_centre_m)*convolution_fir_support_v,
+						     grid_size_l,grid_size_m)
+        print " <DONE>"

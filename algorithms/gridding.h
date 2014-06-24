@@ -56,8 +56,11 @@ namespace imaging {
 		  std::size_t timestamp_count, std::size_t baseline_count, std::size_t channel_count,
 		  const reference_wavelengths_base_type *__restrict__ reference_wavelengths){
 		/*
-		Scale the UVW coords so that we can image only a limited section of sky (same scaling as used in AIPS++ 
-		(casarest package) and by implication lwimager).
+		Pg. 138, 145-147, Synthesis Imaging II (Briggs, Schwab & Sramek)
+		Scale the UVW coords so that we can image only the primary field of view:
+		-(Nx * cellx)/2 < l < (Nx * cellx)/2
+		-(Ny * celly)/2 < m < (Ny * celly)/2
+		Scaling the uv coordinates will translate to scaling the FFT
 		*/
                 uvw_base_type u_scale=nx*cellx.getValue("rad");
                 uvw_base_type v_scale=ny*celly.getValue("rad");
