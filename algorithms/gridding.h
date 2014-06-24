@@ -31,8 +31,9 @@ namespace imaging {
 		cellx,celly: size of the cells (in arcsec)
 		timestamp_count, baseline_count, channel_count, polarization_term_count: (integral counts as specified)
 		reference_wavelengths: associated wavelength of each channel used to sample visibilities (wavelength = speed_of_light / channel_frequency)
-			PRECONDITION:
+			PRECONDITIONS:
 			1. timestamp_count x baseline_count x channel_count x polarization_term_count <= ||visibilities||
+			2. ||flagged rows|| == ||visibilities||
 	*/
 	template  <typename visibility_base_type, typename uvw_base_type, 
 		   typename reference_wavelengths_base_type, typename convolution_base_type,
@@ -52,6 +53,7 @@ namespace imaging {
 		  const baseline_transformation_policy_type & __restrict__ active_baseline_transform_policy,
 		  const convolution_policy_type & __restrict__ active_convolution_policy,
 		  const uvw_coord<uvw_base_type> * __restrict__ uvw_coords,
+		  const bool * __restrict__ flagged_rows,
 		  std::size_t nx, std::size_t ny, casa::Quantity cellx, casa::Quantity celly,
 		  std::size_t timestamp_count, std::size_t baseline_count, std::size_t channel_count,
 		  const reference_wavelengths_base_type *__restrict__ reference_wavelengths){
@@ -70,7 +72,7 @@ namespace imaging {
 		float progress_step_size = 10.0;
 		float next_progress_step = progress_step_size;
 		#endif
-                for (std::size_t bt = 0; bt < baseline_count*timestamp_count; ++bt){
+                for (std::size_t bt = 0; bt < baseline_count*timestamp_count; ++bt){ //this corresponds to the rows of the MS 2.0 MAIN table definition
 			#ifdef GRIDDER_PRINT_PROGRESS
 			float progress = bt/float(baseline_count*timestamp_count)*100.0f;
 			if (progress > next_progress_step){
@@ -79,6 +81,7 @@ namespace imaging {
 				next_progress_step += progress_step_size;
 			}
 			#endif
+			if (flagged_rows[bt]) continue; //if the entire row is flagged don't continue
                         for (std::size_t c = 0; c < channel_count; ++c){
 				/*
 				 Get uvw coords and measure the uvw coordinates in terms of wavelength
@@ -157,15 +160,16 @@ static PyObject * grid (PyObject *self, PyObject *args) {
 	size_t polarization_index;
         PyArrayObject * reference_wavelengths;
 	PyArrayObject * flags;
+	PyArrayObject * flagged_rows;
 	PyArrayObject * polarization_weights;
 	double phase_centre_ra;
 	double phase_centre_dec;
-	PyArrayObject *	facet_centres;
+	PyArrayObject * facet_centres;
 	size_t facet_nx;
 	size_t facet_ny;
 	double facet_cell_size_x;
 	double facet_cell_size_y;
-	if (!PyArg_ParseTuple(args, "OOOkkkkkkkOOOddOkkdd", 
+	if (!PyArg_ParseTuple(args, "OOOkkkkkkkOOOOddOkkdd", 
 			&visibilities,
 			&uvw_coords,
 		        &conv,
@@ -178,6 +182,7 @@ static PyObject * grid (PyObject *self, PyObject *args) {
 			&polarization_index,
 			&reference_wavelengths,
 			&flags,
+		        &flagged_rows,
 			&polarization_weights,
 			&phase_centre_ra,
 			&phase_centre_dec,
@@ -236,6 +241,14 @@ static PyObject * grid (PyObject *self, PyObject *args) {
 			PyErr_SetString(gridding_error, "Expected boolean-typed flags");
 	                return nullptr;
 		}
+		if (flagged_rows->nd != 1) {
+        	        PyErr_SetString(gridding_error, "Invalid number of dimensions on row flags array, expected 1");
+                	return nullptr;
+        	}
+		if (flagged_rows->strides[0] != sizeof(bool)){
+        	        PyErr_Format(gridding_error, "Expected %lu-bit boolean typed row flags array",sizeof(bool)*8);
+                	return nullptr;
+        	}
 		if (polarization_weights->nd != 2) {
         	        PyErr_SetString(gridding_error, "Invalid number of dimensions on visibility weights array, expected 2");
                 	return nullptr;
@@ -294,6 +307,7 @@ static PyObject * grid (PyObject *self, PyObject *args) {
 				      convolution_policy_type>
 							     (polarization_policy,uvw_transform,convolution_policy,
                                         	     	      (uvw_coord<uvw_base_type>*)uvw_coords->data,
+							      (bool*)flagged_rows->data,
 	                                             	      facet_nx,facet_ny,
         	                                     	      casa::Quantity(facet_cell_size_x,"arcsec"),casa::Quantity(facet_cell_size_y,"arcsec"),
                 	                             	      timestamp_count,baseline_count,channel_count,
@@ -343,6 +357,7 @@ static PyObject * grid (PyObject *self, PyObject *args) {
 				      polarization_gridding_policy_type,
 				      convolution_policy_type>(polarization_policy,uvw_transform,convolution_policy,
 									  (uvw_coord<uvw_base_type>*)uvw_coords->data,
+									  (bool*)flagged_rows->data,
 									  facet_nx,facet_ny,
 									  casa::Quantity(facet_cell_size_x,"arcsec"),casa::Quantity(facet_cell_size_y,"arcsec"),
 									  timestamp_count,baseline_count,channel_count,

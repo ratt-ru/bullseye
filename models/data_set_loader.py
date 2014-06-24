@@ -112,6 +112,13 @@ class data_set_loader(object):
             of type boolean
         '''
         self._arr_flaged = casa_ms_table.getcol("FLAG")
+        
+        '''
+	    the flag row column has dimensions [0...obs_time_range*baselines-1] and must be taken into account
+	    even though there is a more fine-grained flag column
+        '''
+        self._arr_flagged_rows = casa_ms_table.getcol("FLAG_ROW")
+        
         '''
         Grab the two antenna id arrays defining the two antennas defining each baseline (in uvw space)
 	'''

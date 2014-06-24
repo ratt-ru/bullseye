@@ -62,7 +62,7 @@ class frmMain:
                 g = libimaging.grid(self._data_set._arr_data,self._data_set._arr_uvw,
                                     conv._conv_FIR.astype(np.float32),conv_support,conv_oversample,
                                     self._data_set._no_timestamps,self._data_set._no_baselines,self._data_set._no_channels,self._data_set._no_polarization_correlations,
-                                    self._polarization,self._data_set._chan_wavelengths,self._data_set._arr_flaged,self._data_set._arr_weights,
+                                    self._polarization,self._data_set._chan_wavelengths,self._data_set._arr_flaged,self._data_set._arr_flagged_rows,self._data_set._arr_weights,
                                     self._data_set._phase_centre[0,0],self._data_set._phase_centre[0,1],
                                     None,self._img_size_l,self._img_size_m,self._img_cell_l,self._img_cell_m)
                 print " <DONE>"
@@ -73,7 +73,7 @@ class frmMain:
 		self._low_res_image = cairo.ImageSurface.create_from_png(self.IMAGE_TMP_FILE_NAME)
 	 	self._builder.get_object("cvsLowRes").queue_draw()
 		self.__change_visibilities()
-		'''
+		
 		pylab.figure()
 		pylab.title("CONVOLUTION F")
 		pylab.imshow(conv._conv_FIR,cmap=pylab.get_cmap("hot"))
@@ -83,7 +83,7 @@ class frmMain:
 		pylab.imshow(conv._F_detaper,cmap=pylab.get_cmap("hot"))
 		pylab.colorbar()
 		pylab.show(block=True)
-		'''
+		
 
 	def on_cvsLowRes_draw(self,widget,cr):
 		if self._low_res_image != None:
