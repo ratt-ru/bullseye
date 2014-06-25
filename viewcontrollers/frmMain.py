@@ -74,6 +74,7 @@ class frmMain:
 	 	self._builder.get_object("cvsLowRes").queue_draw()
 		self.__change_visibilities()
 		
+		'''
 		pylab.figure()
 		pylab.title("CONVOLUTION F")
 		pylab.imshow(conv._conv_FIR,cmap=pylab.get_cmap("hot"))
@@ -83,7 +84,7 @@ class frmMain:
 		pylab.imshow(conv._F_detaper,cmap=pylab.get_cmap("hot"))
 		pylab.colorbar()
 		pylab.show(block=True)
-		
+		'''
 
 	def on_cvsLowRes_draw(self,widget,cr):
 		if self._low_res_image != None:
@@ -128,7 +129,6 @@ class frmMain:
 			  message.run()
 			  message.destroy()
 			  self.__reset_view()
-			
 		dialog.destroy()
 
 	def on_mitExport_click(self,widget):

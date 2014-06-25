@@ -26,6 +26,7 @@ namespace imaging {
 		Arguements:
 		active_polarization_gridding_policy: precreated policy describing how to grid polarization
 		active_phase_transform_policy: precreated phase transform policy
+		active_convolution_policy: precreated policy handling how the convolution itself is performed
 		uvw_coord: set of associated uvw coordinates (measured in arcsec, ***NOT*** in wavelength (ie. meters))
 		nx,ny: size of the pre-allocated buffer
 		cellx,celly: size of the cells (in arcsec)
@@ -33,7 +34,7 @@ namespace imaging {
 		reference_wavelengths: associated wavelength of each channel used to sample visibilities (wavelength = speed_of_light / channel_frequency)
 			PRECONDITIONS:
 			1. timestamp_count x baseline_count x channel_count x polarization_term_count <= ||visibilities||
-			2. ||flagged rows|| == ||visibilities||
+			2. ||flagged rows + unflagged rows|| == ||visibilities array||
 	*/
 	template  <typename visibility_base_type, typename uvw_base_type, 
 		   typename reference_wavelengths_base_type, typename convolution_base_type,
@@ -145,7 +146,7 @@ static PyObject * grid (PyObject *self, PyObject *args) {
         typedef float uvw_base_type;
         typedef float reference_wavelengths_base_type;
         typedef float convolution_base_type;
-	typedef float polarization_weights_base_type;
+	typedef float visibility_weights_base_type;
 	typedef float grid_base_type;
 	//Read the python arguements:
 	PyArrayObject * visibilities;
@@ -161,7 +162,7 @@ static PyObject * grid (PyObject *self, PyObject *args) {
         PyArrayObject * reference_wavelengths;
 	PyArrayObject * flags;
 	PyArrayObject * flagged_rows;
-	PyArrayObject * polarization_weights;
+	PyArrayObject * visibility_weights;
 	double phase_centre_ra;
 	double phase_centre_dec;
 	PyArrayObject * facet_centres;
@@ -183,7 +184,7 @@ static PyObject * grid (PyObject *self, PyObject *args) {
 			&reference_wavelengths,
 			&flags,
 		        &flagged_rows,
-			&polarization_weights,
+			&visibility_weights,
 			&phase_centre_ra,
 			&phase_centre_dec,
 			&facet_centres,
@@ -249,12 +250,12 @@ static PyObject * grid (PyObject *self, PyObject *args) {
         	        PyErr_Format(gridding_error, "Expected %lu-bit boolean typed row flags array",sizeof(bool)*8);
                 	return nullptr;
         	}
-		if (polarization_weights->nd != 2) {
-        	        PyErr_SetString(gridding_error, "Invalid number of dimensions on visibility weights array, expected 2");
+		if (visibility_weights->nd != 3) {
+        	        PyErr_SetString(gridding_error, "Invalid number of dimensions on visibility weights array, expected 3");
                 	return nullptr;
         	}
-		if (polarization_weights->strides[1] != sizeof(polarization_weights_base_type)){
-        	        PyErr_Format(gridding_error, "Expected %lu-bit float typed visibility weight array",sizeof(polarization_weights_base_type)*8);
+		if (visibility_weights->strides[2] != sizeof(visibility_weights_base_type)){
+        	        PyErr_Format(gridding_error, "Expected %lu-bit float typed visibility weight array",sizeof(visibility_weights_base_type)*8);
                 	return nullptr;
         	}
 		if ((PyObject*)facet_centres != Py_None){
@@ -284,7 +285,7 @@ static PyObject * grid (PyObject *self, PyObject *args) {
 								uvw_base_type, 
 								transform_disable_phase_rotation> phase_transform_policy_type;
 			typedef imaging::polarization_gridding_policy<visibility_base_type, uvw_base_type, 
-								      polarization_weights_base_type, convolution_base_type, grid_base_type,
+								      visibility_weights_base_type, convolution_base_type, grid_base_type,
 								      phase_transform_policy_type, gridding_single_pol> polarization_gridding_policy_type;
 			typedef imaging::convolution_policy<convolution_base_type,uvw_base_type,
 							    polarization_gridding_policy_type, convolution_precomputed_fir> convolution_policy_type;
@@ -294,14 +295,14 @@ static PyObject * grid (PyObject *self, PyObject *args) {
 			polarization_gridding_policy_type polarization_policy(phase_transform,
 									      (std::complex<grid_base_type>*)(output_grid->data),
 									      (std::complex<visibility_base_type>*)(visibilities->data),
-									      (polarization_weights_base_type*)(polarization_weights->data),
+									      (visibility_weights_base_type*)(visibility_weights->data),
 									      (bool*)(flags->data),
 									      number_of_polarization_terms,polarization_index);
 			convolution_policy_type convolution_policy(facet_nx,facet_ny,conv_support,conv_oversample,
 								   (convolution_base_type*)conv->data, polarization_policy);
 			imaging::grid<visibility_base_type,uvw_base_type,
 				      reference_wavelengths_base_type,convolution_base_type,
-				      polarization_weights_base_type,grid_base_type,
+				      visibility_weights_base_type,grid_base_type,
 				      baseline_transform_policy_type,
 				      polarization_gridding_policy_type,
 				      convolution_policy_type>
@@ -332,7 +333,7 @@ static PyObject * grid (PyObject *self, PyObject *args) {
 								uvw_base_type, 
 								transform_enable_phase_rotation_lefthanded_ra_dec> phase_transform_policy_type;
 			typedef imaging::polarization_gridding_policy<visibility_base_type, uvw_base_type, 
-								      polarization_weights_base_type, convolution_base_type, grid_base_type,
+								      visibility_weights_base_type, convolution_base_type, grid_base_type,
 								      phase_transform_policy_type, gridding_single_pol> polarization_gridding_policy_type;
 			typedef imaging::convolution_policy<convolution_base_type,uvw_base_type,
 							    polarization_gridding_policy_type,convolution_precomputed_fir> convolution_policy_type;
@@ -345,14 +346,14 @@ static PyObject * grid (PyObject *self, PyObject *args) {
 			polarization_gridding_policy_type polarization_policy(phase_transform,
 									      (std::complex<grid_base_type>*)(output_grid->data) + no_facet_pixels*facet_index*number_of_polarization_terms,
 									      (std::complex<visibility_base_type>*)(visibilities->data),
-									      (polarization_weights_base_type*)(polarization_weights->data),
+									      (visibility_weights_base_type*)(visibility_weights->data),
 									      (bool*)(flags->data),
 									      number_of_polarization_terms,polarization_index);
 			convolution_policy_type convolution_policy(facet_nx,facet_ny,conv_support,conv_oversample,
 								   (convolution_base_type*)conv->data, polarization_policy);
 			imaging::grid<visibility_base_type,uvw_base_type,
 				      reference_wavelengths_base_type,convolution_base_type,
-				      polarization_weights_base_type,grid_base_type,
+				      visibility_weights_base_type,grid_base_type,
 				      baseline_transform_policy_type,
 				      polarization_gridding_policy_type,
 				      convolution_policy_type>(polarization_policy,uvw_transform,convolution_policy,
