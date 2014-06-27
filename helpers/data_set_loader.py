@@ -38,11 +38,15 @@ class data_set_loader(object):
         self._telescope_name = casa_ms_table.getcell("TELESCOPE_NAME", 0)
         self._observation_start = casa_ms_table.getcell("TIME_RANGE", 0)[0]
         self._observation_end = casa_ms_table.getcell("TIME_RANGE", 0)[1]
+        casa_ms_table.close()
+        casa_ms_table = table(self._MSName+"/POINTING",ack=False,readonly=True)
+        self._epoch = casa_ms_table.getcolkeyword("DIRECTION","MEASINFO")["Ref"]
+        casa_ms_table.close()
         fmt = '%Y-%m-%d %H:%M:%S %Z'
-        
-        print "OBSERVED BY %s ON %s FROM %s TO %s SINCE EPOCH J2000" % (self._observer_name,self._telescope_name,
+        print "OBSERVED BY %s ON %s FROM %s TO %s SINCE EPOCH %s" % (self._observer_name,self._telescope_name,
                                                       self._observation_start,
-                                                      self._observation_end
+                                                      self._observation_end,
+                                                      self._epoch,
                                                      )
         
         
