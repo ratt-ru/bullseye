@@ -109,8 +109,33 @@ class data_set_loader(object):
         self._arr_data = casa_ms_table.getcol(data_column).astype(np.complex64)
         '''
             the weights column has dimensions: [0...obs_time_range*baselines-1][0...num_correlations-1]
+            However this column only contains the averages accross all channels. The weight_spectrum column
+            is actually preferred and has dimensions of [0...obs_time_range*baselines-1][0...channels-1][0...num_correlations-1]
+            
+            If weight_spectrum is not available then each average should be duplicated accross all the channels. 
+            This column can be used to store the estimated rms thermal noise, tapering, sampling weight (uniform, normal, etc.) and
+            possibly and prior knowledge about the antenna gains. See for instance the imaging chapter of Synthesis Imaging II.
+            
+            The jones terms (Smirnov I, 2011) should probably not be added into the weight_spectrum array because the matricies **won't**
+            necessarily commute to form something like: 
+            sum_over_all_sources(Tapering_weights*sampling_weights*RMS_est*Jones_DDE(time,channel,baseline,direction)*V(time,channel,baseline,direction)) 
+            as we would expect the weighting to be applied. Instead we expect the weighted visibilty to be corrected for using something like 
+            this in normal imaging (without faceting):
+            sum_over_all_sources dde_p^-1 * V_weighted * (dde_q^H)^-1
+            With faceting the directional dependent effects can move out of the all-sky integral (Smirnov II, 2011)
         '''
-        self._arr_weights = casa_ms_table.getcol("WEIGHT").astype(np.float32)
+	if "WEIGHT_SPECTRUM" in casa_ms_table.colnames():
+	  self._arr_weights = casa_ms_table.getcol("WEIGHT_SPECTRUM").astype(np.float32)
+	  print "THIS MEASUREMENT SET HAS VISIBILITY WEIGHTS PER CHANNEL, LOADING [WEIGHT_SPECTRUM] INSTEAD OF [WEIGHT]" 
+	else:
+	  print "THIS MEASUREMENT SET ONLY HAS AVERAGED VISIBILITY WEIGHTS (PER BASELINE), LOADING [WEIGHT]"
+	  self._arr_weights = np.zeros([self._no_baselines*self._no_timestamps,self._no_channels,self._no_polarization_correlations]).astype(np.float32)
+        
+	  self._arr_weights[:,0:1,:] = casa_ms_table.getcol("WEIGHT").reshape([self._no_baselines*self._no_timestamps,1,self._no_polarization_correlations])
+        
+	  for c in range(1,self._no_channels):
+	    self._arr_weights[:,c:c+1,:] = self._arr_weights[:,0:1,:] #apply the same average to each channel per baseline
+
         '''
             the flag column has dimensions: [0...obs_time_range*baselines-1][0...num_channels-1][0...num_correlations-1]
             of type boolean
