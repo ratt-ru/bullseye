@@ -92,8 +92,10 @@ namespace imaging {
                 
                 // Call the gridding policy function (this can either be the normal gridding function or the conjugate gridding function:
                 ((_active_gridding_policy).*gridding_function)(grid_flat_index,_grid_size_in_pixels,conv_weight);
+		 
             }
         }
+        
     }
   };
 }

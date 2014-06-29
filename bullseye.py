@@ -2,16 +2,19 @@
 import sys
 import argparse
 import numpy as np
+import pylab
 
 from helpers import data_set_loader
 from helpers import fft_utils
 from helpers import convolution_filter
-sys.path.append("build/algorithms")
-import libimaging
+import ctypes
+libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
 
-def coords(s):
+	   
+def coords(s):  
     try:
-        ra, dec = map(float, s.split(','))
+	sT = s.strip()
+        ra, dec = map(float, sT[1:len(sT)-1].split(','))
         return ra, dec
     except:
         raise argparse.ArgumentTypeError("Coordinates must be ra,dec tupples")
@@ -36,21 +39,89 @@ if __name__ == "__main__":
   if pol_options[parser_args['pol']] > 3 and not data._no_polarization_correlations == 4:
     raise argparse.ArgumentTypeError("Cannot image polarization '%s'. Option only avaliable when data contains 4 correlation terms per visibility" % parser_args[pol])
       
-  if parser_args['facet_centres'] == None: #full imaging mode with image centre == pointing centre
-    conv = convolution_filter.convolution_filter(parser_args['conv_sup'],parser_args['conv_sup'],
-						 parser_args['conv_oversamp'],parser_args['npix_l'],
-						 parser_args['npix_m'])
-    print("GRIDDING POLARIZATION %s..." % parser_args['pol']),
-    g = None
-    if pol_options[parser_args['pol']] < 3:
-      g = libimaging.grid(data._arr_data,data._arr_uvw,
-			  conv._conv_FIR.astype(np.float32),parser_args['conv_sup'],parser_args['conv_oversamp'],
-			  data._no_timestamps,data._no_baselines,data._no_channels,data._no_polarization_correlations,
-			  pol_options[parser_args['pol']],data._chan_wavelengths,data._arr_flaged,data._arr_flagged_rows,data._arr_weights,
-			  data._phase_centre[0,0],data._phase_centre[0,1],
-			  None,parser_args['npix_l'],parser_args['npix_m'],parser_args['cell_l'],parser_args['cell_m'])
-    else:
-      raise Exception("STUB: TODO: implement I,Q,U,V polarization options")
-    print " <DONE>"
-    g = np.real(fft_utils.ifft2(g[0,:,:]))/conv._F_detaper
+  
+  conv = convolution_filter.convolution_filter(parser_args['conv_sup'],parser_args['conv_sup'],
+					       parser_args['conv_oversamp'],parser_args['npix_l'],
+					       parser_args['npix_m'])
+  facet_centres = None
+  
+  num_facet_centres = 0
+  if not (parser_args['facet_centres'] == None):
+    num_facet_centres = len(parser_args['facet_centres'])
+    facet_centres = np.array(parser_args['facet_centres']).astype(np.float32).ctypes.data_as(ctypes.c_void_p)
+
+  gridded_vis = None
+  if pol_options[parser_args['pol']] < 3:
+    g = np.zeros([num_facet_centres,1,parser_args['npix_l'],parser_args['npix_m']],dtype=np.complex64)
+    #no need to grid more than one of the correlations if the user isn't interrested in imaging one of the stokes terms (I,Q,U,V):
+    libimaging.grid_single_pol(data._arr_data.ctypes.data_as(ctypes.c_void_p),
+			       data._arr_uvw.ctypes.data_as(ctypes.c_void_p),
+			       ctypes.c_size_t(data._no_timestamps),ctypes.c_size_t(data._no_baselines),
+			       ctypes.c_size_t(data._no_channels),ctypes.c_size_t(data._no_polarization_correlations),
+			       data._chan_wavelengths.ctypes.data_as(ctypes.c_void_p),
+			       data._arr_flaged.ctypes.data_as(ctypes.c_void_p),
+			       data._arr_flagged_rows.ctypes.data_as(ctypes.c_void_p),
+			       data._arr_weights.ctypes.data_as(ctypes.c_void_p),
+			       ctypes.c_size_t(parser_args['npix_l']),
+			       ctypes.c_size_t(parser_args['npix_m']),
+			       ctypes.c_float(parser_args['cell_l']),
+			       ctypes.c_float(parser_args['cell_m']),
+			       ctypes.c_float(data._phase_centre[0,0]),
+			       ctypes.c_float(data._phase_centre[0,1]),
+			       facet_centres, 
+			       ctypes.c_size_t(num_facet_centres), 
+			       conv._conv_FIR.astype(np.float32).ctypes.data_as(ctypes.c_void_p),
+			       ctypes.c_size_t(parser_args['conv_sup']),
+			       ctypes.c_size_t(parser_args['conv_oversamp']),
+			       ctypes.c_size_t(pol_options[parser_args['pol']]),
+			       g.ctypes.data_as(ctypes.c_void_p))  
+    gridded_vis = g[:,0,:,:]
+  else:
+    num_polarized_grids = 1 if (num_facet_centres == 0) else num_facet_centres
+    g = np.zeros([num_polarized_grids,4,parser_args['npix_l'],parser_args['npix_m']],dtype=np.complex64)
+   
+    libimaging.grid_4_cor(data._arr_data.ctypes.data_as(ctypes.c_void_p),
+			  data._arr_uvw.ctypes.data_as(ctypes.c_void_p),
+			  ctypes.c_size_t(data._no_timestamps),ctypes.c_size_t(data._no_baselines),
+			  ctypes.c_size_t(data._no_channels),ctypes.c_size_t(data._no_polarization_correlations),
+			  data._chan_wavelengths.ctypes.data_as(ctypes.c_void_p),
+			  data._arr_flaged.ctypes.data_as(ctypes.c_void_p),
+			  data._arr_flagged_rows.ctypes.data_as(ctypes.c_void_p),
+			  data._arr_weights.ctypes.data_as(ctypes.c_void_p),
+			  ctypes.c_size_t(parser_args['npix_l']),
+			  ctypes.c_size_t(parser_args['npix_m']),
+			  ctypes.c_float(parser_args['cell_l']),
+			  ctypes.c_float(parser_args['cell_m']),
+			  ctypes.c_float(data._phase_centre[0,0]),
+			  ctypes.c_float(data._phase_centre[0,1]),
+			  facet_centres, 
+			  ctypes.c_size_t(num_facet_centres), 
+			  conv._conv_FIR.astype(np.float32).ctypes.data_as(ctypes.c_void_p),
+			  ctypes.c_size_t(parser_args['conv_sup']),
+			  ctypes.c_size_t(parser_args['conv_oversamp']),
+			  g.ctypes.data_as(ctypes.c_void_p))  
     
+    if parser_args['pol'] == "I":
+      gridded_vis = ((g[:,0,:,:] + g[:,3,:,:])/2).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
+    elif parser_args['pol'] == "V":
+      gridded_vis = ((g[:,0,:,:] - g[:,3,:,:])/2).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
+    elif parser_args['pol'] == "Q":
+      gridded_vis = ((g[:,1,:,:] + g[:,2,:,:])/2).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
+    else: # U
+      gridded_vis = ((g[:,1,:,:] - g[:,2,:,:])/2).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
+  #now invert, detaper and write out all the facets to disk:  
+  if parser_args['facet_centres'] == None:
+    dirty = np.real(fft_utils.ifft2(gridded_vis[0,:,:]))/conv._F_detaper
+    i = pylab.imshow(dirty,interpolation='nearest',cmap = pylab.get_cmap('hot'),
+		     extent=[0, parser_args['npix_l']-1, 0, parser_args['npix_m']-1])
+    pylab.close('all')
+    i.write_png(parser_args['output_prefix']+'.png',noscale=True)
+  else:
+    for f in range(0, num_facet_centres):
+      dirty = (np.real(fft_utils.ifft2(gridded_vis[f,:,:]))/conv._F_detaper).reshape(parser_args['npix_l'],parser_args['npix_m'])
+      i = pylab.imshow(dirty,interpolation='nearest',cmap = pylab.get_cmap('hot'),
+		       extent=[0, parser_args['npix_l']-1, 0, parser_args['npix_m']-1])
+      pylab.close('all')
+      i.write_png(parser_args['output_prefix']+str(f)+'.png',noscale=True)
+    
+   

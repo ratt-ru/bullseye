@@ -97,12 +97,15 @@ class data_set_loader(object):
         Grab the uvw coordinates (these are not yet measured in terms of wavelength!)
         '''
         self._arr_uvw = casa_ms_table.getcol("UVW").astype(np.float32)
+        '''
         self._min_u = min(self._arr_uvw,key=lambda p: p[0])[0]
         self._max_u = max(self._arr_uvw,key=lambda p: p[0])[0]
         self._min_v = min(self._arr_uvw,key=lambda p: p[1])[1]
         self._max_v = max(self._arr_uvw,key=lambda p: p[1])[1]
         self._min_w = min(self._arr_uvw,key=lambda p: p[2])[2]
         self._max_w = max(self._arr_uvw,key=lambda p: p[2])[2]
+        '''
+        
         '''
             the data variable has dimensions: [0...obs_time_range*baselines-1][0...num_channels-1][0...num_correlations-1] 
         '''
@@ -154,4 +157,6 @@ class data_set_loader(object):
 	self._arr_antenna_1 = casa_ms_table.getcol("ANTENNA1")
 	self._arr_antenna_1 = casa_ms_table.getcol("ANTENNA2")
         casa_ms_table.close()
+        '''
         print "MIN UVW = (%f,%f,%f), MAX UVW = (%f,%f,%f)" % (self._min_u,self._min_v,self._min_w,self._max_u,self._max_v,self._max_w)
+	'''
