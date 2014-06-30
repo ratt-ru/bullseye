@@ -17,15 +17,16 @@ class data_set_loader(object):
     '''
     classdocs
     '''
-    def __init__(self, MSName, data_column="DATA"):
+    def __init__(self, MSName, data_column="DATA",load_only_header=False):
         '''
         Constructor
         '''
         print "READING MEASUREMENT SET '%s'" % MSName 
         self._MSName = MSName
         self.__read_head()
-        print "READING UVW VALUES AND DATA[TIME][POLARIZATION_CORRELATION][FREQUENCY]"
-        self.__read_data(data_column)
+        if not load_only_header:
+	  print "READING UVW VALUES AND DATA[TIME][POLARIZATION_CORRELATION][FREQUENCY]"
+	  self.__read_data(data_column)
          
     '''
         Read some stats about the MS

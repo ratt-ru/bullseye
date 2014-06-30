@@ -38,7 +38,7 @@ if __name__ == "__main__":
   #some sanity checks:
   if pol_options[parser_args['pol']] > 3 and not data._no_polarization_correlations == 4:
     raise argparse.ArgumentTypeError("Cannot image polarization '%s'. Option only avaliable when data contains 4 correlation terms per visibility" % parser_args[pol])
-      
+    
   
   conv = convolution_filter.convolution_filter(parser_args['conv_sup'],parser_args['conv_sup'],
 					       parser_args['conv_oversamp'],parser_args['npix_l'],
@@ -46,13 +46,13 @@ if __name__ == "__main__":
   facet_centres = None
   
   num_facet_centres = 0
-  if not (parser_args['facet_centres'] == None):
+  if (parser_args['facet_centres'] != None):
     num_facet_centres = len(parser_args['facet_centres'])
-    facet_centres = np.array(parser_args['facet_centres']).astype(np.float32).ctypes.data_as(ctypes.c_void_p)
-
+    facet_centres = np.array(parser_args['facet_centres']).astype(np.float32)
   gridded_vis = None
-  if pol_options[parser_args['pol']] < 3:
-    g = np.zeros([num_facet_centres,1,parser_args['npix_l'],parser_args['npix_m']],dtype=np.complex64)
+  if pol_options[parser_args['pol']] < 3: 
+    num_polarized_grids = 1 if (num_facet_centres == 0) else num_facet_centres
+    g = np.zeros([num_polarized_grids,1,parser_args['npix_l'],parser_args['npix_m']],dtype=np.complex64)
     #no need to grid more than one of the correlations if the user isn't interrested in imaging one of the stokes terms (I,Q,U,V):
     libimaging.grid_single_pol(data._arr_data.ctypes.data_as(ctypes.c_void_p),
 			       data._arr_uvw.ctypes.data_as(ctypes.c_void_p),
@@ -68,7 +68,7 @@ if __name__ == "__main__":
 			       ctypes.c_float(parser_args['cell_m']),
 			       ctypes.c_float(data._phase_centre[0,0]),
 			       ctypes.c_float(data._phase_centre[0,1]),
-			       facet_centres, 
+			       facet_centres.ctypes.data_as(ctypes.c_void_p) if (num_facet_centres != 0) else None, 
 			       ctypes.c_size_t(num_facet_centres), 
 			       conv._conv_FIR.astype(np.float32).ctypes.data_as(ctypes.c_void_p),
 			       ctypes.c_size_t(parser_args['conv_sup']),
@@ -94,7 +94,7 @@ if __name__ == "__main__":
 			  ctypes.c_float(parser_args['cell_m']),
 			  ctypes.c_float(data._phase_centre[0,0]),
 			  ctypes.c_float(data._phase_centre[0,1]),
-			  facet_centres, 
+			  facet_centres.ctypes.data_as(ctypes.c_void_p) if (num_facet_centres != 0) else None, 
 			  ctypes.c_size_t(num_facet_centres), 
 			  conv._conv_FIR.astype(np.float32).ctypes.data_as(ctypes.c_void_p),
 			  ctypes.c_size_t(parser_args['conv_sup']),
@@ -123,5 +123,3 @@ if __name__ == "__main__":
 		       extent=[0, parser_args['npix_l']-1, 0, parser_args['npix_m']-1])
       pylab.close('all')
       i.write_png(parser_args['output_prefix']+str(f)+'.png',noscale=True)
-    
-   

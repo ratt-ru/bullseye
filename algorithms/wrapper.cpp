@@ -67,10 +67,12 @@ extern "C" {
     } else { //enable faceting
 	      size_t no_facet_pixels = facet_nx*facet_ny;
 	      for (size_t facet_index = 0; facet_index < num_facet_centres; ++facet_index){
-			printf("FACETING %lu / %lu...",facet_index+1, num_facet_centres);
-			fflush(stdout);
 			uvw_base_type new_phase_ra = facet_centres[2*facet_index];
 			uvw_base_type new_phase_dec = facet_centres[2*facet_index + 1];
+			
+			printf("FACETING (%f,%f,%f,%f) %lu / %lu...",phase_centre_ra,phase_centre_dec,new_phase_ra,new_phase_dec,facet_index+1, num_facet_centres);
+			fflush(stdout);
+			
 			
 			typedef imaging::baseline_transform_policy<uvw_base_type, 
 								   transform_facet_lefthanded_ra_dec> baseline_transform_policy_type;
@@ -164,12 +166,12 @@ extern "C" {
     } else { //enable faceting
 	      size_t no_facet_pixels = facet_nx*facet_ny;
 	      for (size_t facet_index = 0; facet_index < num_facet_centres; ++facet_index){
-			printf("FACETING %lu / %lu...",facet_index+1, num_facet_centres);
-			fflush(stdout);
-			const uvw_base_type * facet_centres_data = facet_centres;
-			uvw_base_type new_phase_ra = facet_centres_data[2*facet_index];
-			uvw_base_type new_phase_dec = facet_centres_data[2*facet_index + 1];
-			
+			uvw_base_type new_phase_ra = facet_centres[2*facet_index];
+                        uvw_base_type new_phase_dec = facet_centres[2*facet_index + 1];
+
+                        printf("FACETING (%f,%f,%f,%f) %lu / %lu...",phase_centre_ra,phase_centre_dec,new_phase_ra,new_phase_dec,facet_index+1, num_facet_centres);
+                        fflush(stdout);
+	
 			typedef imaging::baseline_transform_policy<uvw_base_type, 
 								   transform_facet_lefthanded_ra_dec> baseline_transform_policy_type;
 			typedef imaging::phase_transform_policy<visibility_base_type, 
