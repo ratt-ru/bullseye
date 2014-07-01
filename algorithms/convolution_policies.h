@@ -15,15 +15,14 @@ namespace imaging {
       throw std::exception("Undefined behaviour");
     }
     /**
-     Convolve will call a gridding function of the active gridding policy (this can be of the normal visibility or its conjungate)
-     All gridding policies should therefore support gridding both visibility terms (see Synthesis Imaging II, pg. 25-26)
+     Convolve will call a gridding function of the active gridding policy but specifies which
+     convolution to compute / load in from a precomputed array
      
      All specializing policies must have a function conforming to the following function header:
      uvw_coord: reference to central uvw coord (in continious space)
      gridding_function: pointer to member function of active gridding policy
      */
-    inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
-			 void (gridding_policy_type::*gridding_function)(std::size_t,std::size_t,convolution_base_type)) const __restrict__ {
+    inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw) const __restrict__ {
       throw std::exception("Undefined behaviour");
     }
   };
@@ -63,8 +62,7 @@ namespace imaging {
 			_conv_scale(1/uvw_base_type(oversampling_factor)), //convolution pixel is oversample times smaller than scaled grid cell size
 			_active_gridding_policy(active_gridding_policy)
 			{}
-    inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
-			 void (gridding_policy_type::*gridding_function)(std::size_t,std::size_t,convolution_base_type)) const __restrict__ {
+    inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw) const __restrict__ {
 	/*
 	 compute the distance the u,v coordinate is from the bin center, scaled by the oversampling factor
 	 (size of the jump in imaging space). Then shift the uv coordinate to the grid centre
@@ -90,9 +88,7 @@ namespace imaging {
                                                     offset_conv_v < _conv_dim_size) ? _conv[conv_flat_index] : 0);
                 std::size_t grid_flat_index = ((disc_grid_v)*_nx+(disc_grid_u)); //flatten grid index
                 
-                // Call the gridding policy function (this can either be the normal gridding function or the conjugate gridding function:
-                ((_active_gridding_policy).*gridding_function)(grid_flat_index,_grid_size_in_pixels,conv_weight);
-		 
+                _active_gridding_policy.grid_polarization_terms(grid_flat_index,_grid_size_in_pixels,conv_weight);
             }
         }
         

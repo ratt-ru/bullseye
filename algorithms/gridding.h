@@ -110,15 +110,14 @@ namespace imaging {
 				/*				
 				On page 25-26 of Synthesis Imaging II Thompson notes that the correlator output is a measure of the visibility at two points on the
 				uv grid. This corresponds to the baseline and the reversed baseline direction: b and -b. The latter represents the complex conjugate of the visibility
-				on b. Rather than running though all the visibilities twice we compute uvw, -uvw, V and V*. We should be able to save ourselves some compuation on phase
-				shifts, etc by so doing. All gridder policies must reflect this and support gridding both the complex visibility and its conjugate. 
+				on b. We can safely assume that simply omitting V* and discarding the imaginary component later will save us from gridding each visibility and its
+				conjugate.
 				*/
 				uvw_coord<uvw_base_type> uvw_neg = uvw;
 				uvw_neg._u *= -1;
 				uvw_neg._v *= -1;
 				
-				active_convolution_policy.convolve(uvw, &polarization_gridding_policy_type::grid_polarization_terms);
- 				active_convolution_policy.convolve(uvw_neg, &polarization_gridding_policy_type::grid_polarization_conjugate_terms);
+				active_convolution_policy.convolve(uvw);
                         }
                 }
                 
