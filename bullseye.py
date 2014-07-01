@@ -51,8 +51,8 @@ if __name__ == "__main__":
     facet_centres = np.array(parser_args['facet_centres']).astype(np.float32)
   gridded_vis = None
   if pol_options[parser_args['pol']] < 3: 
-    num_polarized_grids = 1 if (num_facet_centres == 0) else num_facet_centres
-    g = np.zeros([num_polarized_grids,1,parser_args['npix_l'],parser_args['npix_m']],dtype=np.complex64)
+    num_grids = 1 if (num_facet_centres == 0) else num_facet_centres
+    g = np.zeros([num_grids,1,parser_args['npix_l'],parser_args['npix_m']],dtype=np.complex64)
     #no need to grid more than one of the correlations if the user isn't interrested in imaging one of the stokes terms (I,Q,U,V):
     libimaging.grid_single_pol(data._arr_data.ctypes.data_as(ctypes.c_void_p),
 			       data._arr_uvw.ctypes.data_as(ctypes.c_void_p),
@@ -70,11 +70,11 @@ if __name__ == "__main__":
 			       ctypes.c_float(data._phase_centre[0,1]),
 			       facet_centres.ctypes.data_as(ctypes.c_void_p) if (num_facet_centres != 0) else None, 
 			       ctypes.c_size_t(num_facet_centres), 
-			       conv._conv_FIR.astype(np.float32).ctypes.data_as(ctypes.c_void_p),
+			       conv._conv_FIR.ctypes.data_as(ctypes.c_void_p),
 			       ctypes.c_size_t(parser_args['conv_sup']),
 			       ctypes.c_size_t(parser_args['conv_oversamp']),
 			       ctypes.c_size_t(pol_options[parser_args['pol']]),
-			       g.ctypes.data_as(ctypes.c_void_p))  
+			       g.ctypes.data_as(ctypes.c_void_p))
     gridded_vis = g[:,0,:,:]
   else:
     num_polarized_grids = 1 if (num_facet_centres == 0) else num_facet_centres
@@ -96,7 +96,7 @@ if __name__ == "__main__":
 			  ctypes.c_float(data._phase_centre[0,1]),
 			  facet_centres.ctypes.data_as(ctypes.c_void_p) if (num_facet_centres != 0) else None, 
 			  ctypes.c_size_t(num_facet_centres), 
-			  conv._conv_FIR.astype(np.float32).ctypes.data_as(ctypes.c_void_p),
+			  conv._conv_FIR.ctypes.data_as(ctypes.c_void_p),
 			  ctypes.c_size_t(parser_args['conv_sup']),
 			  ctypes.c_size_t(parser_args['conv_oversamp']),
 			  g.ctypes.data_as(ctypes.c_void_p))  

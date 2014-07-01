@@ -34,7 +34,7 @@ class convolution_filter(object):
 	convolution_size_v = convolution_fir_support_v * oversampling_factor
         convolution_centre_u = convolution_size_u / 2
         convolution_centre_v = convolution_size_v / 2
-	self._conv_FIR = np.zeros([convolution_size_u,convolution_size_v])
+	self._conv_FIR = np.zeros([convolution_size_u,convolution_size_v],dtype=np.float32)
         for vi in range(0,convolution_size_v):
             for ui in range(0,convolution_size_u):
                 self._conv_FIR[ui,vi] = gausian((ui - convolution_centre_u)/float(convolution_size_u)*convolution_fir_support_u,
@@ -47,7 +47,7 @@ class convolution_filter(object):
         detaper_centre_l = grid_size_l / 2
         detaper_centre_m = grid_size_m / 2
 	
-	self._F_detaper = np.zeros([grid_size_l,grid_size_m])
+	self._F_detaper = np.zeros([grid_size_l,grid_size_m],dtype=np.float32)
 	for mi in range(0,grid_size_m):
 	  for li in range(0,grid_size_l):
             self._F_detaper[li,mi] = gausian_fourier((li - detaper_centre_l)/float(detaper_centre_l)*convolution_fir_support_u, 
