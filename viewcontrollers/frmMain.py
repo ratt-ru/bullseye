@@ -54,7 +54,7 @@ class frmMain:
 		self._polarization = int(model.get_value(itr,1))
 		pol_labels = {0:"XX",1:"XY",2:"YX",3:"YY",4:"I",5:"Q",6:"U",7:"V"}
 		
-		if (not (os.system("python bullseye.py %s %s --npix_l %d --npix_m %d --cell_l %d --cell_m %d --pol %s --conv_sup %d --conv_oversamp %d" % (self._ms_name,
+		if (not (os.system("python bullseye.py %s %s --output_format png --npix_l %d --npix_m %d --cell_l %d --cell_m %d --pol %s --conv_sup %d --conv_oversamp %d" % (self._ms_name,
 				   self.IMAGE_TMP_FILE_NAME,self._img_size_l,self._img_size_m,self._img_cell_l,
 				   self._img_cell_m,pol_labels[self._polarization],conv_support,conv_oversample)) == 0)):
 		    raise Exception("Invalid parameters for imager")
@@ -152,7 +152,7 @@ class frmMain:
 			facet_centres = np.array([[facet_ra,facet_dec]],dtype=np.float32)
 			
 			pol_labels = {0:"XX",1:"XY",2:"YX",3:"YY",4:"I",5:"Q",6:"U",7:"V"}
-			if (not (os.system("python bullseye.py %s %s --npix_l %d --npix_m %d --cell_l %d --cell_m %d --pol %s --conv_sup %d --conv_oversamp %d --facet_centres \(%f,%f\)" % (
+			if (not (os.system("python bullseye.py %s %s --output_format png --npix_l %d --npix_m %d --cell_l %d --cell_m %d --pol %s --conv_sup %d --conv_oversamp %d --facet_centres \(%f,%f\)" % (
 					    self._ms_name,self.FACET_TMP_FILE_NAME,facet_size_l,facet_size_m,facet_cell_l,
 					    facet_cell_m,pol_labels[self._polarization],conv_support,conv_oversample,
 					    int(facet_ra),int(facet_dec))) == 0)):

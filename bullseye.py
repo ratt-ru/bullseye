@@ -3,10 +3,13 @@ import sys
 import argparse
 import numpy as np
 import pylab
+import re
+from pyrap.quanta import quantity
 
 from helpers import data_set_loader
 from helpers import fft_utils
 from helpers import convolution_filter
+from helpers import fits_export
 import ctypes
 libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
 
@@ -33,6 +36,7 @@ if __name__ == "__main__":
   parser.add_argument('--conv', help='Specify gridding convolution function type', choices=['gausian'], default="gausian")
   parser.add_argument('--conv_sup', help='Specify gridding convolution function support area (number of grid cells)', type=int, default=1)
   parser.add_argument('--conv_oversamp', help='Specify gridding convolution function oversampling multiplier', type=int, default=1)
+  parser.add_argument('--output_format', help='Specify image output format', choices=["fits","png"], default="fits")
   parser_args = vars(parser.parse_args())
   data = data_set_loader.data_set_loader(parser_args['input_ms'])
   #some sanity checks:
@@ -112,14 +116,32 @@ if __name__ == "__main__":
   #now invert, detaper and write out all the facets to disk:  
   if parser_args['facet_centres'] == None:
     dirty = np.real(fft_utils.ifft2(gridded_vis[0,:,:]))/conv._F_detaper
-    i = pylab.imshow(dirty,interpolation='nearest',cmap = pylab.get_cmap('hot'),
-		     extent=[0, parser_args['npix_l']-1, 0, parser_args['npix_m']-1])
-    pylab.close('all')
-    i.write_png(parser_args['output_prefix']+'.png',noscale=True)
+    if parser_args['output_format'] == 'png':
+      i = pylab.imshow(dirty[::-1,:],interpolation='nearest',cmap = pylab.get_cmap('hot'),
+		       extent=[0, parser_args['npix_l']-1, 0, parser_args['npix_m']-1])
+      i.write_png(parser_args['output_prefix']+'.png',noscale=True)
+      pylab.close('all')
+    else:
+      fits_export.save_to_fits_image(parser_args['output_prefix']+'.fits',
+				     parser_args['npix_l'],parser_args['npix_m'],
+				     quantity(parser_args['cell_l'],'arcsec'),quantity(parser_args['cell_m'],'arcsec'),
+				     quantity(data._phase_centre[0,0],'arcsec'),quantity(data._phase_centre[0,1],'arcsec'),
+				     parser_args['pol'],
+				     float(data._epoch[1:]) if not data._epoch[0] in range(ord('0'),ord('9')) else float(data._epoch),
+				     dirty)
   else:
     for f in range(0, num_facet_centres):
       dirty = (np.real(fft_utils.ifft2(gridded_vis[f,:,:]))/conv._F_detaper).reshape(parser_args['npix_l'],parser_args['npix_m'])
-      i = pylab.imshow(dirty,interpolation='nearest',cmap = pylab.get_cmap('hot'),
+      if parser_args['output_format'] == 'png':
+	i = pylab.imshow(dirty[::-1,:],interpolation='nearest',cmap = pylab.get_cmap('hot'),
 		       extent=[0, parser_args['npix_l']-1, 0, parser_args['npix_m']-1])
-      pylab.close('all')
-      i.write_png(parser_args['output_prefix']+str(f)+'.png',noscale=True)
+	i.write_png(parser_args['output_prefix']+str(f)+'.png',noscale=True)
+	pylab.close('all')
+      else:
+	fits_export.save_to_fits_image(parser_args['output_prefix']+str(f)+'.fits',
+				       parser_args['npix_l'],parser_args['npix_m'],
+				       quantity(parser_args['cell_l'],'arcsec'),quantity(parser_args['cell_m'],'arcsec'),
+				       quantity(facet_centres[0,0],'arcsec'),quantity(facet_centres[0,1],'arcsec'),
+				       parser_args['pol'],
+				       float(data._epoch[1:]) if not data._epoch[0] in range(ord('0'),ord('9')) else float(data._epoch),
+				       dirty)

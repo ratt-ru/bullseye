@@ -105,18 +105,14 @@ namespace imaging {
 				 Now that all the transformations are done, convert and scale the uv coords down to grid space:
 				*/
 				uvw._u = uvw._u*u_scale;
-				uvw._v = uvw._v*v_scale;
+				uvw._v = -uvw._v*v_scale;
 				
 				/*				
 				On page 25-26 of Synthesis Imaging II Thompson notes that the correlator output is a measure of the visibility at two points on the
 				uv grid. This corresponds to the baseline and the reversed baseline direction: b and -b. The latter represents the complex conjugate of the visibility
 				on b. We can safely assume that simply omitting V* and discarding the imaginary component later will save us from gridding each visibility and its
 				conjugate.
-				*/
-				uvw_coord<uvw_base_type> uvw_neg = uvw;
-				uvw_neg._u *= -1;
-				uvw_neg._v *= -1;
-				
+				*/				
 				active_convolution_policy.convolve(uvw);
                         }
                 }
