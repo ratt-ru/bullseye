@@ -66,6 +66,11 @@ class data_set_loader(object):
         self._no_polarization_correlations = casa_ms_table.getcell("NUM_CORR", 0)
         print "%d CORRELATIONS DUE TO POLARIZATION" % self._no_polarization_correlations
         casa_ms_table.close()
+        casa_ms_table = table(self._MSName+"/FEED",ack=False,readonly=True)
+        self._no_receptors = casa_ms_table.getcell("NUM_RECEPTORS", 0)
+        assert(self._no_polarization_correlations == self._no_receptors**2) #number of ways to correlate two feeds
+        self._polarization_type = casa_ms_table.getcell("POLARIZATION_TYPE", 0) #should be something like [X,Y] or [R,L]
+        casa_ms_table.close()
         casa_ms_table = table(self._MSName+"/SPECTRAL_WINDOW",ack=False,readonly=True)
         self._no_channels = casa_ms_table.getcell("NUM_CHAN", 0)
         print "%d CHANNELS IN OBSERVATION" % self._no_channels
