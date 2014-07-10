@@ -52,7 +52,7 @@ class frmMain:
 		conv_oversample = int(model.get_value(itr,1))
 		itr = model.iter_next(itr)
 		self._polarization = int(model.get_value(itr,1))
-		pol_labels = {0:"XX",1:"XY",2:"YX",3:"YY",4:"I",5:"Q",6:"U",7:"V"}
+		pol_labels = {0:'XX', 1:'XY', 2:'YX', 3:'YY', 4:'RR', 5:'RL', 6:'LR', 7:'LL', 8:'I', 9:'Q', 10:'U', 11:'V'}
 		
 		if (not (os.system("python bullseye.py %s %s --output_format png --npix_l %d --npix_m %d --cell_l %d --cell_m %d --pol %s --conv_sup %d --conv_oversamp %d" % (self._ms_name,
 				   self.IMAGE_TMP_FILE_NAME,self._img_size_l,self._img_size_m,self._img_cell_l,
@@ -151,7 +151,7 @@ class frmMain:
                         facet_dec = self._phase_centre[0,1] + (-int(event.y/float(rect.height) * img_height) + img_height/2)*self._img_cell_m	
 			facet_centres = np.array([[facet_ra,facet_dec]],dtype=np.float32)
 			
-			pol_labels = {'XX': 0,'XY': 1,'YX': 2,'YY': 3,'RR' : 4,'RL' : 5,'LR' : 6,'LL' : 7, 'I': 8,'Q': 9,'U': 10,'V': 11}
+			pol_labels = {0:'XX', 1:'XY', 2:'YX', 3:'YY', 4:'RR', 5:'RL', 6:'LR', 7:'LL', 8:'I', 9:'Q', 10:'U', 11:'V'}
 			if (not (os.system("python bullseye.py %s %s --output_format png --npix_l %d --npix_m %d --cell_l %d --cell_m %d --pol %s --conv_sup %d --conv_oversamp %d --facet_centres \(%f,%f\)" % (
 					    self._ms_name,self.FACET_TMP_FILE_NAME,facet_size_l,facet_size_m,facet_cell_l,
 					    facet_cell_m,pol_labels[self._polarization],conv_support,conv_oversample,
@@ -173,7 +173,7 @@ class frmMain:
 			m_pos = int(event.y/float(rect.height) * img_height) 
 			
 			sbrMain.push(sbrMain.get_context_id("CursorPos"),"Pixel position: (l,m) = (%d,%d), (ra,dec) = (%s,%s)" % (l_pos, m_pos,
-							    		 quantity(self._phase_centre[0,0] + (l_pos - img_width/2)*self._img_cell_l,"arcsec").get("deg").formatted("[+-]dd.mm.ss.t.."),
+							    		 quantity(self._phase_centre[0,0] + (-l_pos + img_width/2)*self._img_cell_l,"arcsec").get("deg").formatted("[+-]dd.mm.ss.t.."),
 							    		 quantity(self._phase_centre[0,1] + (-m_pos + img_height/2)*self._img_cell_m,"arcsec").get("deg").formatted("[+-]dd.mm.ss.t..")))
 				
 

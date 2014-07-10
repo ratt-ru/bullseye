@@ -33,7 +33,7 @@ if __name__ == "__main__":
   parser.add_argument('--cell_l', help='Size of a pixel in l (arcsecond)', type=int, default=1)
   parser.add_argument('--cell_m', help='Size of a pixel in l (arcsecond)', type=int, default=1)
   parser.add_argument('--pol', help='Specify image polarization', choices=pol_options.keys(), default="XX")
-  parser.add_argument('--conv', help='Specify gridding convolution function type', choices=['gausian','keiser bessel'], default='keiser_bessel')
+  parser.add_argument('--conv', help='Specify gridding convolution function type', choices=['gausian','keiser bessel'], default='keiser bessel')
   parser.add_argument('--conv_sup', help='Specify gridding convolution function support area (number of grid cells)', type=int, default=1)
   parser.add_argument('--conv_oversamp', help='Specify gridding convolution function oversampling multiplier', type=int, default=1)
   parser.add_argument('--output_format', help='Specify image output format', choices=["fits","png"], default="fits")
