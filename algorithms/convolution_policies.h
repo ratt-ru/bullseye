@@ -59,7 +59,7 @@ namespace imaging {
 			_convolution_support(convolution_support), _oversampling_factor(oversampling_factor), 
 			_conv(conv), _conv_dim_size(convolution_support * oversampling_factor),
 			_conv_dim_centre(_conv_dim_size / 2),
-			_conv_scale(1/uvw_base_type(oversampling_factor)), //convolution pixel is oversample times smaller than scaled grid cell size
+			_conv_scale(1.0/oversampling_factor), //convolution pixel is oversample times smaller than scaled grid cell size
 			_active_gridding_policy(active_gridding_policy)
 			{}
     inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw) const __restrict__ {

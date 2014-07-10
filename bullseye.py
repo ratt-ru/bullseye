@@ -33,7 +33,7 @@ if __name__ == "__main__":
   parser.add_argument('--cell_l', help='Size of a pixel in l (arcsecond)', type=int, default=1)
   parser.add_argument('--cell_m', help='Size of a pixel in l (arcsecond)', type=int, default=1)
   parser.add_argument('--pol', help='Specify image polarization', choices=pol_options.keys(), default="XX")
-  parser.add_argument('--conv', help='Specify gridding convolution function type', choices=['gausian'], default="gausian")
+  parser.add_argument('--conv', help='Specify gridding convolution function type', choices=['gausian','keiser bessel'], default='keiser_bessel')
   parser.add_argument('--conv_sup', help='Specify gridding convolution function support area (number of grid cells)', type=int, default=1)
   parser.add_argument('--conv_oversamp', help='Specify gridding convolution function oversampling multiplier', type=int, default=1)
   parser.add_argument('--output_format', help='Specify image output format', choices=["fits","png"], default="fits")
@@ -46,7 +46,7 @@ if __name__ == "__main__":
   
   conv = convolution_filter.convolution_filter(parser_args['conv_sup'],parser_args['conv_sup'],
 					       parser_args['conv_oversamp'],parser_args['npix_l'],
-					       parser_args['npix_m'])
+					       parser_args['npix_m'],parser_args['conv'])
   facet_centres = None
   
   num_facet_centres = 0
@@ -104,15 +104,17 @@ if __name__ == "__main__":
 			  ctypes.c_size_t(parser_args['conv_sup']),
 			  ctypes.c_size_t(parser_args['conv_oversamp']),
 			  g.ctypes.data_as(ctypes.c_void_p))  
-    
+    '''
+    See Smirnov I for description on conversion between correlation terms and stokes params for linearly polarized feeds
+    '''
     if parser_args['pol'] == "I":
-      gridded_vis = ((g[:,0,:,:] + g[:,3,:,:])/2).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
+      gridded_vis = ((g[:,0,:,:] + g[:,3,:,:])).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
     elif parser_args['pol'] == "V":
-      gridded_vis = ((g[:,0,:,:] - g[:,3,:,:])/2).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
+      gridded_vis = ((g[:,1,:,:] - g[:,2,:,:])).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
     elif parser_args['pol'] == "Q":
-      gridded_vis = ((g[:,1,:,:] + g[:,2,:,:])/2).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
-    else: # U
-      gridded_vis = ((g[:,1,:,:] - g[:,2,:,:])/2).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
+      gridded_vis = ((g[:,0,:,:] - g[:,3,:,:])/1.0j).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
+    elif parser_args['pol'] == "U":
+      gridded_vis = ((g[:,1,:,:] - g[:,2,:,:])).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
   #now invert, detaper and write out all the facets to disk:  
   if parser_args['facet_centres'] == None:
     dirty = np.real(fft_utils.ifft2(gridded_vis[0,:,:]))/conv._F_detaper
