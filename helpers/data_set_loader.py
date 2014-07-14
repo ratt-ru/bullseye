@@ -17,23 +17,19 @@ class data_set_loader(object):
     '''
     classdocs
     '''
-    def __init__(self, MSName, data_column="DATA",load_only_header=False):
+    def __init__(self, MSName):
         '''
         Constructor
         '''
-        print "READING MEASUREMENT SET '%s'" % MSName 
-        self._MSName = MSName
-        self.__read_head()
-        if not load_only_header:
-	  print "READING UVW VALUES AND DATA[TIME][POLARIZATION_CORRELATION][FREQUENCY]"
-	  self.__read_data(data_column)
-         
+        self._MSName = MSName 
+        
     '''
         Read some stats about the MS
         Assume this method only gets called from __init__
         (This can be checked against listobs in CASAPY)
     '''
-    def __read_head(self):
+    def read_head(self):
+	print "READING MEASUREMENT SET HEAD OF '%s'" % self._MSName 
         casa_ms_table = table(self._MSName+'/OBSERVATION',ack=False,readonly=True)
         self._observer_name = casa_ms_table.getcell("OBSERVER", 0)
         self._telescope_name = casa_ms_table.getcell("TELESCOPE_NAME", 0)
@@ -94,15 +90,43 @@ class data_set_loader(object):
         print "%d TIMESTAMPS IN OBSERVATION" % self._no_timestamps
         casa_ms_table.close()
     '''
-        Read data from the MS
-        Assume this method only gets called from __init__
+      Computes the number of rows to read, given memory constraints (in bytes)
+      Assumes read_head has been called prior to this call
     '''
-    def __read_data(self,data_column):
+    def compute_number_of_rows_to_read_from_mem_requirements(self,max_bytes_available):
+	return max_bytes_available / ((3*8) + #uvw data
+				      (self._no_channels*self._no_polarization_correlations*2*8) + #complex visibilities
+				      (self._no_channels*self._no_polarization_correlations*8) + #weight
+				      (3*4) + #casted uvw data
+				      (self._no_channels*self._no_polarization_correlations*2*4) + #casted complex visibilities
+				      (self._no_channels*self._no_polarization_correlations*4) + #casted weight
+				      (self._no_channels*self._no_polarization_correlations*np.dtype(np.bool_).itemsize) + #visibility flags
+				      (np.dtype(np.bool_).itemsize) + #row flags
+				      (2*np.dtype(np.intc).itemsize)) #antenna 1 & 2
+    
+    '''
+      Computes the number of iterations required to read entire file, given memory constraints (in bytes)
+      Assumes read_head has been called prior to this call
+    '''
+    def number_of_read_iterations_required_from_mem_requirements(self,max_bytes_available):
+	return int(math.ceil(self._no_baselines*self._no_timestamps / float(self.compute_number_of_rows_to_read_from_mem_requirements(max_bytes_available))))
+    
+    '''
+      Read data from the MS
+      Arguements:
+      start_row moves the reading cursor in the primary table
+      no_rows specifies the number of rows to read (-1 == "read all")
+      Assumes read_head has been called prior to this call
+    '''
+    def read_data(self,start_row=0,no_rows=-1,data_column = "DATA"):
+	print "READING UVW VALUES, DATA, WEIGHTS AND FLAGS"
+	no_rows = self._no_baselines*self._no_timestamps if no_rows==-1 else no_rows
         casa_ms_table = table(self._MSName,ack=False,readonly=True)
         '''
         Grab the uvw coordinates (these are not yet measured in terms of wavelength!)
+        This should have dimensions [0...time * baseline -1][0...num_channels-1][0...num_correlations-1][3]
         '''
-        self._arr_uvw = casa_ms_table.getcol("UVW").astype(np.float32)
+        self._arr_uvw = casa_ms_table.getcol("UVW",startrow=start_row,nrow=no_rows).astype(np.float32)
         '''
         self._min_u = min(self._arr_uvw,key=lambda p: p[0])[0]
         self._max_u = max(self._arr_uvw,key=lambda p: p[0])[0]
@@ -115,7 +139,7 @@ class data_set_loader(object):
         '''
             the data variable has dimensions: [0...obs_time_range*baselines-1][0...num_channels-1][0...num_correlations-1] 
         '''
-        self._arr_data = casa_ms_table.getcol(data_column).astype(np.complex64)
+        self._arr_data = casa_ms_table.getcol(data_column,startrow=start_row,nrow=no_rows).astype(np.complex64)
         '''
             the weights column has dimensions: [0...obs_time_range*baselines-1][0...num_correlations-1]
             However this column only contains the averages accross all channels. The weight_spectrum column
@@ -134,13 +158,13 @@ class data_set_loader(object):
             With faceting the directional dependent effects can move out of the all-sky integral (Smirnov II, 2011)
         '''
 	if "WEIGHT_SPECTRUM" in casa_ms_table.colnames():
-	  self._arr_weights = casa_ms_table.getcol("WEIGHT_SPECTRUM").astype(np.float32)
+	  self._arr_weights = casa_ms_table.getcol("WEIGHT_SPECTRUM",startrow=start_row,nrow=no_rows).astype(np.float32)
 	  print "THIS MEASUREMENT SET HAS VISIBILITY WEIGHTS PER CHANNEL, LOADING [WEIGHT_SPECTRUM] INSTEAD OF [WEIGHT]" 
 	else:
 	  print "THIS MEASUREMENT SET ONLY HAS AVERAGED VISIBILITY WEIGHTS (PER BASELINE), LOADING [WEIGHT]"
-	  self._arr_weights = np.zeros([self._no_baselines*self._no_timestamps,self._no_channels,self._no_polarization_correlations]).astype(np.float32)
+	  self._arr_weights = np.zeros([no_rows,self._no_channels,self._no_polarization_correlations]).astype(np.float32)
         
-	  self._arr_weights[:,0:1,:] = casa_ms_table.getcol("WEIGHT").reshape([self._no_baselines*self._no_timestamps,1,self._no_polarization_correlations])
+	  self._arr_weights[:,0:1,:] = casa_ms_table.getcol("WEIGHT",startrow=start_row,nrow=no_rows).reshape([no_rows,1,self._no_polarization_correlations])
         
 	  for c in range(1,self._no_channels):
 	    self._arr_weights[:,c:c+1,:] = self._arr_weights[:,0:1,:] #apply the same average to each channel per baseline
@@ -149,19 +173,19 @@ class data_set_loader(object):
             the flag column has dimensions: [0...obs_time_range*baselines-1][0...num_channels-1][0...num_correlations-1]
             of type boolean
         '''
-        self._arr_flaged = casa_ms_table.getcol("FLAG")
+        self._arr_flaged = casa_ms_table.getcol("FLAG",startrow=start_row,nrow=no_rows)
         
         '''
 	    the flag row column has dimensions [0...obs_time_range*baselines-1] and must be taken into account
 	    even though there is a more fine-grained flag column
         '''
-        self._arr_flagged_rows = casa_ms_table.getcol("FLAG_ROW")
+        self._arr_flagged_rows = casa_ms_table.getcol("FLAG_ROW",startrow=start_row,nrow=no_rows)
         
         '''
         Grab the two antenna id arrays defining the two antennas defining each baseline (in uvw space)
 	'''
-	self._arr_antenna_1 = casa_ms_table.getcol("ANTENNA1")
-	self._arr_antenna_1 = casa_ms_table.getcol("ANTENNA2")
+	self._arr_antenna_1 = casa_ms_table.getcol("ANTENNA1",startrow=start_row,nrow=no_rows)
+	self._arr_antenna_1 = casa_ms_table.getcol("ANTENNA2",startrow=start_row,nrow=no_rows)
         casa_ms_table.close()
         '''
         print "MIN UVW = (%f,%f,%f), MAX UVW = (%f,%f,%f)" % (self._min_u,self._min_v,self._min_w,self._max_u,self._max_v,self._max_w)

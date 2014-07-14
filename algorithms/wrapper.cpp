@@ -22,7 +22,7 @@ extern "C" {
 		       visibility_weights_base_type *  visibility_weights, size_t facet_nx, size_t facet_ny, uvw_base_type facet_cell_size_x,
 		       uvw_base_type facet_cell_size_y, uvw_base_type phase_centre_ra, uvw_base_type phase_centre_dec, const uvw_base_type * facet_centres, 
 		       std::size_t num_facet_centres, convolution_base_type * conv, size_t conv_support,size_t conv_oversample,size_t polarization_index,
-		       std::complex<grid_base_type> * output_buffer){
+		       std::complex<grid_base_type> * output_buffer, size_t row_count){
     using namespace imaging;
    
     if (facet_centres == nullptr){ //no faceting
@@ -62,7 +62,7 @@ extern "C" {
         	                                     	      casa::Quantity(facet_cell_size_x,"arcsec"),
 							      casa::Quantity(facet_cell_size_y,"arcsec"),
                 	                             	      timestamp_count,baseline_count,channel_count,
-                        	                     	      reference_wavelengths);
+							      row_count,reference_wavelengths);
 		printf(" <DONE>\n");
     } else { //enable faceting
 	      size_t no_facet_pixels = facet_nx*facet_ny;
@@ -111,7 +111,7 @@ extern "C" {
 									  facet_nx,facet_ny,
 									  casa::Quantity(facet_cell_size_x,"arcsec"),casa::Quantity(facet_cell_size_y,"arcsec"),
 									  timestamp_count,baseline_count,channel_count,
-									  reference_wavelengths);
+									  row_count,reference_wavelengths);
 			printf(" <DONE>\n");	
 		}
     }
@@ -122,7 +122,7 @@ extern "C" {
 		  visibility_weights_base_type *  visibility_weights, size_t facet_nx, size_t facet_ny, uvw_base_type facet_cell_size_x,
 		  uvw_base_type facet_cell_size_y, uvw_base_type phase_centre_ra, uvw_base_type phase_centre_dec, const uvw_base_type * facet_centres, 
 		  std::size_t num_facet_centres, convolution_base_type * conv, size_t conv_support,size_t conv_oversample,
-		  std::complex<grid_base_type> * output_buffer){
+		  std::complex<grid_base_type> * output_buffer, size_t row_count){
     using namespace imaging;
     assert(number_of_polarization_terms == 4); //Only supports 4 correlation visibilties in this mode
     if (facet_centres == nullptr){ //no faceting
@@ -161,7 +161,7 @@ extern "C" {
         	                                     	      casa::Quantity(facet_cell_size_x,"arcsec"),
 							      casa::Quantity(facet_cell_size_y,"arcsec"),
                 	                             	      timestamp_count,baseline_count,channel_count,
-                        	                     	      reference_wavelengths);
+                        	                     	      row_count,reference_wavelengths);
 		printf(" <DONE>\n");	
     } else { //enable faceting
 	      size_t no_facet_pixels = facet_nx*facet_ny;
@@ -207,7 +207,7 @@ extern "C" {
 									  facet_nx,facet_ny,
 									  casa::Quantity(facet_cell_size_x,"arcsec"),casa::Quantity(facet_cell_size_y,"arcsec"),
 									  timestamp_count,baseline_count,channel_count,
-									  reference_wavelengths);
+									  row_count,reference_wavelengths);
 			printf(" <DONE>\n");	
 		}
     }

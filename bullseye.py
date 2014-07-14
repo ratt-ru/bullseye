@@ -12,7 +12,6 @@ from helpers import convolution_filter
 from helpers import fits_export
 import ctypes
 libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
-
 	   
 def coords(s):  
     try:
@@ -30,15 +29,20 @@ if __name__ == "__main__":
   parser.add_argument('--facet_centres', help='List of coordinate tupples indicating facet centres (RA,DEC). If none present default pointing centre will be used', type=coords, nargs='+', default=None)
   parser.add_argument('--npix_l', help='Number of facet pixels in l', type=int, default=256)
   parser.add_argument('--npix_m', help='Number of facet pixels in m', type=int, default=256)
-  parser.add_argument('--cell_l', help='Size of a pixel in l (arcsecond)', type=int, default=1)
-  parser.add_argument('--cell_m', help='Size of a pixel in l (arcsecond)', type=int, default=1)
+  parser.add_argument('--cell_l', help='Size of a pixel in l (arcsecond)', type=float, default=1)
+  parser.add_argument('--cell_m', help='Size of a pixel in l (arcsecond)', type=float, default=1)
   parser.add_argument('--pol', help='Specify image polarization', choices=pol_options.keys(), default="XX")
   parser.add_argument('--conv', help='Specify gridding convolution function type', choices=['gausian','keiser bessel'], default='keiser bessel')
   parser.add_argument('--conv_sup', help='Specify gridding convolution function support area (number of grid cells)', type=int, default=1)
   parser.add_argument('--conv_oversamp', help='Specify gridding convolution function oversampling multiplier', type=int, default=1)
   parser.add_argument('--output_format', help='Specify image output format', choices=["fits","png"], default="fits")
+  parser.add_argument('--mem_available_for_input_data', help='Specify available memory (bytes) for storing the input measurement set data arrays', type=int, default=2048*1024*1024)
+  
   parser_args = vars(parser.parse_args())
   data = data_set_loader.data_set_loader(parser_args['input_ms'])
+  data.read_head()
+  chunk_size = data.compute_number_of_rows_to_read_from_mem_requirements(parser_args['mem_available_for_input_data'])
+  no_chunks = data.number_of_read_iterations_required_from_mem_requirements(parser_args['mem_available_for_input_data'])
   #some sanity checks:
   if parser_args['pol'] in ['I','Q','U','V']:
     if data._no_polarization_correlations != 4:
@@ -71,7 +75,7 @@ if __name__ == "__main__":
     num_facet_centres = len(parser_args['facet_centres'])
     facet_centres = np.array(parser_args['facet_centres']).astype(np.float32)
   gridded_vis = None
-  if not parser_args['pol'] in ['I','Q','U','V']:
+  if parser_args['pol'] not in ['I','Q','U','V']:
     pol_index = pol_options[parser_args['pol']]
     if data._polarization_type in [['L'],['Y']]:
       pol_index = 0
@@ -81,52 +85,68 @@ if __name__ == "__main__":
     num_grids = 1 if (num_facet_centres == 0) else num_facet_centres
     g = np.zeros([num_grids,1,parser_args['npix_l'],parser_args['npix_m']],dtype=np.complex64)
     #no need to grid more than one of the correlations if the user isn't interrested in imaging one of the stokes terms (I,Q,U,V):
-    libimaging.grid_single_pol(data._arr_data.ctypes.data_as(ctypes.c_void_p),
-			       data._arr_uvw.ctypes.data_as(ctypes.c_void_p),
-			       ctypes.c_size_t(data._no_timestamps),ctypes.c_size_t(data._no_baselines),
-			       ctypes.c_size_t(data._no_channels),ctypes.c_size_t(data._no_polarization_correlations),
-			       data._chan_wavelengths.ctypes.data_as(ctypes.c_void_p),
-			       data._arr_flaged.ctypes.data_as(ctypes.c_void_p),
-			       data._arr_flagged_rows.ctypes.data_as(ctypes.c_void_p),
-			       data._arr_weights.ctypes.data_as(ctypes.c_void_p),
-			       ctypes.c_size_t(parser_args['npix_l']),
-			       ctypes.c_size_t(parser_args['npix_m']),
-			       ctypes.c_float(parser_args['cell_l']),
-			       ctypes.c_float(parser_args['cell_m']),
-			       ctypes.c_float(data._phase_centre[0,0]),
-			       ctypes.c_float(data._phase_centre[0,1]),
-			       facet_centres.ctypes.data_as(ctypes.c_void_p) if (num_facet_centres != 0) else None, 
-			       ctypes.c_size_t(num_facet_centres), 
-			       conv._conv_FIR.ctypes.data_as(ctypes.c_void_p),
-			       ctypes.c_size_t(parser_args['conv_sup']),
-			       ctypes.c_size_t(parser_args['conv_oversamp']),
-			       ctypes.c_size_t(pol_index),
-			       g.ctypes.data_as(ctypes.c_void_p))
+    for chunk_index in range(0,no_chunks):
+      chunk_lbound = chunk_index * chunk_size
+      chunk_ubound = min((chunk_index+1) * chunk_size,data._no_baselines*data._no_timestamps)
+      chunk_linecount = chunk_ubound - chunk_lbound
+      print "READING CHUNK %d OF %d" % (chunk_index+1,no_chunks)
+      data.read_data(start_row=chunk_lbound,no_rows=chunk_linecount)
+      
+      libimaging.grid_single_pol(data._arr_data.ctypes.data_as(ctypes.c_void_p),
+				data._arr_uvw.ctypes.data_as(ctypes.c_void_p),
+				ctypes.c_size_t(data._no_timestamps),ctypes.c_size_t(data._no_baselines),
+				ctypes.c_size_t(data._no_channels),ctypes.c_size_t(data._no_polarization_correlations),
+				data._chan_wavelengths.ctypes.data_as(ctypes.c_void_p),
+				data._arr_flaged.ctypes.data_as(ctypes.c_void_p),
+				data._arr_flagged_rows.ctypes.data_as(ctypes.c_void_p),
+				data._arr_weights.ctypes.data_as(ctypes.c_void_p),
+				ctypes.c_size_t(parser_args['npix_l']),
+				ctypes.c_size_t(parser_args['npix_m']),
+				ctypes.c_float(parser_args['cell_l']),
+				ctypes.c_float(parser_args['cell_m']),
+				ctypes.c_float(data._phase_centre[0,0]),
+				ctypes.c_float(data._phase_centre[0,1]),
+				facet_centres.ctypes.data_as(ctypes.c_void_p) if (num_facet_centres != 0) else None, 
+				ctypes.c_size_t(num_facet_centres), 
+				conv._conv_FIR.ctypes.data_as(ctypes.c_void_p),
+				ctypes.c_size_t(parser_args['conv_sup']),
+				ctypes.c_size_t(parser_args['conv_oversamp']),
+				ctypes.c_size_t(pol_index),
+				g.ctypes.data_as(ctypes.c_void_p),
+				ctypes.c_size_t(chunk_linecount))
+      
     gridded_vis = g[:,0,:,:]
   else:
     num_polarized_grids = 1 if (num_facet_centres == 0) else num_facet_centres
     g = np.zeros([num_polarized_grids,4,parser_args['npix_l'],parser_args['npix_m']],dtype=np.complex64)
-   
-    libimaging.grid_4_cor(data._arr_data.ctypes.data_as(ctypes.c_void_p),
-			  data._arr_uvw.ctypes.data_as(ctypes.c_void_p),
-			  ctypes.c_size_t(data._no_timestamps),ctypes.c_size_t(data._no_baselines),
-			  ctypes.c_size_t(data._no_channels),ctypes.c_size_t(data._no_polarization_correlations),
-			  data._chan_wavelengths.ctypes.data_as(ctypes.c_void_p),
-			  data._arr_flaged.ctypes.data_as(ctypes.c_void_p),
-			  data._arr_flagged_rows.ctypes.data_as(ctypes.c_void_p),
-			  data._arr_weights.ctypes.data_as(ctypes.c_void_p),
-			  ctypes.c_size_t(parser_args['npix_l']),
-			  ctypes.c_size_t(parser_args['npix_m']),
-			  ctypes.c_float(parser_args['cell_l']),
-			  ctypes.c_float(parser_args['cell_m']),
-			  ctypes.c_float(data._phase_centre[0,0]),
-			  ctypes.c_float(data._phase_centre[0,1]),
-			  facet_centres.ctypes.data_as(ctypes.c_void_p) if (num_facet_centres != 0) else None, 
-			  ctypes.c_size_t(num_facet_centres), 
-			  conv._conv_FIR.ctypes.data_as(ctypes.c_void_p),
-			  ctypes.c_size_t(parser_args['conv_sup']),
-			  ctypes.c_size_t(parser_args['conv_oversamp']),
-			  g.ctypes.data_as(ctypes.c_void_p))  
+    for chunk_index in range(0,no_chunks):
+      chunk_lbound = chunk_index * chunk_size
+      chunk_ubound = min((chunk_index+1) * chunk_size,data._no_baselines*data._no_timestamps)
+      chunk_linecount = chunk_ubound - chunk_lbound
+      print "READING CHUNK %d OF %d" % (chunk_index+1,no_chunks)
+      data.read_data(start_row=chunk_lbound,no_rows=chunk_linecount)
+      
+      libimaging.grid_4_cor(data._arr_data.ctypes.data_as(ctypes.c_void_p),
+			    data._arr_uvw.ctypes.data_as(ctypes.c_void_p),
+			    ctypes.c_size_t(data._no_timestamps),ctypes.c_size_t(data._no_baselines),
+			    ctypes.c_size_t(data._no_channels),ctypes.c_size_t(data._no_polarization_correlations),
+			    data._chan_wavelengths.ctypes.data_as(ctypes.c_void_p),
+			    data._arr_flaged.ctypes.data_as(ctypes.c_void_p),
+			    data._arr_flagged_rows.ctypes.data_as(ctypes.c_void_p),
+			    data._arr_weights.ctypes.data_as(ctypes.c_void_p),
+			    ctypes.c_size_t(parser_args['npix_l']),
+			    ctypes.c_size_t(parser_args['npix_m']),
+			    ctypes.c_float(parser_args['cell_l']),
+			    ctypes.c_float(parser_args['cell_m']),
+			    ctypes.c_float(data._phase_centre[0,0]),
+			    ctypes.c_float(data._phase_centre[0,1]),
+			    facet_centres.ctypes.data_as(ctypes.c_void_p) if (num_facet_centres != 0) else None, 
+			    ctypes.c_size_t(num_facet_centres), 
+			    conv._conv_FIR.ctypes.data_as(ctypes.c_void_p),
+			    ctypes.c_size_t(parser_args['conv_sup']),
+			    ctypes.c_size_t(parser_args['conv_oversamp']),
+			    g.ctypes.data_as(ctypes.c_void_p),
+			    ctypes.c_size_t(chunk_linecount))  
     '''
     See Smirnov I (2011) for description on conversion between correlation terms and stokes params for linearly polarized feeds
     See Synthesis Imaging II (1999) Pg. 9 for a description on conversion between correlation terms and stokes params for rotary polarized feeds

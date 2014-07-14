@@ -54,6 +54,7 @@ namespace imaging {
 		  const bool * __restrict__ flagged_rows,
 		  std::size_t nx, std::size_t ny, casa::Quantity cellx, casa::Quantity celly,
 		  std::size_t timestamp_count, std::size_t baseline_count, std::size_t channel_count,
+		  std::size_t row_count,
 		  const reference_wavelengths_base_type *__restrict__ reference_wavelengths){
 		/*
 		Pg. 138, 145-147, Synthesis Imaging II (Briggs, Schwab & Sramek)
@@ -70,9 +71,9 @@ namespace imaging {
 		float progress_step_size = 10.0;
 		float next_progress_step = progress_step_size;
 		#endif
-                for (std::size_t bt = 0; bt < baseline_count*timestamp_count; ++bt){ //this corresponds to the rows of the MS 2.0 MAIN table definition
+                for (std::size_t bt = 0; bt < row_count; ++bt){ //this corresponds to the rows of the MS 2.0 MAIN table definition
 			#ifdef GRIDDER_PRINT_PROGRESS
-			float progress = bt/float(baseline_count*timestamp_count)*100.0f;
+			float progress = bt/float(row_count)*100.0f;
 			if (progress > next_progress_step){
 				printf("%f%%... ",next_progress_step);
 				fflush(stdout);
