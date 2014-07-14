@@ -110,7 +110,7 @@ if __name__ == "__main__":
 	print "\033[93m%s [model image] (normalized):" % parser_args["model_image"]
 	print "\033[33m\tAverage: %f" % avg_model
 	print "\033[33m\tStandard deviation: %f" % stddev_model
-	print "\033[93mMean Squared Error between normalized input images: %fdB" % mse
+	print "\033[93mMean Squared Error between normalized input images: %f" % mse
 	print "\033[93mPeak Signal to Noise between normalized input images: %fdB\033[0m" % snr_img1_to_img2
 
 
