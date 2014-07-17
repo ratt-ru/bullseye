@@ -36,7 +36,6 @@ def save_to_fits_image(name,size_l,size_m,
 		   cell_l,cell_m,
 		   pointing_ra,pointing_dec,
 		   polarization_term,
-		   equinox,
 		   data):
   if data.size != size_l*size_m:
     raise Exception("Data size must be equal to size_l * size_m")
@@ -65,7 +64,5 @@ def save_to_fits_image(name,size_l,size_m,
   pri_hdr.header.append(("CRVAL4",FITS_POLARIZATION_CLASSIFIERS[polarization_term],"Polarization identifier"))
   pri_hdr.header.append(("CUNIT4"," ","Polarization term is unitless"))
   pri_hdr.header.append(("LONPOLE",180 if pointing_dec.get_value("deg") < 0 else 0,"Native longitude of celestial pole"))
-  pri_hdr.header.append(("RADESYS","FK5" if equinox >= 1984 else "FK4","Mean IAU 1984 equatorial coordinates"))
-  pri_hdr.header.append(("EQUINOX",equinox,"Equinox"))
   fits = pyfits.HDUList([pri_hdr])
   fits.writeto(name,clobber=True)

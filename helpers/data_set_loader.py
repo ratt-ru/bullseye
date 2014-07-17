@@ -45,8 +45,6 @@ class data_set_loader(object):
                                                       self._observation_end,
                                                       self._epoch,
                                                      )
-        
-        
         casa_ms_table.close()
         casa_ms_table = table(self._MSName+'/ANTENNA',ack=False,readonly=True)
         self._no_antennae = casa_ms_table.nrows()
@@ -60,13 +58,9 @@ class data_set_loader(object):
         print "%d UNIQUE BASELINES" % (self._no_baselines)
         casa_ms_table = table(self._MSName+"/POLARIZATION",ack=False,readonly=True)
         self._no_polarization_correlations = casa_ms_table.getcell("NUM_CORR", 0)
+        self._polarization_correlations = casa_ms_table.getcell("CORR_TYPE", 0)
         print "%d CORRELATIONS DUE TO POLARIZATION" % self._no_polarization_correlations
-        casa_ms_table.close()
-        casa_ms_table = table(self._MSName+"/FEED",ack=False,readonly=True)
-        self._no_receptors = casa_ms_table.getcell("NUM_RECEPTORS", 0)
-        assert(self._no_polarization_correlations == self._no_receptors**2) #number of ways to correlate two feeds
-        self._polarization_type = casa_ms_table.getcell("POLARIZATION_TYPE", 0) #should be something like [X,Y] or [R,L]
-        casa_ms_table.close()
+        casa_ms_table.close()        
         casa_ms_table = table(self._MSName+"/SPECTRAL_WINDOW",ack=False,readonly=True)
         self._no_channels = casa_ms_table.getcell("NUM_CHAN", 0)
         print "%d CHANNELS IN OBSERVATION" % self._no_channels
@@ -79,11 +73,15 @@ class data_set_loader(object):
         print "REFERENCE WAVELENGTH: %f m" % (self._ref_wavelength)
         casa_ms_table.close()
         casa_ms_table = table(self._MSName+"/FIELD",ack=False,readonly=True)
-        self._phase_centre = casa_ms_table.getcell("PHASE_DIR", 0)
-	self._phase_centre[0,0] = quantity(self._phase_centre[0,0],"rad").get_value("arcsec")
-	self._phase_centre[0,1] = quantity(self._phase_centre[0,1],"rad").get_value("arcsec")
-	print "PHASE CENTRE: (RA: %s, DEC: %s)" % (quantity(self._phase_centre[0,0],"arcsec").get("deg").formatted("[+-]dd.mm.ss.t.."),
-						   quantity(self._phase_centre[0,1],"arcsec").get("deg").formatted("[+-]dd.mm.ss.t.."))
+        self._field_centres = casa_ms_table.getcol("REFERENCE_DIR")
+        self._field_centre_names = casa_ms_table.getcol("NAME")
+	print "REFERENCE CENTRES OBSERVED:"
+        for i in range(0, len(self._field_centres)):
+	  self._field_centres[i,0,0] = quantity(self._field_centres[i,0,0],"rad").get_value("arcsec")
+	  self._field_centres[i,0,1] = quantity(self._field_centres[i,0,1],"rad").get_value("arcsec")
+	  print "\tCENTRE OF %s (FIELD ID %d): RA: %s, DEC: %s" % (self._field_centre_names[i],i,
+								 quantity(self._field_centres[i,0,0],"arcsec").get("deg").formatted("[+-]dd.mm.ss.t.."),
+								 quantity(self._field_centres[i,0,1],"arcsec").get("deg").formatted("[+-]dd.mm.ss.t.."))
         casa_ms_table.close()
         casa_ms_table = table(self._MSName,ack=False,readonly=True)
         self._no_timestamps = casa_ms_table.nrows() / self._no_baselines
@@ -102,7 +100,7 @@ class data_set_loader(object):
 				      (self._no_channels*self._no_polarization_correlations*4) + #casted weight
 				      (self._no_channels*self._no_polarization_correlations*np.dtype(np.bool_).itemsize) + #visibility flags
 				      (np.dtype(np.bool_).itemsize) + #row flags
-				      (2*np.dtype(np.intc).itemsize)) #antenna 1 & 2
+				      (3*np.dtype(np.intc).itemsize)) #antenna 1 & 2 and FIELD_ID
     
     '''
       Computes the number of iterations required to read entire file, given memory constraints (in bytes)
@@ -127,15 +125,7 @@ class data_set_loader(object):
         This should have dimensions [0...time * baseline -1][0...num_channels-1][0...num_correlations-1][3]
         '''
         self._arr_uvw = casa_ms_table.getcol("UVW",startrow=start_row,nrow=no_rows).astype(np.float32)
-        '''
-        self._min_u = min(self._arr_uvw,key=lambda p: p[0])[0]
-        self._max_u = max(self._arr_uvw,key=lambda p: p[0])[0]
-        self._min_v = min(self._arr_uvw,key=lambda p: p[1])[1]
-        self._max_v = max(self._arr_uvw,key=lambda p: p[1])[1]
-        self._min_w = min(self._arr_uvw,key=lambda p: p[2])[2]
-        self._max_w = max(self._arr_uvw,key=lambda p: p[2])[2]
-        '''
-        
+          
         '''
             the data variable has dimensions: [0...obs_time_range*baselines-1][0...num_channels-1][0...num_correlations-1] 
         '''
@@ -157,10 +147,10 @@ class data_set_loader(object):
             sum_over_all_sources dde_p^-1 * V_weighted * (dde_q^H)^-1
             With faceting the directional dependent effects can move out of the all-sky integral (Smirnov II, 2011)
         '''
-	if "WEIGHT_SPECTRUM" in casa_ms_table.colnames():
+	try:
 	  self._arr_weights = casa_ms_table.getcol("WEIGHT_SPECTRUM",startrow=start_row,nrow=no_rows).astype(np.float32)
 	  print "THIS MEASUREMENT SET HAS VISIBILITY WEIGHTS PER CHANNEL, LOADING [WEIGHT_SPECTRUM] INSTEAD OF [WEIGHT]" 
-	else:
+	except:
 	  print "THIS MEASUREMENT SET ONLY HAS AVERAGED VISIBILITY WEIGHTS (PER BASELINE), LOADING [WEIGHT]"
 	  self._arr_weights = np.zeros([no_rows,self._no_channels,self._no_polarization_correlations]).astype(np.float32)
         
@@ -185,8 +175,9 @@ class data_set_loader(object):
         Grab the two antenna id arrays defining the two antennas defining each baseline (in uvw space)
 	'''
 	self._arr_antenna_1 = casa_ms_table.getcol("ANTENNA1",startrow=start_row,nrow=no_rows)
-	self._arr_antenna_1 = casa_ms_table.getcol("ANTENNA2",startrow=start_row,nrow=no_rows)
-        casa_ms_table.close()
-        '''
-        print "MIN UVW = (%f,%f,%f), MAX UVW = (%f,%f,%f)" % (self._min_u,self._min_v,self._min_w,self._max_u,self._max_v,self._max_w)
+	self._arr_antenna_2 = casa_ms_table.getcol("ANTENNA2",startrow=start_row,nrow=no_rows)
 	'''
+	Grab the FIELD_ID column in case there is more than a single pointing
+	'''
+	self._row_field_id = casa_ms_table.getcol("FIELD_ID",startrow=start_row,nrow=no_rows)
+        casa_ms_table.close()

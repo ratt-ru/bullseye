@@ -23,7 +23,7 @@ def coords(s):
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(description='Bullseye: An implementation of targetted facet-based synthesis imaging in radio astronomy.')
-  pol_options = {'XX': 0,'XY': 1,'YX': 2,'YY': 3,'RR' : 4,'RL' : 5,'LR' : 6,'LL' : 7, 'I': 8,'Q': 9,'U': 10,'V': 11} #if the user selects [XX...YY] or [RR...LL] we only have to compute a single grid
+  pol_options = {'I' : 1, 'Q' : 2, 'U' : 3, 'V' : 4, 'RR' : 5, 'RL' : 6, 'LR' : 7, 'LL' : 8, 'XX' : 9, 'XY' : 10, 'YX' : 11, 'YY' : 12} # as per Stokes.h in casacore, the rest is left unimplemented
   parser.add_argument('input_ms', help='Name of the measurement set to read', type=str)
   parser.add_argument('output_prefix', help='Prefix for the output FITS images. Facets will be indexed as [prefix_1.fits ... prefix_n.fits]', type=str)
   parser.add_argument('--facet_centres', help='List of coordinate tupples indicating facet centres (RA,DEC). If none present default pointing centre will be used', type=coords, nargs='+', default=None)
@@ -37,37 +37,25 @@ if __name__ == "__main__":
   parser.add_argument('--conv_oversamp', help='Specify gridding convolution function oversampling multiplier', type=int, default=1)
   parser.add_argument('--output_format', help='Specify image output format', choices=["fits","png"], default="fits")
   parser.add_argument('--mem_available_for_input_data', help='Specify available memory (bytes) for storing the input measurement set data arrays', type=int, default=2048*1024*1024)
-  
+  parser.add_argument('--field_id', help='Specify the id of the field (pointing) to image', type=int, default=0)
   parser_args = vars(parser.parse_args())
   data = data_set_loader.data_set_loader(parser_args['input_ms'])
   data.read_head()
   chunk_size = data.compute_number_of_rows_to_read_from_mem_requirements(parser_args['mem_available_for_input_data'])
   no_chunks = data.number_of_read_iterations_required_from_mem_requirements(parser_args['mem_available_for_input_data'])
   #some sanity checks:
-  if parser_args['pol'] in ['I','Q','U','V']:
-    if data._no_polarization_correlations != 4:
-      raise argparse.ArgumentTypeError("Cannot image polarization '%s'. Option only avaliable when data contains 4 correlation terms per visibility" % parser_args['pol'])
-    
-    if not data._polarization_type in [['X','Y'],['R','L']]:
-      raise argparse.ArgumentTypeError("Cannot image polarization '%s' with feeds labeled '%s', expecting feeds to be either [X,Y] or [R,L]" % (parser_args['pol'],data._polarization_type))
-  else:
-    #linearly polarized feeds
-    if parser_args['pol'] == 'XX' and not data._polarization_type in [['X','Y'],['X']]:
-      raise argparse.ArgumentTypeError("Cannot image polarization '%s' with feeds labeled '%s', expecting feeds to be either [X,Y] or [X]" % (parser_args['pol'],data._polarization_type))
-    if parser_args['pol'] in ['XY','YX']  and not data._polarization_type in [['X','Y']]:
-      raise argparse.ArgumentTypeError("Cannot image polarization '%s' with feeds labeled '%s', expecting feeds to be [X,Y]" % (parser_args['pol'],data._polarization_type))
-    if parser_args['pol'] == 'YY'  and not data._polarization_type in [['X','Y'],['Y']]:
-      raise argparse.ArgumentTypeError("Cannot image polarization '%s' with feeds labeled '%s', expecting feeds to be either [X,Y] or [Y]" % (parser_args['pol'],data._polarization_type))
-    #rotary polarized feeds
-    if parser_args['pol'] == 'RR' and not data._polarization_type in [['R','L'],['R']]:
-      raise argparse.ArgumentTypeError("Cannot image polarization '%s' with feeds labeled '%s', expecting feeds to be either [R,L] or [R]" % (parser_args['pol'],data._polarization_type))
-    if parser_args['pol'] in ['RL','LR']  and not data._polarization_type in [['R','L']]:
-      raise argparse.ArgumentTypeError("Cannot image polarization '%s' with feeds labeled '%s', expecting feeds to be [R,L]" % (parser_args['pol'],data._polarization_type))
-    if parser_args['pol'] == 'LL'  and not data._polarization_type in [['R','L'],['L']]:
-      raise argparse.ArgumentTypeError("Cannot image polarization '%s' with feeds labeled '%s', expecting feeds to be either [R,L] or [L]" % (parser_args['pol'],data._polarization_type))
+  if data._polarization_correlations.tolist() not in [[pol_options['I'],pol_options['Q'],pol_options['U'],pol_options['V']],		#normal stokes terms
+						      [pol_options['RR'],pol_options['RL'],pol_options['LR'],pol_options['LL']],		#circular correlation products
+						      [pol_options['XX'],pol_options['XY'],pol_options['YX'],pol_options['YY']]]:	#linear correlation products
+    raise argparse.ArgumentTypeError("Unknown polarization specified in Measurement Set. Only ['I','Q','U','V'], ['RR','RL','LR','LL'], ['XX','XY','YX','YY'] are implemented at this point")
+  if (parser_args['pol'] not in ['I','Q','U','V']) and (pol_options[parser_args['pol']] not in data._polarization_correlations):
+    raise argparse.ArgumentTypeError("Cannot obtain requested gridded polarization from the provided measurement set.")
+  if parser_args['field_id'] not in range(0,len(data._field_centre_names)):
+    raise argparse.ArgumentTypeError("Specified field does not exist Must be in 0 ... %d for this Measurement Set" % (len(data._field_centre_names) - 1))
   conv = convolution_filter.convolution_filter(parser_args['conv_sup'],parser_args['conv_sup'],
 					       parser_args['conv_oversamp'],parser_args['npix_l'],
 					       parser_args['npix_m'],parser_args['conv'])
+  print "IMAGING ONLY FIELD %s" % data._field_centre_names[parser_args['field_id']]
   facet_centres = None
   
   num_facet_centres = 0
@@ -75,16 +63,16 @@ if __name__ == "__main__":
     num_facet_centres = len(parser_args['facet_centres'])
     facet_centres = np.array(parser_args['facet_centres']).astype(np.float32)
   gridded_vis = None
-  if parser_args['pol'] not in ['I','Q','U','V']:
+  #no need to grid more than one of the correlations if the user isn't interrested in imaging one of the stokes terms (I,Q,U,V) or the stokes terms are the correlation products:
+  if parser_args['pol'] not in ['I','Q','U','V'] or data._polarization_correlations.tolist() == [pol_options['I'],pol_options['Q'],pol_options['U'],pol_options['V']]:
     pol_index = pol_options[parser_args['pol']]
-    if data._polarization_type in [['L'],['Y']]:
-      pol_index = 0
-    elif parser_args['pol'] in ['RR','RL','LR','LL']:
-      pol_index -= 3
+    if parser_args['pol'] in ['RR','RL','LR','LL']:
+      pol_index -= pol_options['RR']
+    if parser_args['pol'] in ['XX','XY','YX','YY']:
+      pol_index -= pol_options['XX']
     
     num_grids = 1 if (num_facet_centres == 0) else num_facet_centres
     g = np.zeros([num_grids,1,parser_args['npix_l'],parser_args['npix_m']],dtype=np.complex64)
-    #no need to grid more than one of the correlations if the user isn't interrested in imaging one of the stokes terms (I,Q,U,V):
     for chunk_index in range(0,no_chunks):
       chunk_lbound = chunk_index * chunk_size
       chunk_ubound = min((chunk_index+1) * chunk_size,data._no_baselines*data._no_timestamps)
@@ -104,8 +92,8 @@ if __name__ == "__main__":
 				ctypes.c_size_t(parser_args['npix_m']),
 				ctypes.c_float(parser_args['cell_l']),
 				ctypes.c_float(parser_args['cell_m']),
-				ctypes.c_float(data._phase_centre[0,0]),
-				ctypes.c_float(data._phase_centre[0,1]),
+				ctypes.c_float(data._field_centres[parser_args['field_id'],0,0]),
+				ctypes.c_float(data._field_centres[parser_args['field_id'],0,1]),
 				facet_centres.ctypes.data_as(ctypes.c_void_p) if (num_facet_centres != 0) else None, 
 				ctypes.c_size_t(num_facet_centres), 
 				conv._conv_FIR.ctypes.data_as(ctypes.c_void_p),
@@ -113,10 +101,12 @@ if __name__ == "__main__":
 				ctypes.c_size_t(parser_args['conv_oversamp']),
 				ctypes.c_size_t(pol_index),
 				g.ctypes.data_as(ctypes.c_void_p),
-				ctypes.c_size_t(chunk_linecount))
+				ctypes.c_size_t(chunk_linecount),
+				data._row_field_id.ctypes.data_as(ctypes.c_void_p),
+				ctypes.c_uint(parser_args['field_id']))
       
     gridded_vis = g[:,0,:,:]
-  else:
+  else: # the user want to derive one of the stokes terms (I,Q,U,V) from the correlation terms:
     num_polarized_grids = 1 if (num_facet_centres == 0) else num_facet_centres
     g = np.zeros([num_polarized_grids,4,parser_args['npix_l'],parser_args['npix_m']],dtype=np.complex64)
     for chunk_index in range(0,no_chunks):
@@ -138,29 +128,22 @@ if __name__ == "__main__":
 			    ctypes.c_size_t(parser_args['npix_m']),
 			    ctypes.c_float(parser_args['cell_l']),
 			    ctypes.c_float(parser_args['cell_m']),
-			    ctypes.c_float(data._phase_centre[0,0]),
-			    ctypes.c_float(data._phase_centre[0,1]),
+			    ctypes.c_float(data._field_centres[parser_args['field_id'],0,0]),
+			    ctypes.c_float(data._field_centres[parser_args['field_id'],0,1]),
 			    facet_centres.ctypes.data_as(ctypes.c_void_p) if (num_facet_centres != 0) else None, 
 			    ctypes.c_size_t(num_facet_centres), 
 			    conv._conv_FIR.ctypes.data_as(ctypes.c_void_p),
 			    ctypes.c_size_t(parser_args['conv_sup']),
 			    ctypes.c_size_t(parser_args['conv_oversamp']),
 			    g.ctypes.data_as(ctypes.c_void_p),
-			    ctypes.c_size_t(chunk_linecount))  
+			    ctypes.c_size_t(chunk_linecount),
+			    data._row_field_id.ctypes.data_as(ctypes.c_void_p),
+			    ctypes.c_uint(parser_args['field_id']))  
     '''
     See Smirnov I (2011) for description on conversion between correlation terms and stokes params for linearly polarized feeds
-    See Synthesis Imaging II (1999) Pg. 9 for a description on conversion between correlation terms and stokes params for rotary polarized feeds
+    See Synthesis Imaging II (1999) Pg. 9 for a description on conversion between correlation terms and stokes params for circularly polarized feeds
     '''
-    if data._polarization_type in [['X','Y']]:
-      if parser_args['pol'] == "I":
-	gridded_vis = ((g[:,0,:,:] + g[:,3,:,:])).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
-      elif parser_args['pol'] == "V":
-	gridded_vis = ((g[:,1,:,:] - g[:,2,:,:])/1.0j).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
-      elif parser_args['pol'] == "Q":
-	gridded_vis = ((g[:,0,:,:] - g[:,3,:,:])).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
-      elif parser_args['pol'] == "U":
-	gridded_vis = ((g[:,1,:,:] + g[:,2,:,:])).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
-    else: #in [['R','L']]
+    if data._polarization_correlations.tolist() == [pol_options['RR'],pol_options['RL'],pol_options['LR'],pol_options['LL']]:		#circular correlation products
       if parser_args['pol'] == "I":
 	gridded_vis = ((g[:,0,:,:] + g[:,3,:,:])/2).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
       elif parser_args['pol'] == "V":
@@ -169,10 +152,21 @@ if __name__ == "__main__":
 	gridded_vis = ((g[:,1,:,:] + g[:,2,:,:])/2).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
       elif parser_args['pol'] == "U":
 	gridded_vis = ((g[:,1,:,:] - g[:,2,:,:])/2/1.0j).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
+    elif data._polarization_correlations.tolist() == [pol_options['XX'],pol_options['XY'],pol_options['YX'],pol_options['YY']]:		#linear correlation products
+      if parser_args['pol'] == "I":
+	gridded_vis = ((g[:,0,:,:] + g[:,3,:,:])).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
+      elif parser_args['pol'] == "V":
+	gridded_vis = ((g[:,1,:,:] - g[:,2,:,:])/1.0j).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
+      elif parser_args['pol'] == "Q":
+	gridded_vis = ((g[:,0,:,:] - g[:,3,:,:])).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
+      elif parser_args['pol'] == "U":
+	gridded_vis = ((g[:,1,:,:] + g[:,2,:,:])).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
+    else: raise Exception("Unimplemenented: can only derive ['I','Q','U','V'] from ['RR','RL','LR','LL'], ['XX','XY','YX','YY'] at this time")
+      
 	
   #now invert, detaper and write out all the facets to disk:  
   if parser_args['facet_centres'] == None:
-    dirty = np.real(fft_utils.ifft2(gridded_vis[0,:,:]))/conv._F_detaper
+    dirty = np.real(fft_utils.ifft2(gridded_vis[0,:,:]))/(conv._F_detaper)
     if parser_args['output_format'] == 'png':
       i = pylab.imshow(dirty[::-1,:],interpolation='nearest',cmap = pylab.get_cmap('hot'),
 		       extent=[0, parser_args['npix_l']-1, 0, parser_args['npix_m']-1])
@@ -182,9 +176,9 @@ if __name__ == "__main__":
       fits_export.save_to_fits_image(parser_args['output_prefix']+'.fits',
 				     parser_args['npix_l'],parser_args['npix_m'],
 				     quantity(parser_args['cell_l'],'arcsec'),quantity(parser_args['cell_m'],'arcsec'),
-				     quantity(data._phase_centre[0,0],'arcsec'),quantity(data._phase_centre[0,1],'arcsec'),
+				     quantity(data._field_centres[parser_args['field_id'],0,0],'arcsec'),
+				     quantity(data._field_centres[parser_args['field_id'],0,1],'arcsec'),
 				     parser_args['pol'],
-				     float(data._epoch[1:]) if not data._epoch[0] in range(ord('0'),ord('9')) else float(data._epoch),
 				     dirty)
   else:
     for f in range(0, num_facet_centres):
@@ -200,5 +194,4 @@ if __name__ == "__main__":
 				       quantity(parser_args['cell_l'],'arcsec'),quantity(parser_args['cell_m'],'arcsec'),
 				       quantity(facet_centres[0,0],'arcsec'),quantity(facet_centres[0,1],'arcsec'),
 				       parser_args['pol'],
-				       float(data._epoch[1:]) if not data._epoch[0] in range(ord('0'),ord('9')) else float(data._epoch),
 				       dirty)

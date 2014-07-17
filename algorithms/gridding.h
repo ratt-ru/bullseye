@@ -28,6 +28,9 @@ namespace imaging {
 		nx,ny: size of the pre-allocated buffer
 		cellx,celly: size of the cells (in arcsec)
 		timestamp_count, baseline_count, channel_count, polarization_term_count: (integral counts as specified)
+		row_count: number of measurement set rows being imaged (this can be equal to timestamp_count*baseline_count if the entire measurement set is read into memory)
+		field_array: this corresponds to the FIELD_ID column of an ms, and can be used to identify where each baseline is pointing at a particular time (see also "imaging_field")
+		imaging_field: this is the identifier of the field (pointing) currently being imaged. Only contributions from baselines with this field identifier will be gridded.
 		reference_wavelengths: associated wavelength of each channel used to sample visibilities (wavelength = speed_of_light / channel_frequency)
 			PRECONDITIONS:
 			1. timestamp_count x baseline_count x channel_count x polarization_term_count <= ||visibilities||
@@ -55,7 +58,10 @@ namespace imaging {
 		  std::size_t nx, std::size_t ny, casa::Quantity cellx, casa::Quantity celly,
 		  std::size_t timestamp_count, std::size_t baseline_count, std::size_t channel_count,
 		  std::size_t row_count,
-		  const reference_wavelengths_base_type *__restrict__ reference_wavelengths){
+		  const reference_wavelengths_base_type *__restrict__ reference_wavelengths,
+		  const unsigned int * __restrict__ field_array,
+		  unsigned int imaging_field
+ 		){
 		/*
 		Pg. 138, 145-147, Synthesis Imaging II (Briggs, Schwab & Sramek)
 		Scale the UVW coords so that we can image only the primary field of view:
@@ -80,6 +86,7 @@ namespace imaging {
 				next_progress_step += progress_step_size;
 			}
 			#endif
+			if (field_array[bt] != imaging_field) continue; //We only image contributions from those antennae actually pointing to the field in question
 			if (flagged_rows[bt]) continue; //if the entire row is flagged don't continue
                         for (std::size_t c = 0; c < channel_count; ++c){
 				/*
