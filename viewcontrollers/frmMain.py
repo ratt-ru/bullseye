@@ -1,5 +1,6 @@
 import sys
 import os
+import traceback
 from pyrap.tables import table
 from pyrap.measures import measures
 from pyrap.quanta import quantity
@@ -43,20 +44,20 @@ class frmMain:
 		itr = model.iter_next(itr)
 		self._img_size_m = int(model.get_value(itr,1))
 		itr = model.iter_next(itr)
-		self._img_cell_l = model.get_value(itr,1)
+		self._img_cell_l = float(model.get_value(itr,1))
 		itr = model.iter_next(itr)
-		self._img_cell_m = model.get_value(itr,1)
+		self._img_cell_m = float(model.get_value(itr,1))
 		itr = model.iter_next(itr)
 		conv_support = int(model.get_value(itr,1))
 		itr = model.iter_next(itr)
 		conv_oversample = int(model.get_value(itr,1))
 		itr = model.iter_next(itr)
-		self._polarization = int(model.get_value(itr,1))
-		pol_labels = {0:'XX', 1:'XY', 2:'YX', 3:'YY', 4:'RR', 5:'RL', 6:'LR', 7:'LL', 8:'I', 9:'Q', 10:'U', 11:'V'}
-		
-		if (not (os.system("python bullseye.py %s %s --output_format png --npix_l %d --npix_m %d --cell_l %d --cell_m %d --pol %s --conv_sup %d --conv_oversamp %d" % (self._ms_name,
-				   self.IMAGE_TMP_FILE_NAME,self._img_size_l,self._img_size_m,self._img_cell_l,
-				   self._img_cell_m,pol_labels[self._polarization],conv_support,conv_oversample)) == 0)):
+		self._polarization = model.get_value(itr,1)
+		itr = model.iter_next(itr)
+		self._field_id = int(model.get_value(itr,1))
+		if (not (os.system("python bullseye.py \"%s\" \"%s\" --output_format png --npix_l %d --npix_m %d --cell_l %d --cell_m %d --pol %s --conv_sup %d --conv_oversamp %d --field_id %d" % (self._ms_name,
+				   self.IMAGE_TMP_FILE_NAME,self._img_size_l,self._img_size_m,self._img_cell_l,self._img_cell_m,
+				   self._polarization,conv_support,conv_oversample,self._field_id)) == 0)):
 		    raise Exception("Invalid parameters for imager")
 		self._low_res_image = cairo.ImageSurface.create_from_png(self.IMAGE_TMP_FILE_NAME+".png")
 		self._builder.get_object("cvsLowRes").queue_draw()
@@ -100,12 +101,11 @@ class frmMain:
 			  self._ms_name = dialog.get_filename()
 			  self.on_btnMakeLowRes_clicked(self._builder.get_object("btnMakeLowRes"))
 			  casa_ms_table = table(self._ms_name+"/FIELD",ack=False,readonly=True)
-			  self._phase_centre = casa_ms_table.getcell("PHASE_DIR", 0)
-			  self._phase_centre[0,0] = quantity(self._phase_centre[0,0],"rad").get_value("arcsec")
-			  self._phase_centre[0,1] = quantity(self._phase_centre[0,1],"rad").get_value("arcsec")
+			  self._phase_centres = casa_ms_table.getcol("REFERENCE_DIR")
+			  casa_ms_table.close()
 			  self.__change_visibilities() 
 			except:
-			  message = Gtk.MessageDialog(self._builder.get_object("frmMain"),0,Gtk.MessageType.ERROR,Gtk.ButtonsType.OK,"Not a valid MS 2.0 Measurement Set directory!")
+			  message = Gtk.MessageDialog(self._builder.get_object("frmMain"),0,Gtk.MessageType.ERROR,Gtk.ButtonsType.OK,"Not a valid MS 2.0 Measurement Set directory!\n"+traceback.format_exc())
 			  message.run()
 			  message.destroy()
 			  self.__reset_view()
@@ -117,16 +117,12 @@ class frmMain:
 	def on_tvwLowResProperties_cell_edited(self,cell,path_string,new_text):
 		model = self._builder.get_object("lstLowResProperties")
 		it = model.get_iter(path_string)
-		val = math.floor(float(new_text)) if int(path_string) <= 1 or int(path_string) > 3 else float(new_text)
-		if path_string == "6":
-			val = max(0,min(3,val))
-		model.set_value(it, 1, val)
+		model.set_value(it, 1, new_text)
 	
 	def on_tvwFacetingProperties_cell_edited(self,cell,path_string,new_text):
 		model = self._builder.get_object("lstFacetingProperties")
                 it = model.get_iter(path_string)
-                val = math.floor(float(new_text)) if int(path_string) <= 1 or int(path_string) > 3 else float(new_text)
-                model.set_value(it, 1, val)
+                model.set_value(it, 1, new_text)
 
 	def on_click(self,widget,event):
 		if self._low_res_image != None:
@@ -136,9 +132,9 @@ class frmMain:
 			itr = model.iter_next(itr)
 			facet_size_m = int(model.get_value(itr,1))
 			itr = model.iter_next(itr)
-			facet_cell_l = model.get_value(itr,1)
+			facet_cell_l = float(model.get_value(itr,1))
 			itr = model.iter_next(itr)
-			facet_cell_m = model.get_value(itr,1)
+			facet_cell_m = float(model.get_value(itr,1))
 			itr = model.iter_next(itr)
 			conv_support = int(model.get_value(itr,1))
 			itr = model.iter_next(itr)
@@ -147,15 +143,14 @@ class frmMain:
 			rect = self._builder.get_object("cvsLowRes").get_allocation()
                         img_height = self._low_res_image.get_height()
                         img_width = self._low_res_image.get_width()
-                        facet_ra = self._phase_centre[0,0] + (-int(event.x/float(rect.width) * img_width) + img_width/2)*self._img_cell_l
-                        facet_dec = self._phase_centre[0,1] + (-int(event.y/float(rect.height) * img_height) + img_height/2)*self._img_cell_m	
+                        facet_ra = quantity(self._phase_centres[self._field_id,0,0],"rad").get_value("arcsec") + (-int(event.x/float(rect.width) * img_width) + img_width/2)*self._img_cell_l
+                        facet_dec = quantity(self._phase_centres[self._field_id,0,1],"rad").get_value("arcsec") + (-int(event.y/float(rect.height) * img_height) + img_height/2)*self._img_cell_m	
 			facet_centres = np.array([[facet_ra,facet_dec]],dtype=np.float32)
 			
-			pol_labels = {0:'XX', 1:'XY', 2:'YX', 3:'YY', 4:'RR', 5:'RL', 6:'LR', 7:'LL', 8:'I', 9:'Q', 10:'U', 11:'V'}
-			if (not (os.system("python bullseye.py %s %s --output_format png --npix_l %d --npix_m %d --cell_l %d --cell_m %d --pol %s --conv_sup %d --conv_oversamp %d --facet_centres \(%f,%f\)" % (
+			if (not (os.system("python bullseye.py \"%s\" \"%s\" --output_format png --npix_l %d --npix_m %d --cell_l %d --cell_m %d --pol %s --conv_sup %d --conv_oversamp %d --facet_centres \(%f,%f\) --field_id %d" % (
 					    self._ms_name,self.FACET_TMP_FILE_NAME,facet_size_l,facet_size_m,facet_cell_l,
-					    facet_cell_m,pol_labels[self._polarization],conv_support,conv_oversample,
-					    int(facet_ra),int(facet_dec))) == 0)):
+					    facet_cell_m,self._polarization,conv_support,conv_oversample,
+					    int(facet_ra),int(facet_dec),self._field_id)) == 0)):
 			  raise Exception("Invalid parameters for imager")
 			
 			frmFacetDisplay.frmFacetDisplay(self.FACET_TMP_FILE_NAME+"0.png")
@@ -173,8 +168,8 @@ class frmMain:
 			m_pos = int(event.y/float(rect.height) * img_height) 
 			
 			sbrMain.push(sbrMain.get_context_id("CursorPos"),"Pixel position: (l,m) = (%d,%d), (ra,dec) = (%s,%s)" % (l_pos, m_pos,
-							    		 quantity(self._phase_centre[0,0] + (-l_pos + img_width/2)*self._img_cell_l,"arcsec").get("deg").formatted("[+-]dd.mm.ss.t.."),
-							    		 quantity(self._phase_centre[0,1] + (-m_pos + img_height/2)*self._img_cell_m,"arcsec").get("deg").formatted("[+-]dd.mm.ss.t..")))
+							    		 quantity(quantity(self._phase_centres[self._field_id,0,0],"rad").get_value("arcsec") + (-l_pos + img_width/2)*self._img_cell_l,"arcsec").get("deg").formatted("[+-]dd.mm.ss.t.."),
+							    		 quantity(quantity(self._phase_centres[self._field_id,0,1],"rad").get_value("arcsec") + (-m_pos + img_height/2)*self._img_cell_m,"arcsec").get("deg").formatted("[+-]dd.mm.ss.t..")))
 				
 
 	def __init__(self):
