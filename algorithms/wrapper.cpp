@@ -77,7 +77,7 @@ extern "C" {
 			
 			
 			typedef imaging::baseline_transform_policy<uvw_base_type, 
-								   transform_facet_lefthanded_ra_dec> baseline_transform_policy_type;
+								   transform_disable_facet_rotation> baseline_transform_policy_type;
 			typedef imaging::phase_transform_policy<visibility_base_type, 
 								uvw_base_type, 
 								transform_enable_phase_rotation_lefthanded_ra_dec> phase_transform_policy_type;
@@ -86,10 +86,11 @@ extern "C" {
 								      phase_transform_policy_type, gridding_single_pol> polarization_gridding_policy_type;
 			typedef imaging::convolution_policy<convolution_base_type,uvw_base_type,
 							    polarization_gridding_policy_type,convolution_precomputed_fir> convolution_policy_type;
-			
+			/*
 			baseline_transform_policy_type uvw_transform(0,0,casa::Quantity(phase_centre_ra,"arcsec"),casa::Quantity(phase_centre_dec,"arcsec"),
 								     casa::Quantity(new_phase_ra,"arcsec"),casa::Quantity(new_phase_dec,"arcsec")); //lm faceting
-			
+			*/
+			baseline_transform_policy_type uvw_transform; //uv faceting
 			phase_transform_policy_type phase_transform(casa::Quantity(phase_centre_ra,"arcsec"),casa::Quantity(phase_centre_dec,"arcsec"),
 								    casa::Quantity(new_phase_ra,"arcsec"),casa::Quantity(new_phase_dec,"arcsec")); //lm faceting
 			
@@ -178,7 +179,7 @@ extern "C" {
                         fflush(stdout);
 	
 			typedef imaging::baseline_transform_policy<uvw_base_type, 
-								   transform_facet_lefthanded_ra_dec> baseline_transform_policy_type;
+								   transform_disable_facet_rotation> baseline_transform_policy_type;
 			typedef imaging::phase_transform_policy<visibility_base_type, 
 								uvw_base_type, 
 								transform_enable_phase_rotation_lefthanded_ra_dec> phase_transform_policy_type;
@@ -187,9 +188,11 @@ extern "C" {
 								      phase_transform_policy_type, gridding_4_pol> polarization_gridding_policy_type;
 			typedef imaging::convolution_policy<convolution_base_type,uvw_base_type,
 							    polarization_gridding_policy_type,convolution_precomputed_fir> convolution_policy_type;
-			
+			/*
 			baseline_transform_policy_type uvw_transform(0,0,casa::Quantity(phase_centre_ra,"arcsec"),casa::Quantity(phase_centre_dec,"arcsec"),
 								     casa::Quantity(new_phase_ra,"arcsec"),casa::Quantity(new_phase_dec,"arcsec")); //lm faceting
+			*/
+			baseline_transform_policy_type uvw_transform; //uv faceting
 			phase_transform_policy_type phase_transform(casa::Quantity(phase_centre_ra,"arcsec"),casa::Quantity(phase_centre_dec,"arcsec"),
 								    casa::Quantity(new_phase_ra,"arcsec"),casa::Quantity(new_phase_dec,"arcsec")); //lm faceting
 			

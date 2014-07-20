@@ -95,7 +95,7 @@ namespace imaging {
                                 uvw_coord<uvw_base_type> uvw = uvw_coords[bt];
 				uvw._u *= (1/reference_wavelengths[c]);
 				uvw._v *= (1/reference_wavelengths[c]);
-				
+				uvw._w *= (1/reference_wavelengths[c]);
 				/*	
 				 By default this uvw transform does nothing, but it can be set to do rotate a lw facet to be tangent to a new phase centre		
 				 The default phase transform does nothing, but it can be set to rotate the visibilities to a new phase centre in lw / uv faceting.
