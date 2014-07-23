@@ -24,8 +24,8 @@ TEST_CASE( "Testing phase transform policies" ) {
     REQUIRE(uvw._w == 12.0f);
   }
   SECTION( "Testing the enabled left-handed ra dec phase transform" ){
-    phase_transform_policy<double,double,transform_enable_phase_rotation_lefthanded_ra_dec> a_policy(126000,144000,
-												     100000,135000);
+    phase_transform_policy<double,double,transform_enable_phase_rotation_righthanded_ra_dec> a_policy(126000,144000,
+												      100000,135000);
     complex<double> visibility(3.0f,5.0f);
     uvw_coord<double> uvw(1.5f,6.0f,12.0f);
     complex<double> ans(-3.304262109,-7.285729333);

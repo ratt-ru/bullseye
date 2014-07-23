@@ -89,25 +89,28 @@ namespace imaging {
 			if (field_array[bt] != imaging_field) continue; //We only image contributions from those antennae actually pointing to the field in question
 			if (flagged_rows[bt]) continue; //if the entire row is flagged don't continue
                         for (std::size_t c = 0; c < channel_count; ++c){
-				/*
-				 Get uvw coords and measure the uvw coordinates in terms of wavelength
-				*/
                                 uvw_coord<uvw_base_type> uvw = uvw_coords[bt];
+				/*
+				 measure the uvw coordinates in terms of wavelength (the uvw coordinates in the measurement set does not
+				 take reference wavelength of the spw into account.
+				*/
 				uvw._u *= (1/reference_wavelengths[c]);
 				uvw._v *= (1/reference_wavelengths[c]);
 				uvw._w *= (1/reference_wavelengths[c]);
 				/*	
-				 By default this uvw transform does nothing, but it can be set to do rotate a lw facet to be tangent to a new phase centre		
-				 The default phase transform does nothing, but it can be set to rotate the visibilities to a new phase centre in lw / uv faceting.
-				 
 				 The phase transformation policy is applied to all the polarization terms by the polarization gridding policy. This provides a 
 				 neat way of handling multiple polarization options when it comes to gridding. The phase transformation term should be seen 
 				 as a scalar Jones term when dealing with 2x2 polarized visibility terms for instance.
 				 
+				 By default the uvw transform does nothing, but it can be set to do rotate a lw facet to be tangent to a new phase centre		
+				 The default phase transform does nothing, but it can be set to rotate the visibilities to a new phase centre in lw / uv faceting.
+				 
 				 Refer to Cornwell & Perley (1992), Synthesis Imaging II (1999) and Smirnov I (2011)
 				*/
-				active_baseline_transform_policy.transform(uvw);
+				
 				active_polarization_gridding_policy.transform(bt,c,baseline_count,timestamp_count,channel_count,uvw); //reads and transforms the current visibility
+				//as per Cornwell and Perley... then we rotate the uvw coordinate...
+				active_baseline_transform_policy.transform(uvw);
 				
 				/*
 				 Now that all the transformations are done, convert and scale the uv coords down to grid space:

@@ -9,14 +9,14 @@
 #include "uvw_coord.h"
 
 namespace imaging {
-	class transform_facet_lefthanded_ra_dec {};
+	class transform_facet_righthanded_ra_dec {};
 	class transform_disable_facet_rotation {};	
 	template <typename uvw_base_type,typename coordinate_framework>
 	class baseline_transform_policy {
 	public:
-		baseline_transform_policy() { throw std::exception("Undefined behaviour"); }
+		baseline_transform_policy() { throw std::runtime_error("Undefined behaviour"); }
 		inline uvw_coord<uvw_base_type> transform(uvw_coord<uvw_base_type> baseline) const __restrict__ {
-			throw std::exception("Undefined behaviour");
+			throw std::runtime_error("Undefined behaviour");
 		}
 	};
 	template <typename uvw_base_type>
@@ -29,7 +29,7 @@ namespace imaging {
 	};
 	
 	template <typename uvw_base_type>
-	class baseline_transform_policy <uvw_base_type, transform_facet_lefthanded_ra_dec>{
+	class baseline_transform_policy <uvw_base_type, transform_facet_righthanded_ra_dec>{
 	private:
 		uvw_base_type _baseline_transform_matrix[9];
 	public:
@@ -44,12 +44,20 @@ namespace imaging {
                                         transpose(T(old_phase_centre_ra,old_phase_centre_dec)) * transpose(Z_rot(facet_old_rotation))
                                 
                                 where:
-                                        |       cRA     -sRA.sDEC       sRA.cDEC        |
-                                T =     |       -sRA    -cRA.sDEC       cRA.cDEC        |
-                                        |       0       cDEC            sDEC            |       
-                                 
+						 |	sH		cH		0	|
+                                T (H,D) =     	 |	-sDcH		sDsH		cD	| 
+						 |	cDcH		-cDsH		sD	|  
+
+				This is the same as in Thompson, A. R.; Moran, J. M.; and Swenson, 
+				G. W., Jr. Interferometry and Synthesis in Radio Astronomy. New York: Wiley, ch. 4
+				
+				casacore::measures::uvwmachine.cpp contains a transformation chain that results in a matrix equal to:
+				T(H,D)*transpose(T (H0,D0))
+				
+				We're not transforming between a coordinate system with w pointing towards the pole and one with
+				w pointing towards the reference centre here, so the last rotation matrix is ignored!
                         */ 
-			uvw_base_type d_ra = (new_phase_centre_ra - old_phase_centre_ra).getValue("rad"),
+			uvw_base_type d_ra = (-new_phase_centre_ra + old_phase_centre_ra).getValue("rad"),
                                       c_d_ra = cos(d_ra),
                                       s_d_ra = sin(d_ra),
                                       c_new_dec = cos(new_phase_centre_dec.getValue("rad")),
@@ -62,14 +70,13 @@ namespace imaging {
                                       s_new_rotation = sin(facet_new_rotation);
 			matrix<uvw_base_type> TT_transpose (3,3);
 			
-			//in row,column format, using basic trig identities the following matrix can be computed (this is the same one used in the classic AIPS task "IMAGR"):
 			TT_transpose(0,0) = c_d_ra;
-			TT_transpose(0,1) = s_old_dec*s_d_ra;
-			TT_transpose(0,2) = -c_old_dec*s_d_ra;
-			TT_transpose(1,0) = -s_new_dec*s_d_ra;
+			TT_transpose(0,1) = -s_old_dec*s_d_ra;
+			TT_transpose(0,2) = c_old_dec*s_d_ra;
+			TT_transpose(1,0) = s_new_dec*s_d_ra;
                         TT_transpose(1,1) = s_new_dec*s_old_dec*c_d_ra+c_new_dec*c_old_dec;
                         TT_transpose(1,2) = -c_old_dec*s_new_dec*c_d_ra+c_new_dec*s_old_dec;
-			TT_transpose(2,0) = c_new_dec*s_d_ra;
+			TT_transpose(2,0) = -c_new_dec*s_d_ra;
                         TT_transpose(2,1) = -c_new_dec*s_old_dec*c_d_ra+s_new_dec*c_old_dec;
                         TT_transpose(2,2) = c_new_dec*c_old_dec*c_d_ra+s_new_dec*s_old_dec;
 			
@@ -94,6 +101,10 @@ namespace imaging {
                 inline void transform(uvw_coord<uvw_base_type> & __restrict__ baseline) const __restrict__{
 			//unroll the vector transformation for efficiency:
 			uvw_coord<uvw_base_type> old = baseline;
+			/*
+			 * Note: there is a 3-way sign flip in CASA, without reverting the signs there is a reasonable distortion at bigger angles.
+			 * See: Convention for UVW calculations in CASA, Urvashi Rau (2013)
+			 */
 			baseline._u = _baseline_transform_matrix[0]*old._u + _baseline_transform_matrix[1]*old._v + _baseline_transform_matrix[2]*old._w;
 			baseline._v = _baseline_transform_matrix[0+3]*old._u + _baseline_transform_matrix[1+3]*old._v + _baseline_transform_matrix[2+3]*old._w;
 			baseline._w = _baseline_transform_matrix[0+6]*old._u + _baseline_transform_matrix[1+6]*old._v + _baseline_transform_matrix[2+6]*old._w;
