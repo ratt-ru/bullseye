@@ -19,7 +19,7 @@ FITS_POLARIZATION_CLASSIFIERS = {"I" : 1, #Standard Stokes unpolarized
 				 "XX": -5, #X parallel linear
 				 "YY": -6, #Y parallel linear
 				 "XY": -7, #XY cross linear
-				 "XY": -8}  #YX cross linear
+				 "YX": -8}  #YX cross linear
 '''
 Routine to store the data in row major format as described
 by the FITS standard (see citation above). We're assuming the pixels

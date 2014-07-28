@@ -14,9 +14,9 @@ namespace imaging {
 	template <typename uvw_base_type,typename coordinate_framework>
 	class baseline_transform_policy {
 	public:
-		baseline_transform_policy() { throw std::exception("Undefined behaviour"); }
+		baseline_transform_policy() { throw std::runtime_error("Undefined behaviour"); }
 		inline uvw_coord<uvw_base_type> transform(uvw_coord<uvw_base_type> baseline) const __restrict__ {
-			throw std::exception("Undefined behaviour");
+			throw std::runtime_error("Undefined behaviour");
 		}
 	};
 	template <typename uvw_base_type>

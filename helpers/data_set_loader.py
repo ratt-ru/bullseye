@@ -62,16 +62,24 @@ class data_set_loader(object):
         print "%d CORRELATIONS DUE TO POLARIZATION" % self._no_polarization_correlations
         casa_ms_table.close()        
         casa_ms_table = table(self._MSName+"/SPECTRAL_WINDOW",ack=False,readonly=True)
-        self._no_channels = casa_ms_table.getcell("NUM_CHAN", 0)
+        self._no_channels = casa_ms_table.getcell("NUM_CHAN", 0) #Note: assuming all spectral windows will have an equal number of channels
+        self._no_spw = casa_ms_table.nrows()
         print "%d CHANNELS IN OBSERVATION" % self._no_channels
-        self._chan_freqs = casa_ms_table.getcell("CHAN_FREQ",0)
-        self._chan_wavelengths = (quanta.constants['c'].get_value("m/s") /self._chan_freqs).astype(np.float32) # lambda = speed of light / frequency
-        for i,lamb in enumerate(self._chan_wavelengths):
-            print "\t Channel %d has a wavelength of %f m" % (i,lamb)
-        self._ref_frequency = casa_ms_table.getcell("REF_FREQUENCY", 0)
-        self._ref_wavelength = quanta.constants['c'].get_value("m/s") / float(self._ref_frequency) # lambda = speed of light / frequency
-        print "REFERENCE WAVELENGTH: %f m" % (self._ref_wavelength)
+        print "%d SPECTRAL WINDOWS IN OBSERVATION" % self._no_spw
+        self._chan_freqs = casa_ms_table.getcol("CHAN_FREQ") # this will have dimensions [number of SPWs][num channels in spectral window]
+        self._chan_wavelengths = (quanta.constants['c'].get_value("m/s") / self._chan_freqs).astype(np.float32) # lambda = speed of light / frequency
+        for spw in range(0,self._no_spw):
+	  for c in range(0,self._no_channels):
+            print "\t Spectral window %d, channel %d has a wavelength of %f m" % (spw,c,self._chan_wavelengths[spw,c])
         casa_ms_table.close()
+        casa_ms_table = table(self._MSName+"/DATA_DESCRIPTION",ack=False,readonly=True)
+        spw_indexes = casa_ms_table.getcol("SPECTRAL_WINDOW_ID")
+        for i in range(0,self._no_spw):
+	  temp = self._chan_wavelengths[i] #deep copy
+	  #swap the rows so that we index by the column in DATA_DESCRIPTION
+	  self._chan_wavelengths[i] = self._chan_wavelengths[spw_indexes[i]]
+	  self._chan_wavelengths[spw_indexes[i]] = temp 
+	casa_ms_table.close()
         casa_ms_table = table(self._MSName+"/FIELD",ack=False,readonly=True)
         self._field_centres = casa_ms_table.getcol("REFERENCE_DIR")
         self._field_centre_names = casa_ms_table.getcol("NAME")
@@ -100,7 +108,7 @@ class data_set_loader(object):
 				      (self._no_channels*self._no_polarization_correlations*4) + #casted weight
 				      (self._no_channels*self._no_polarization_correlations*np.dtype(np.bool_).itemsize) + #visibility flags
 				      (np.dtype(np.bool_).itemsize) + #row flags
-				      (3*np.dtype(np.intc).itemsize)) #antenna 1 & 2 and FIELD_ID
+				      (4*np.dtype(np.intc).itemsize)) #antenna 1 & 2, FIELD_ID and DATA_DESCRIPTION_ID
     
     '''
       Computes the number of iterations required to read entire file, given memory constraints (in bytes)
@@ -164,20 +172,22 @@ class data_set_loader(object):
             of type boolean
         '''
         self._arr_flaged = casa_ms_table.getcol("FLAG",startrow=start_row,nrow=no_rows)
-        
         '''
 	    the flag row column has dimensions [0...obs_time_range*baselines-1] and must be taken into account
 	    even though there is a more fine-grained flag column
         '''
         self._arr_flagged_rows = casa_ms_table.getcol("FLAG_ROW",startrow=start_row,nrow=no_rows)
-        
         '''
-        Grab the two antenna id arrays defining the two antennas defining each baseline (in uvw space)
+	  Grab the DATA_DESCRIPTION_ID column (which will describe which reference frequency (per baseline to use)
+        '''
+        self._description_col = casa_ms_table.getcol("DATA_DESC_ID",startrow=start_row,nrow=no_rows)
+        '''
+	  Grab the two antenna id arrays defining the two antennas defining each baseline (in uvw space)
 	'''
 	self._arr_antenna_1 = casa_ms_table.getcol("ANTENNA1",startrow=start_row,nrow=no_rows)
 	self._arr_antenna_2 = casa_ms_table.getcol("ANTENNA2",startrow=start_row,nrow=no_rows)
 	'''
-	Grab the FIELD_ID column in case there is more than a single pointing
+	  Grab the FIELD_ID column in case there is more than a single pointing
 	'''
 	self._row_field_id = casa_ms_table.getcol("FIELD_ID",startrow=start_row,nrow=no_rows)
         casa_ms_table.close()

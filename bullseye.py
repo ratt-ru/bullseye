@@ -38,20 +38,26 @@ if __name__ == "__main__":
   parser.add_argument('--output_format', help='Specify image output format', choices=["fits","png"], default="fits")
   parser.add_argument('--mem_available_for_input_data', help='Specify available memory (bytes) for storing the input measurement set data arrays', type=int, default=2048*1024*1024)
   parser.add_argument('--field_id', help='Specify the id of the field (pointing) to image', type=int, default=0)
+  parser.add_argument('--data_column', help='Specify the measurement set data column being imaged', type=str, default='DATA')
+  
   parser_args = vars(parser.parse_args())
   data = data_set_loader.data_set_loader(parser_args['input_ms'])
   data.read_head()
   chunk_size = data.compute_number_of_rows_to_read_from_mem_requirements(parser_args['mem_available_for_input_data'])
   no_chunks = data.number_of_read_iterations_required_from_mem_requirements(parser_args['mem_available_for_input_data'])
   #some sanity checks:
-  if data._polarization_correlations.tolist() not in [[pol_options['I'],pol_options['Q'],pol_options['U'],pol_options['V']],		#normal stokes terms
-						      [pol_options['RR'],pol_options['RL'],pol_options['LR'],pol_options['LL']],		#circular correlation products
-						      [pol_options['XX'],pol_options['XY'],pol_options['YX'],pol_options['YY']]]:	#linear correlation products
-    raise argparse.ArgumentTypeError("Unknown polarization specified in Measurement Set. Only ['I','Q','U','V'], ['RR','RL','LR','LL'], ['XX','XY','YX','YY'] are implemented at this point")
-  if (parser_args['pol'] not in ['I','Q','U','V']) and (pol_options[parser_args['pol']] not in data._polarization_correlations):
+  if (parser_args['pol'] in ['I','Q','U','V'] and 
+      pol_options[parser_args['pol']] not in data._polarization_correlations and 
+      data._polarization_correlations.tolist() not in [[pol_options['RR'],pol_options['RL'],pol_options['LR'],pol_options['LL']],	#circular correlation products
+						       [pol_options['XX'],pol_options['XY'],pol_options['YX'],pol_options['YY']]]):	#linear correlation products
+      raise argparse.ArgumentTypeError("Unsupported polarization option specified in Measurement Set. Stokes terms "
+				       "may only be derived from ['RR','RL','LR','LL'] or ['XX','XY','YX','YY']")
+  
+  elif (parser_args['pol'] not in ['I','Q','U','V']) and (pol_options[parser_args['pol']] not in data._polarization_correlations):
     raise argparse.ArgumentTypeError("Cannot obtain requested gridded polarization from the provided measurement set.")
   if parser_args['field_id'] not in range(0,len(data._field_centre_names)):
     raise argparse.ArgumentTypeError("Specified field does not exist Must be in 0 ... %d for this Measurement Set" % (len(data._field_centre_names) - 1))
+  
   conv = convolution_filter.convolution_filter(parser_args['conv_sup'],parser_args['conv_sup'],
 					       parser_args['conv_oversamp'],parser_args['npix_l'],
 					       parser_args['npix_m'],parser_args['conv'])
@@ -64,12 +70,9 @@ if __name__ == "__main__":
     facet_centres = np.array(parser_args['facet_centres']).astype(np.float32)
   gridded_vis = None
   #no need to grid more than one of the correlations if the user isn't interrested in imaging one of the stokes terms (I,Q,U,V) or the stokes terms are the correlation products:
-  if parser_args['pol'] not in ['I','Q','U','V'] or data._polarization_correlations.tolist() == [pol_options['I'],pol_options['Q'],pol_options['U'],pol_options['V']]:
+  if pol_options[parser_args['pol']] in data._polarization_correlations.tolist():
     pol_index = pol_options[parser_args['pol']]
-    if parser_args['pol'] in ['RR','RL','LR','LL']:
-      pol_index -= pol_options['RR']
-    if parser_args['pol'] in ['XX','XY','YX','YY']:
-      pol_index -= pol_options['XX']
+    pol_index = data._polarization_correlations.tolist().index(pol_options[parser_args['pol']])
     
     num_grids = 1 if (num_facet_centres == 0) else num_facet_centres
     g = np.zeros([num_grids,1,parser_args['npix_l'],parser_args['npix_m']],dtype=np.complex64)
@@ -78,7 +81,7 @@ if __name__ == "__main__":
       chunk_ubound = min((chunk_index+1) * chunk_size,data._no_baselines*data._no_timestamps)
       chunk_linecount = chunk_ubound - chunk_lbound
       print "READING CHUNK %d OF %d" % (chunk_index+1,no_chunks)
-      data.read_data(start_row=chunk_lbound,no_rows=chunk_linecount)
+      data.read_data(start_row=chunk_lbound,no_rows=chunk_linecount,data_column = parser_args['data_column'])
       
       libimaging.grid_single_pol(data._arr_data.ctypes.data_as(ctypes.c_void_p),
 				data._arr_uvw.ctypes.data_as(ctypes.c_void_p),
@@ -103,7 +106,8 @@ if __name__ == "__main__":
 				g.ctypes.data_as(ctypes.c_void_p),
 				ctypes.c_size_t(chunk_linecount),
 				data._row_field_id.ctypes.data_as(ctypes.c_void_p),
-				ctypes.c_uint(parser_args['field_id']))
+				ctypes.c_uint(parser_args['field_id']),
+				data._description_col.ctypes.data_as(ctypes.c_void_p))
       
     gridded_vis = g[:,0,:,:]
   else: # the user want to derive one of the stokes terms (I,Q,U,V) from the correlation terms:
@@ -114,7 +118,7 @@ if __name__ == "__main__":
       chunk_ubound = min((chunk_index+1) * chunk_size,data._no_baselines*data._no_timestamps)
       chunk_linecount = chunk_ubound - chunk_lbound
       print "READING CHUNK %d OF %d" % (chunk_index+1,no_chunks)
-      data.read_data(start_row=chunk_lbound,no_rows=chunk_linecount)
+      data.read_data(start_row=chunk_lbound,no_rows=chunk_linecount,data_column = parser_args['data_column'])
       
       libimaging.grid_4_cor(data._arr_data.ctypes.data_as(ctypes.c_void_p),
 			    data._arr_uvw.ctypes.data_as(ctypes.c_void_p),
@@ -138,7 +142,8 @@ if __name__ == "__main__":
 			    g.ctypes.data_as(ctypes.c_void_p),
 			    ctypes.c_size_t(chunk_linecount),
 			    data._row_field_id.ctypes.data_as(ctypes.c_void_p),
-			    ctypes.c_uint(parser_args['field_id']))  
+			    ctypes.c_uint(parser_args['field_id']),
+			    data._description_col.ctypes.data_as(ctypes.c_void_p))  
     '''
     See Smirnov I (2011) for description on conversion between correlation terms and stokes params for linearly polarized feeds
     See Synthesis Imaging II (1999) Pg. 9 for a description on conversion between correlation terms and stokes params for circularly polarized feeds
@@ -151,12 +156,12 @@ if __name__ == "__main__":
       elif parser_args['pol'] == "Q":
 	gridded_vis = ((g[:,1,:,:] + g[:,2,:,:])/2).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
       elif parser_args['pol'] == "U":
-	gridded_vis = ((g[:,1,:,:] - g[:,2,:,:])/2/1.0j).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
+	gridded_vis = ((g[:,1,:,:] - g[:,2,:,:])/2.0).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
     elif data._polarization_correlations.tolist() == [pol_options['XX'],pol_options['XY'],pol_options['YX'],pol_options['YY']]:		#linear correlation products
       if parser_args['pol'] == "I":
 	gridded_vis = ((g[:,0,:,:] + g[:,3,:,:])).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
       elif parser_args['pol'] == "V":
-	gridded_vis = ((g[:,1,:,:] - g[:,2,:,:])/1.0j).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
+	gridded_vis = ((g[:,1,:,:] - g[:,2,:,:])/1.0).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
       elif parser_args['pol'] == "Q":
 	gridded_vis = ((g[:,0,:,:] - g[:,3,:,:])).reshape(num_polarized_grids,parser_args['npix_l'],parser_args['npix_m'])
       elif parser_args['pol'] == "U":

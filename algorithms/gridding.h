@@ -29,9 +29,10 @@ namespace imaging {
 		cellx,celly: size of the cells (in arcsec)
 		timestamp_count, baseline_count, channel_count, polarization_term_count: (integral counts as specified)
 		row_count: number of measurement set rows being imaged (this can be equal to timestamp_count*baseline_count if the entire measurement set is read into memory)
+		reference_wavelengths: associated wavelength of each channel per spectral window used to sample visibilities (wavelength = speed_of_light / channel_frequency)
 		field_array: this corresponds to the FIELD_ID column of an ms, and can be used to identify where each baseline is pointing at a particular time (see also "imaging_field")
 		imaging_field: this is the identifier of the field (pointing) currently being imaged. Only contributions from baselines with this field identifier will be gridded.
-		reference_wavelengths: associated wavelength of each channel used to sample visibilities (wavelength = speed_of_light / channel_frequency)
+		spw_index_array: this array specifies which reference frequency to select (reference_wavelengths has dimensions no_spws * no_channels)
 			PRECONDITIONS:
 			1. timestamp_count x baseline_count x channel_count x polarization_term_count <= ||visibilities||
 			2. ||flagged rows + unflagged rows|| == ||visibilities array||
@@ -60,7 +61,8 @@ namespace imaging {
 		  std::size_t row_count,
 		  const reference_wavelengths_base_type *__restrict__ reference_wavelengths,
 		  const unsigned int * __restrict__ field_array,
-		  unsigned int imaging_field
+		  unsigned int imaging_field,
+		  const unsigned int * __restrict__ spw_index_array
  		){
 		/*
 		Pg. 138, 145-147, Synthesis Imaging II (Briggs, Schwab & Sramek)
@@ -88,14 +90,19 @@ namespace imaging {
 			#endif
 			if (field_array[bt] != imaging_field) continue; //We only image contributions from those antennae actually pointing to the field in question
 			if (flagged_rows[bt]) continue; //if the entire row is flagged don't continue
+			unsigned int current_spw_offset = spw_index_array[bt]*channel_count;
                         for (std::size_t c = 0; c < channel_count; ++c){
 				/*
-				 Get uvw coords and measure the uvw coordinates in terms of wavelength
+				 Get uvw coords
 				*/
                                 uvw_coord<uvw_base_type> uvw = uvw_coords[bt];
-				uvw._u *= (1/reference_wavelengths[c]);
-				uvw._v *= (1/reference_wavelengths[c]);
-				uvw._w *= (1/reference_wavelengths[c]);
+				/*
+				 * Now measure the uvw coordinates in terms of wavelength
+				 */
+				reference_wavelengths_base_type wavelength = 1.0/reference_wavelengths[current_spw_offset + c];
+				uvw._u *= wavelength;
+				uvw._v *= wavelength;
+				uvw._w *= wavelength;
 				/*	
 				 By default this uvw transform does nothing, but it can be set to do rotate a lw facet to be tangent to a new phase centre		
 				 The default phase transform does nothing, but it can be set to rotate the visibilities to a new phase centre in lw / uv faceting.
@@ -108,7 +115,6 @@ namespace imaging {
 				*/
 				active_baseline_transform_policy.transform(uvw);
 				active_polarization_gridding_policy.transform(bt,c,baseline_count,timestamp_count,channel_count,uvw); //reads and transforms the current visibility
-				
 				/*
 				 Now that all the transformations are done, convert and scale the uv coords down to grid space:
 				*/
