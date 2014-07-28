@@ -95,7 +95,7 @@ namespace imaging {
 				/*
 				 Get uvw coords
 				*/
-                                uvw_coord<uvw_base_type> uvw = uvw_coords[bt];
+				uvw_coord<uvw_base_type> uvw = uvw_coords[bt];
 				/*
 				 * Now measure the uvw coordinates in terms of wavelength
 				 */
@@ -113,8 +113,11 @@ namespace imaging {
 				 
 				 Refer to Cornwell & Perley (1992), Synthesis Imaging II (1999) and Smirnov I (2011)
 				*/
-				active_baseline_transform_policy.transform(uvw);
+
 				active_polarization_gridding_policy.transform(bt,c,baseline_count,timestamp_count,channel_count,uvw); //reads and transforms the current visibility
+				//as per Cornwell and Perley... then we rotate the uvw coordinate...
+				active_baseline_transform_policy.transform(uvw);
+				
 				/*
 				 Now that all the transformations are done, convert and scale the uv coords down to grid space:
 				*/

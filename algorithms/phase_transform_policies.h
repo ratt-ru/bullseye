@@ -9,7 +9,7 @@
 
 namespace imaging {
 	class transform_disable_phase_rotation {};
-	class transform_enable_phase_rotation_lefthanded_ra_dec {};
+	class transform_enable_phase_rotation_righthanded_ra_dec {};
 	/**
 	 Phase transform policies define the behaviour of the gridder; enabling or disabling lm / uv faceting
 	 This can be used to effectively decrease computation time when faceting is not needed
@@ -39,7 +39,7 @@ namespace imaging {
 	 Enable default lm / uv faceting phase shift operations as discussed in Cornwell & Perley (1992) and Synthesis Imaging II (1999)
 	 */
 	template <typename visibility_base_type, typename uvw_base_type>
-	class phase_transform_policy <visibility_base_type, uvw_base_type, transform_enable_phase_rotation_lefthanded_ra_dec> {
+	class phase_transform_policy <visibility_base_type, uvw_base_type, transform_enable_phase_rotation_righthanded_ra_dec> {
 		uvw_base_type _d_l, _d_m, _d_n;
 	public:
 		/**
