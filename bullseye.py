@@ -78,14 +78,14 @@ if __name__ == "__main__":
     g = np.zeros([num_grids,1,parser_args['npix_l'],parser_args['npix_m']],dtype=np.complex64)
     for chunk_index in range(0,no_chunks):
       chunk_lbound = chunk_index * chunk_size
-      chunk_ubound = min((chunk_index+1) * chunk_size,data._no_baselines*data._no_timestamps)
+      chunk_ubound = min((chunk_index+1) * chunk_size,data._no_rows)
       chunk_linecount = chunk_ubound - chunk_lbound
       print "READING CHUNK %d OF %d" % (chunk_index+1,no_chunks)
       data.read_data(start_row=chunk_lbound,no_rows=chunk_linecount,data_column = parser_args['data_column'])
       
       libimaging.grid_single_pol(data._arr_data.ctypes.data_as(ctypes.c_void_p),
 				data._arr_uvw.ctypes.data_as(ctypes.c_void_p),
-				ctypes.c_size_t(data._no_timestamps),ctypes.c_size_t(data._no_baselines),
+				ctypes.c_size_t(data._no_timestamps_read),ctypes.c_size_t(data._no_baselines),
 				ctypes.c_size_t(data._no_channels),ctypes.c_size_t(data._no_polarization_correlations),
 				data._chan_wavelengths.ctypes.data_as(ctypes.c_void_p),
 				data._arr_flaged.ctypes.data_as(ctypes.c_void_p),
@@ -115,14 +115,14 @@ if __name__ == "__main__":
     g = np.zeros([num_polarized_grids,4,parser_args['npix_l'],parser_args['npix_m']],dtype=np.complex64)
     for chunk_index in range(0,no_chunks):
       chunk_lbound = chunk_index * chunk_size
-      chunk_ubound = min((chunk_index+1) * chunk_size,data._no_baselines*data._no_timestamps)
+      chunk_ubound = min((chunk_index+1) * chunk_size,data._no_rows)
       chunk_linecount = chunk_ubound - chunk_lbound
       print "READING CHUNK %d OF %d" % (chunk_index+1,no_chunks)
       data.read_data(start_row=chunk_lbound,no_rows=chunk_linecount,data_column = parser_args['data_column'])
       
       libimaging.grid_4_cor(data._arr_data.ctypes.data_as(ctypes.c_void_p),
 			    data._arr_uvw.ctypes.data_as(ctypes.c_void_p),
-			    ctypes.c_size_t(data._no_timestamps),ctypes.c_size_t(data._no_baselines),
+			    ctypes.c_size_t(data._no_timestamps_read),ctypes.c_size_t(data._no_baselines),
 			    ctypes.c_size_t(data._no_channels),ctypes.c_size_t(data._no_polarization_correlations),
 			    data._chan_wavelengths.ctypes.data_as(ctypes.c_void_p),
 			    data._arr_flaged.ctypes.data_as(ctypes.c_void_p),

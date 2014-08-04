@@ -9,5 +9,3 @@ include_directories(/usr/include/python2.7 /usr/lib/python2.7/dist-packages/nump
 
 add_library(imaging SHARED wrapper.cpp)
 target_link_libraries(imaging casa_casa)
-
-add_subdirectory(tests)

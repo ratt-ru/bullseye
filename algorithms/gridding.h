@@ -90,7 +90,8 @@ namespace imaging {
 			#endif
 			if (field_array[bt] != imaging_field) continue; //We only image contributions from those antennae actually pointing to the field in question
 			if (flagged_rows[bt]) continue; //if the entire row is flagged don't continue
-			unsigned int current_spw_offset = spw_index_array[bt]*channel_count;
+			std::size_t spw_index = spw_index_array[bt];
+			unsigned int current_spw_offset = spw_index*channel_count;
                         for (std::size_t c = 0; c < channel_count; ++c){
 				/*
 				 Get uvw coords
@@ -99,10 +100,8 @@ namespace imaging {
 				/*
 				 * Now measure the uvw coordinates in terms of wavelength
 				 */
-				reference_wavelengths_base_type wavelength = 1.0/reference_wavelengths[current_spw_offset + c];
-				uvw._u *= wavelength;
-				uvw._v *= wavelength;
-				uvw._w *= wavelength;
+				reference_wavelengths_base_type wavelength = (reference_wavelengths_base_type)(1.0/reference_wavelengths[current_spw_offset + c]);
+				uvw *= wavelength;
 				/*	
 				 By default this uvw transform does nothing, but it can be set to do rotate a lw facet to be tangent to a new phase centre		
 				 The default phase transform does nothing, but it can be set to rotate the visibilities to a new phase centre in lw / uv faceting.
@@ -114,15 +113,14 @@ namespace imaging {
 				 Refer to Cornwell & Perley (1992), Synthesis Imaging II (1999) and Smirnov I (2011)
 				*/
 
-				active_polarization_gridding_policy.transform(bt,c,baseline_count,timestamp_count,channel_count,uvw); //reads and transforms the current visibility
+				active_polarization_gridding_policy.transform(bt,spw_index,c,uvw); //reads and transforms the current visibility
 				//as per Cornwell and Perley... then we rotate the uvw coordinate...
 				active_baseline_transform_policy.transform(uvw);
 				
 				/*
-				 Now that all the transformations are done, convert and scale the uv coords down to grid space:
+				 Now that all the transformations are done, convert and scale the uv coords down to the desired FOV (this scales the IFFT by the simularity theorem):
 				*/
-				uvw._u = uvw._u*u_scale;
-				uvw._v = -uvw._v*v_scale;
+				uvw *= uvw_coord<uvw_base_type>(u_scale,-v_scale);
 				
 				/*				
 				On page 25-26 of Synthesis Imaging II Thompson notes that the correlator output is a measure of the visibility at two points on the
@@ -130,12 +128,9 @@ namespace imaging {
 				on b. Rather than running though all the visibilities twice we compute uvw, -uvw, V and V*. We should be able to save ourselves some compuation on phase
 				shifts, etc by so doing. All gridder policies must reflect this and support gridding both the complex visibility and its conjugate. 
 				*/
-				uvw_coord<uvw_base_type> uvw_neg = uvw;
-				uvw_neg._u *= -1;
-				uvw_neg._v *= -1;
 				
 				active_convolution_policy.convolve(uvw, &polarization_gridding_policy_type::grid_polarization_terms);
- 				active_convolution_policy.convolve(uvw_neg, &polarization_gridding_policy_type::grid_polarization_conjugate_terms);
+ 				active_convolution_policy.convolve(-uvw, &polarization_gridding_policy_type::grid_polarization_conjugate_terms);
                         }
                 }
                 

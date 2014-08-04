@@ -30,13 +30,13 @@ class data_set_loader(object):
     '''
     def read_head(self):
 	print "READING MEASUREMENT SET HEAD OF '%s'" % self._MSName 
-        casa_ms_table = table(self._MSName+'/OBSERVATION',ack=False,readonly=True)
+        casa_ms_table = table(self._MSName+'::OBSERVATION',ack=False,readonly=True)
         self._observer_name = casa_ms_table.getcell("OBSERVER", 0)
         self._telescope_name = casa_ms_table.getcell("TELESCOPE_NAME", 0)
         self._observation_start = casa_ms_table.getcell("TIME_RANGE", 0)[0]
         self._observation_end = casa_ms_table.getcell("TIME_RANGE", 0)[1]
         casa_ms_table.close()
-        casa_ms_table = table(self._MSName+"/POINTING",ack=False,readonly=True)
+        casa_ms_table = table(self._MSName+"::POINTING",ack=False,readonly=True)
         self._epoch = casa_ms_table.getcolkeyword("DIRECTION","MEASINFO")["Ref"]
         casa_ms_table.close()
         fmt = '%Y-%m-%d %H:%M:%S %Z'
@@ -46,7 +46,7 @@ class data_set_loader(object):
                                                       self._epoch,
                                                      )
         casa_ms_table.close()
-        casa_ms_table = table(self._MSName+'/ANTENNA',ack=False,readonly=True)
+        casa_ms_table = table(self._MSName+'::ANTENNA',ack=False,readonly=True)
         self._no_antennae = casa_ms_table.nrows()
         self._no_baselines = self._no_antennae*(self._no_antennae-1)/2 + self._no_antennae
         print "FOUND %d ANTENNAE:" % (self._no_antennae) 
@@ -56,12 +56,12 @@ class data_set_loader(object):
             print "\t %s has position [%f , %f , %f]" % (name,position[0],position[1],position[2])
         casa_ms_table.close()
         print "%d UNIQUE BASELINES" % (self._no_baselines)
-        casa_ms_table = table(self._MSName+"/POLARIZATION",ack=False,readonly=True)
+        casa_ms_table = table(self._MSName+"::POLARIZATION",ack=False,readonly=True)
         self._no_polarization_correlations = casa_ms_table.getcell("NUM_CORR", 0)
         self._polarization_correlations = casa_ms_table.getcell("CORR_TYPE", 0)
         print "%d CORRELATIONS DUE TO POLARIZATION" % self._no_polarization_correlations
         casa_ms_table.close()        
-        casa_ms_table = table(self._MSName+"/SPECTRAL_WINDOW",ack=False,readonly=True)
+        casa_ms_table = table(self._MSName+"::SPECTRAL_WINDOW",ack=False,readonly=True)
         self._no_channels = casa_ms_table.getcell("NUM_CHAN", 0) #Note: assuming all spectral windows will have an equal number of channels
         self._no_spw = casa_ms_table.nrows()
         print "%d CHANNELS IN OBSERVATION" % self._no_channels
@@ -72,7 +72,7 @@ class data_set_loader(object):
 	  for c in range(0,self._no_channels):
             print "\t Spectral window %d, channel %d has a wavelength of %f m" % (spw,c,self._chan_wavelengths[spw,c])
         casa_ms_table.close()
-        casa_ms_table = table(self._MSName+"/DATA_DESCRIPTION",ack=False,readonly=True)
+        casa_ms_table = table(self._MSName+"::DATA_DESCRIPTION",ack=False,readonly=True)
         spw_indexes = casa_ms_table.getcol("SPECTRAL_WINDOW_ID")
         for i in range(0,self._no_spw):
 	  temp = self._chan_wavelengths[i] #deep copy
@@ -80,7 +80,7 @@ class data_set_loader(object):
 	  self._chan_wavelengths[i] = self._chan_wavelengths[spw_indexes[i]]
 	  self._chan_wavelengths[spw_indexes[i]] = temp 
 	casa_ms_table.close()
-        casa_ms_table = table(self._MSName+"/FIELD",ack=False,readonly=True)
+        casa_ms_table = table(self._MSName+"::FIELD",ack=False,readonly=True)
         self._field_centres = casa_ms_table.getcol("REFERENCE_DIR")
         self._field_centre_names = casa_ms_table.getcol("NAME")
 	print "REFERENCE CENTRES OBSERVED:"
@@ -92,8 +92,10 @@ class data_set_loader(object):
 								 quantity(self._field_centres[i,0,1],"arcsec").get("deg").formatted("[+-]dd.mm.ss.t.."))
         casa_ms_table.close()
         casa_ms_table = table(self._MSName,ack=False,readonly=True)
-        self._no_timestamps = casa_ms_table.nrows() / self._no_baselines
-        print "%d TIMESTAMPS IN OBSERVATION" % self._no_timestamps
+        #Number of timestamps is NOT this (cannot deduce it from baselines and number of rows, since there may be 0 <= x < no baselines in each timestep): 
+        #self._no_timestamps = casa_ms_table.nrows() / self._no_baselines
+        #print "%d TIMESTAMPS IN OBSERVATION" % self._no_timestamps
+        self._no_rows = casa_ms_table.nrows()
         casa_ms_table.close()
     '''
       Computes the number of rows to read, given memory constraints (in bytes)
@@ -108,14 +110,16 @@ class data_set_loader(object):
 				      (self._no_channels*self._no_polarization_correlations*4) + #casted weight
 				      (self._no_channels*self._no_polarization_correlations*np.dtype(np.bool_).itemsize) + #visibility flags
 				      (np.dtype(np.bool_).itemsize) + #row flags
-				      (4*np.dtype(np.intc).itemsize)) #antenna 1 & 2, FIELD_ID and DATA_DESCRIPTION_ID
+				      (4*np.dtype(np.intc).itemsize) + #antenna 1 & 2, FIELD_ID and DATA_DESCRIPTION_ID
+				      (np.dtype(np.float64).itemsize) + #timestamp window centre (MAIN/TIME)
+				      (1*np.dtype(np.intp).itemsize)) #timestamp id (computed when data is read)
     
     '''
       Computes the number of iterations required to read entire file, given memory constraints (in bytes)
       Assumes read_head has been called prior to this call
     '''
     def number_of_read_iterations_required_from_mem_requirements(self,max_bytes_available):
-	return int(math.ceil(self._no_baselines*self._no_timestamps / float(self.compute_number_of_rows_to_read_from_mem_requirements(max_bytes_available))))
+	return int(math.ceil(self._no_rows / float(self.compute_number_of_rows_to_read_from_mem_requirements(max_bytes_available))))
     
     '''
       Read data from the MS
@@ -126,8 +130,9 @@ class data_set_loader(object):
     '''
     def read_data(self,start_row=0,no_rows=-1,data_column = "DATA"):
 	print "READING UVW VALUES, DATA, WEIGHTS AND FLAGS"
-	no_rows = self._no_baselines*self._no_timestamps if no_rows==-1 else no_rows
         casa_ms_table = table(self._MSName,ack=False,readonly=True)
+        no_rows = casa_ms_table.nrows() if no_rows==-1 else no_rows
+        assert(no_rows > 0) #table is the empty set
         '''
         Grab the uvw coordinates (these are not yet measured in terms of wavelength!)
         This should have dimensions [0...time * baseline -1][0...num_channels-1][0...num_correlations-1][3]
@@ -182,10 +187,28 @@ class data_set_loader(object):
         '''
         self._description_col = casa_ms_table.getcol("DATA_DESC_ID",startrow=start_row,nrow=no_rows)
         '''
-	  Grab the two antenna id arrays defining the two antennas defining each baseline (in uvw space)
+	  Grab the two antenna id arrays specifying the two antennas defining each baseline (in uvw space)
 	'''
 	self._arr_antenna_1 = casa_ms_table.getcol("ANTENNA1",startrow=start_row,nrow=no_rows)
 	self._arr_antenna_2 = casa_ms_table.getcol("ANTENNA2",startrow=start_row,nrow=no_rows)
+	time_window_centre = casa_ms_table.getcol("TIME",startrow=start_row,nrow=no_rows)
+	self._time_indicies = np.zeros(no_rows,dtype=np.intp)
+	
+	
+	timestamp_index = 0
+	last_timestamp_time = time_window_centre[0]
+	for r in range(0,no_rows):
+	  current_time = time_window_centre[r]
+	  if current_time > last_timestamp_time:
+	    timestamp_index+=1
+	    last_timestamp_time = current_time
+	  self._time_indicies[r] = timestamp_index
+	self._no_timestamps_read = timestamp_index + 1  #the last timestamp may be partially read depending on memory constraints
+	
+	'''
+	Read set of jones matricies from disk
+	'''
+	
 	'''
 	  Grab the FIELD_ID column in case there is more than a single pointing
 	'''

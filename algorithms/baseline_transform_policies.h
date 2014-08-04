@@ -9,7 +9,7 @@
 #include "uvw_coord.h"
 
 namespace imaging {
-	class transform_facet_righthanded_ra_dec {};
+	class transform_facet_lefthanded_ra_dec {};
 	class transform_disable_facet_rotation {};	
 	template <typename uvw_base_type,typename coordinate_framework>
 	class baseline_transform_policy {
@@ -29,13 +29,13 @@ namespace imaging {
 	};
 	
 	template <typename uvw_base_type>
-	class baseline_transform_policy <uvw_base_type, transform_facet_righthanded_ra_dec>{
+	class baseline_transform_policy <uvw_base_type, transform_facet_lefthanded_ra_dec>{
 	private:
 		uvw_base_type _baseline_transform_matrix[9];
 	public:
-		baseline_transform_policy(uvw_base_type facet_original_rotation, uvw_base_type facet_new_rotation, 
-                                  	  casa::Quantity old_phase_centre_ra, casa::Quantity old_phase_centre_dec, 
-				   	  casa::Quantity new_phase_centre_ra, casa::Quantity new_phase_centre_dec)
+		baseline_transform_policy(uvw_base_type facet_new_rotation, uvw_base_type facet_original_rotation,
+					  casa::Quantity old_phase_centre_ra, casa::Quantity old_phase_centre_dec,
+					  casa::Quantity new_phase_centre_ra, casa::Quantity new_phase_centre_dec)
 		{
 			using namespace boost::numeric::ublas;
 			/*
@@ -44,20 +44,17 @@ namespace imaging {
                                         transpose(T(old_phase_centre_ra,old_phase_centre_dec)) * transpose(Z_rot(facet_old_rotation))
                                 
                                 where:
-						 |	sH		cH		0	|
-                                T (H,D) =     	 |	-sDcH		sDsH		cD	| 
-						 |	cDcH		-cDsH		sD	|  
+						 |	cRA		-sRA		0	|
+                                T (RA,D) =     	 |	-sDsRA		-sDcRA		cD	| 
+						 |	cDsRA		cDcRA		sD	|  
 
-				This is the same as in Thompson, A. R.; Moran, J. M.; and Swenson, 
-				G. W., Jr. Interferometry and Synthesis in Radio Astronomy. New York: Wiley, ch. 4
-				
-				casacore::measures::uvwmachine.cpp contains a transformation chain that results in a matrix equal to:
-				T(H,D)*transpose(T (H0,D0))
+				This is the similar to the one in Thompson, A. R.; Moran, J. M.; and Swenson, 
+				G. W., Jr. Interferometry and Synthesis in Radio Astronomy, New York: Wiley, ch. 4, but in a left handed system
 				
 				We're not transforming between a coordinate system with w pointing towards the pole and one with
 				w pointing towards the reference centre here, so the last rotation matrix is ignored!
                         */ 
-			uvw_base_type d_ra = (-new_phase_centre_ra + old_phase_centre_ra).getValue("rad"),
+			uvw_base_type d_ra = (new_phase_centre_ra - old_phase_centre_ra).getValue("rad"),
                                       c_d_ra = cos(d_ra),
                                       s_d_ra = sin(d_ra),
                                       c_new_dec = cos(new_phase_centre_dec.getValue("rad")),
@@ -71,12 +68,12 @@ namespace imaging {
 			matrix<uvw_base_type> TT_transpose (3,3);
 			
 			TT_transpose(0,0) = c_d_ra;
-			TT_transpose(0,1) = -s_old_dec*s_d_ra;
-			TT_transpose(0,2) = c_old_dec*s_d_ra;
-			TT_transpose(1,0) = s_new_dec*s_d_ra;
+			TT_transpose(0,1) = s_old_dec*s_d_ra;
+			TT_transpose(0,2) = -c_old_dec*s_d_ra;
+			TT_transpose(1,0) = -s_new_dec*s_d_ra;
                         TT_transpose(1,1) = s_new_dec*s_old_dec*c_d_ra+c_new_dec*c_old_dec;
                         TT_transpose(1,2) = -c_old_dec*s_new_dec*c_d_ra+c_new_dec*s_old_dec;
-			TT_transpose(2,0) = -c_new_dec*s_d_ra;
+			TT_transpose(2,0) = c_new_dec*s_d_ra;
                         TT_transpose(2,1) = -c_new_dec*s_old_dec*c_d_ra+s_new_dec*c_old_dec;
                         TT_transpose(2,2) = c_new_dec*c_old_dec*c_d_ra+s_new_dec*s_old_dec;
 			

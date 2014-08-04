@@ -23,7 +23,7 @@ namespace imaging {
      gridding_function: pointer to member function of active gridding policy
      */
     inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
-			 void (gridding_policy_type::*gridding_function)(std::size_t,std::size_t,convolution_base_type)) const __restrict__ {
+			 void (gridding_policy_type::*gridding_function)(std::size_t,convolution_base_type)) const __restrict__ {
       throw std::exception("Undefined behaviour");
     }
   };
@@ -64,7 +64,7 @@ namespace imaging {
 			_active_gridding_policy(active_gridding_policy)
 			{}
     inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
-			 void (gridding_policy_type::*gridding_function)(std::size_t,std::size_t,convolution_base_type)) const __restrict__ {
+			 void (gridding_policy_type::*gridding_function)(std::size_t,convolution_base_type)) const __restrict__ {
 	
 	uvw_base_type translated_grid_u = uvw._u + _grid_u_centre;
 	uvw_base_type translated_grid_v = uvw._v + _grid_v_centre;
@@ -84,7 +84,7 @@ namespace imaging {
                 std::size_t grid_flat_index = ((disc_grid_v)*_nx+(disc_grid_u)); //flatten grid index
                 
                 // Call the gridding policy function (this can either be the normal gridding function or the conjugate gridding function:
-                ((_active_gridding_policy).*gridding_function)(grid_flat_index,_grid_size_in_pixels,conv_weight);		 
+                ((_active_gridding_policy).*gridding_function)(grid_flat_index,conv_weight);		 
             }
         }
         
