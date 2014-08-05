@@ -11,6 +11,7 @@ if __name__ == "__main__":
 	parser_args = vars(parser.parse_args())
 	data = data_set_loader.data_set_loader(parser_args['input_ms'])
 	data.read_head()
+	assert(data._no_polarization_correlations == 4)
 	#compute set of timestamp indicies:
 	casa_ms_table = table(parser_args['input_ms'],ack=False,readonly=False)
 	time_window_centre = casa_ms_table.getcol("TIME")
@@ -50,12 +51,28 @@ if __name__ == "__main__":
 	output_table.putcol("SPW_ID",spw_id_data.reshape(no_timestamps_read*data._no_antennae*parser_args["no_direction"]*data._no_spw))
 	output_table.putcol("DIRECTION_ID",direction_id_data.reshape(no_timestamps_read*data._no_antennae*parser_args["no_direction"]*data._no_spw))
 	output_table.putcol("ANTENNA_ID",antenna_id_data.reshape(no_timestamps_read*data._no_antennae*parser_args["no_direction"]*data._no_spw))
+	#write a short description table
+	ant_cnt = makescacoldesc("ANTENNA_COUNT",data._no_antennae)
+	dir_cnt = makescacoldesc("DIRECTION_COUNT",parser_args["no_direction"])
+	spw_cnt = makescacoldesc("SPW_COUNT",data._no_spw)
+	chn_cnt = makescacoldesc("CHANNEL_COUNT",data._no_channels)
+	tmstmp_cnt = makescacoldesc("TIMESTAMP_COUNT",no_timestamps_read)
+	td_dsc = maketabdesc([ant_cnt,dir_cnt,spw_cnt,chn_cnt,tmstmp_cnt])
+	desc_output_table = table(parser_args["input_ms"]+"/DDE_CALIBRATION_INFO",td_dsc,nrow=1)
+	desc_output_table.putcell("ANTENNA_COUNT",0,data._no_antennae)
+	desc_output_table.putcell("DIRECTION_COUNT",0,parser_args["no_direction"])
+	desc_output_table.putcell("SPW_COUNT",0,data._no_spw)
+	desc_output_table.putcell("CHANNEL_COUNT",0,data._no_channels)
+	desc_output_table.putcell("TIMESTAMP_COUNT",0,no_timestamps_read)
 	#reference new DDE_CALIBRATION in MAIN table
 	try:
 	  casa_ms_table.removekeyword("DDE_CALIBRATION")
+	  casa_ms_table.removekeyword("DDE_CALIBRATION_INFO")
 	except:
-	  print "COULD NOT REMOVE PREVIOUS KEYWORD FROM MAIN TABLE, ASSUMING THIS IS THE FIRST TIME THE DDE TERMS ARE ADDED TO THE MS"
+	  print "COULD NOT REMOVE PREVIOUS KEYWORDS FROM MAIN TABLE, ASSUMING THIS IS THE FIRST TIME THE DDE TERMS ARE ADDED TO THE MS"
 	casa_ms_table.putkeyword("DDE_CALIBRATION",output_table)
-	#finally close both MAIN and DDE_CALIBRATION tables
+	casa_ms_table.putkeyword("DDE_CALIBRATION_INFO",desc_output_table)
+	#finally close both MAIN, DDE_CALIBRATION and DDE_CALIBRATION_INFO tables
 	casa_ms_table.close()
 	output_table.close()
+	desc_output_table.close()

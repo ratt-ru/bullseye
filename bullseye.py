@@ -36,7 +36,7 @@ if __name__ == "__main__":
   parser.add_argument('--conv_sup', help='Specify gridding convolution function support area (number of grid cells)', type=int, default=1)
   parser.add_argument('--conv_oversamp', help='Specify gridding convolution function oversampling multiplier', type=int, default=1)
   parser.add_argument('--output_format', help='Specify image output format', choices=["fits","png"], default="fits")
-  parser.add_argument('--mem_available_for_input_data', help='Specify available memory (bytes) for storing the input measurement set data arrays', type=int, default=2048*1024*1024)
+  parser.add_argument('--mem_available_for_input_data', help='Specify available memory (bytes) for storing the input measurement set data arrays', type=int, default=512*1024*1024)
   parser.add_argument('--field_id', help='Specify the id of the field (pointing) to image', type=int, default=0)
   parser.add_argument('--data_column', help='Specify the measurement set data column being imaged', type=str, default='DATA')
   
@@ -44,6 +44,8 @@ if __name__ == "__main__":
   data = data_set_loader.data_set_loader(parser_args['input_ms'])
   data.read_head()
   chunk_size = data.compute_number_of_rows_to_read_from_mem_requirements(parser_args['mem_available_for_input_data'])
+  if chunk_size == 0:
+    raise Exception("Insufficient memory allocated for loading data. Cannot even load a single row and a timestamp of jones matricies at a time")
   no_chunks = data.number_of_read_iterations_required_from_mem_requirements(parser_args['mem_available_for_input_data'])
   #some sanity checks:
   if (parser_args['pol'] in ['I','Q','U','V'] and 
