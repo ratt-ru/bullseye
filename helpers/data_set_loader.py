@@ -17,11 +17,12 @@ class data_set_loader(object):
     '''
     classdocs
     '''
-    def __init__(self, MSName):
+    def __init__(self, MSName,read_jones_terms = True):
         '''
         Constructor
         '''
-        self._MSName = MSName 
+        self._MSName = MSName
+        self._should_read_jones_terms = read_jones_terms
     '''
         Read some stats about the MS
         Assume this method only gets called from __init__
@@ -97,36 +98,35 @@ class data_set_loader(object):
         self._no_rows = casa_ms_table.nrows()
         casa_ms_table.close()
         self._cal_no_dirs = 0
-        self._cal_no_antennae = 0
-        self._cal_no_spw = 0
-        self._cal_no_channels = 0
-        self._cal_no_timestamps = 0
-        dde_cal_info_desc_exists = False
-        dde_cal_info_exists = False
-	try:
+	self._cal_no_antennae = 0
+	self._cal_no_spw = 0
+	self._cal_no_channels = 0
+	self._cal_no_timestamps = 0
+	self._dde_cal_info_desc_exists = False
+	self._dde_cal_info_exists = False
+        if self._should_read_jones_terms:  
+	  try:
 	    casa_ms_table = table(self._MSName+"/DDE_CALIBRATION",ack=False,readonly=True)
-	    dde_cal_info_exists = True
+	    self._dde_cal_info_exists = True
 	    self._cal_no_rows = casa_ms_table.nrows()
 	    casa_ms_table.close()
 	    casa_ms_table = table(self._MSName+"/DDE_CALIBRATION_INFO",ack=False,readonly=True)
-	    dde_cal_info_desc_exists = True
+	    self._dde_cal_info_desc_exists = True
 	    self._cal_no_dirs = casa_ms_table.getcell("DIRECTION_COUNT",0)
 	    self._cal_no_antennae = casa_ms_table.getcell("ANTENNA_COUNT",0)
 	    self._cal_no_spw = casa_ms_table.getcell("SPW_COUNT",0)
 	    self._cal_no_channels = casa_ms_table.getcell("CHANNEL_COUNT",0)
 	    self._cal_no_timestamps = casa_ms_table.getcell("TIMESTAMP_COUNT",0)
 	    casa_ms_table.close()
-	except:
+	  except:
 	    pass
-	if dde_cal_info_exists != dde_cal_info_desc_exists:
-	  raise Exception("Missing one of 'DDE_CALIBRATION' or 'DDE_CALIBRATION_INFO' tables. The following must be valid: both tables exist or neither is present in the MS.") 
+	  if self._dde_cal_info_exists != self._dde_cal_info_desc_exists:
+	    raise Exception("Missing one of 'DDE_CALIBRATION' or 'DDE_CALIBRATION_INFO' tables. The following must be valid: both tables exist or neither is present in the MS.") 
 	
-	if dde_cal_info_desc_exists:
-	  if (self._cal_no_antennae != self._no_antennae or 
-	      self._cal_no_spw != self._no_spw or
-	      self._cal_no_channels != self._no_channels or
-	      self._cal_no_rows != self._cal_no_timestamps*self._cal_no_antennae*self._cal_no_dirs*self._cal_no_spw):
-	    raise Exception("Calibration data dimensions does not correspond to measurement set. Ensure calibration data has dimensions [no_timestamps x no_antennae x no_directions x no_spw x no_channel]")
+	  if self._dde_cal_info_desc_exists:
+	    if (self._cal_no_antennae != self._no_antennae or self._cal_no_spw != self._no_spw or self._cal_no_channels != self._no_channels or
+		self._cal_no_rows != self._cal_no_timestamps*self._cal_no_antennae*self._cal_no_dirs*self._cal_no_spw):
+		  raise Exception("Calibration data dimensions does not correspond to measurement set. Ensure calibration data has dimensions [no_timestamps x no_antennae x no_directions x no_spw x no_channel]")
     '''
       Computes the number of rows to read, given memory constraints (in bytes)
       Assumes read_head has been called prior to this call
@@ -160,7 +160,7 @@ class data_set_loader(object):
       no_rows specifies the number of rows to read (-1 == "read all")
       Assumes read_head has been called prior to this call
     '''
-    def read_data(self,start_row=0,no_rows=-1,data_column = "DATA",read_jones_terms = True):
+    def read_data(self,start_row=0,no_rows=-1,data_column = "DATA"):
 	print "READING UVW VALUES, DATA, WEIGHTS AND FLAGS"
         casa_ms_table = table(self._MSName,ack=False,readonly=True)
         no_rows = casa_ms_table.nrows() if no_rows==-1 else no_rows
@@ -257,12 +257,12 @@ class data_set_loader(object):
         '''
 	Read set of jones matricies from disk
 	'''
-	if read_jones_terms:
+	if self._should_read_jones_terms:
 	  try:
 	    casa_ms_table = table(self._MSName+"/DDE_CALIBRATION",ack=False,readonly=True)
-	    jones_timestamp_size = self._no_antennae*self._cal_no_dirs*self._no_spw
+	    jones_timestamp_size = self._no_antennae*self._cal_no_dirs*self._no_spw*self._no_channels
 	    print "READING JONES TERMS FROM TIMESTAMP %d TO %d" % (self._last_starting_point,self._last_starting_point+self._no_timestamps_read-1)
-	    self._jones_terms = casa_ms_table.getcol("JONES",startrow=self._last_starting_point*jones_timestamp_size,nrow=self._no_timestamps_read*jones_timestamp_size)
+	    self._jones_terms = casa_ms_table.getcol("JONES",startrow=self._last_starting_point*jones_timestamp_size,nrow=self._no_timestamps_read*jones_timestamp_size).astype(np.complex64)
 	    casa_ms_table.close()
 	  except:
 	    print "WARNING: MEASUREMENT SET DOES NOT CONTAIN OPTIONAL SUBTABLE 'DDE_CALIBRATION'" 

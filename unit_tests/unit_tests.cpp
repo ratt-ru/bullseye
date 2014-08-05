@@ -136,6 +136,33 @@ TEST_CASE( "Testing Jones Matrix operations" ) {
     REQUIRE(is_close(j.correlations[3].real(),0.175));
     REQUIRE(is_close(j.correlations[3].imag(),0.1));
   }
+  SECTION( "Testing the all inverse" ) {
+    jones_2x2<float> jones_set[] = {{complex<float>(2,3),complex<float>(4,5),complex<float>(1,6),complex<float>(7,8)},
+				    {complex<float>(4,6),complex<float>(8,10),complex<float>(2,12),complex<float>(14,16)}};
+    invert_all((jones_2x2<float> *)jones_set,2);
+    REQUIRE(is_close(jones_set[0].correlations[0].real(),0.55));
+    REQUIRE(is_close(jones_set[0].correlations[0].imag(),0.225));
+    REQUIRE(is_close(jones_set[0].correlations[1].real(),-0.325));
+    REQUIRE(is_close(jones_set[0].correlations[1].imag(),-0.15));
+    REQUIRE(is_close(jones_set[0].correlations[2].real(),-0.2));
+    REQUIRE(is_close(jones_set[0].correlations[2].imag(),-0.275));
+    REQUIRE(is_close(jones_set[0].correlations[3].real(),0.175));
+    REQUIRE(is_close(jones_set[0].correlations[3].imag(),0.1));
+    
+    REQUIRE(is_close(jones_set[1].correlations[0].real(),0.275));
+    REQUIRE(is_close(jones_set[1].correlations[0].imag(),0.1125));
+    REQUIRE(is_close(jones_set[1].correlations[1].real(),-0.1625));
+    REQUIRE(is_close(jones_set[1].correlations[1].imag(),-0.075));
+    REQUIRE(is_close(jones_set[1].correlations[2].real(),-0.1));
+    REQUIRE(is_close(jones_set[1].correlations[2].imag(),-0.1375));
+    REQUIRE(is_close(jones_set[1].correlations[3].real(),0.0875));
+    REQUIRE(is_close(jones_set[1].correlations[3].imag(),0.05));
+  }
+  SECTION( "Testing the all inverse throws exception on inverting singular matrix" ) {
+    jones_2x2<float> jones_set[] = {{complex<float>(2,3),complex<float>(4,5),complex<float>(1,6),complex<float>(7,8)},
+				    {complex<float>(0,0),complex<float>(0,0),complex<float>(0,0),complex<float>(0,0)}};
+    REQUIRE_THROWS(invert_all((jones_2x2<float> *)jones_set,2));
+  }
   SECTION( "Testing the unrolled multiplication" ) {
     jones_2x2<float> a = {complex<float>(1,2),complex<float>(3,4),complex<float>(5,6),complex<float>(7,8)};
     jones_2x2<float> b = {complex<float>(9,10),complex<float>(11,12),complex<float>(13,14),complex<float>(15,16)};

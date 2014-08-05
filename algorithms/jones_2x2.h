@@ -42,7 +42,20 @@ namespace imaging {
     std::complex<visibility_base_type> swp = mat.correlations[0];
     mat.correlations[0] = mat.correlations[3] * detInv;
     mat.correlations[3] = swp * detInv;
-    
+  }
+  /**
+   * Inverts all matricies in the set
+   * Assumes all the matricies are non-singular, will throw an exception if a 
+   * singular matrix is encountered.
+   */
+  template <typename visibility_base_type>
+  inline void invert_all(jones_2x2<visibility_base_type> * __restrict__ mat, std::size_t jones_count) {
+    for (std::size_t j = 0; j < jones_count; ++j){
+      if (det(mat[j]) == std::complex<visibility_base_type>(0,0)){
+	throw std::runtime_error("JONES MATRIX SET CONTAINS SINGULAR MATRICIES. ABORTING.");
+      }
+      invert(mat[j]);
+    }
   }
   /**
    * Unrolled 2x2 matrix multiplication
