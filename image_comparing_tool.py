@@ -10,13 +10,11 @@ if __name__ == "__main__":
 	parser.add_argument("input_fits_1", help="Name of the first FITS image", type=str)
 	parser.add_argument("input_fits_2", help="Name of the second FITS image", type=str)
 	parser.add_argument("model_image", help="Name of model FITS image",type=str)
-
-	parser_args = vars(parser.parse_args())
-
+	parser_args = vars(parser.parse_args())	
+	
 	img1 = pyfits.open(parser_args["input_fits_1"])
 	img2 = pyfits.open(parser_args["input_fits_2"])
 	model = pyfits.open(parser_args["model_image"])
-	
 	print "\033[44;33mFirst image info:\033[0m"
 	img1.info()
 	print "\033[44;33mSecond image info:\033[0m"

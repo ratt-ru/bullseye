@@ -50,7 +50,9 @@ namespace imaging {
 														    uvw_base_type, 
 														    transform_disable_phase_rotation>,
 											     gridding_4_pol>,
-		  typename convolution_policy_type = convolution_policy<convolution_base_type, uvw_base_type, baseline_transformation_policy_type, convolution_precomputed_fir> >
+		  typename convolution_policy_type = convolution_policy<convolution_base_type, uvw_base_type, 
+									grid_base_type, baseline_transformation_policy_type, 
+									convolution_precomputed_fir> >
 	void grid(polarization_gridding_policy_type & __restrict__ active_polarization_gridding_policy,
 		  const baseline_transformation_policy_type & __restrict__ active_baseline_transform_policy,
 		  const convolution_policy_type & __restrict__ active_convolution_policy,
