@@ -12,7 +12,7 @@ import math
 import time
 import datetime
 import pylab
-
+import base_types
 class data_set_loader(object):
     '''
     classdocs
@@ -67,7 +67,7 @@ class data_set_loader(object):
         print "%d CHANNELS IN OBSERVATION" % self._no_channels
         print "%d SPECTRAL WINDOWS IN OBSERVATION" % self._no_spw
         self._chan_freqs = casa_ms_table.getcol("CHAN_FREQ") # this will have dimensions [number of SPWs][num channels in spectral window]
-        self._chan_wavelengths = (quanta.constants['c'].get_value("m/s") / self._chan_freqs).astype(np.float32) # lambda = speed of light / frequency
+        self._chan_wavelengths = (quanta.constants['c'].get_value("m/s") / self._chan_freqs).astype(base_types.reference_wavelength_type) # lambda = speed of light / frequency
         for spw in range(0,self._no_spw):
 	  for c in range(0,self._no_channels):
             print "\t Spectral window %d, channel %d has a wavelength of %f m" % (spw,c,self._chan_wavelengths[spw,c])
@@ -136,9 +136,9 @@ class data_set_loader(object):
 	return int(max_bytes_available / ((3*8) + #uvw data
 				      (self._no_channels*self._no_polarization_correlations*2*8) + #complex visibilities
 				      (self._no_channels*self._no_polarization_correlations*8) + #weight
-				      (3*4) + #casted uvw data
-				      (self._no_channels*self._no_polarization_correlations*2*4) + #casted complex visibilities
-				      (self._no_channels*self._no_polarization_correlations*4) + #casted weight
+				      (3*np.dtype(base_types.uvw_type).itemsize) + #casted uvw data
+				      (self._no_channels*self._no_polarization_correlations*np.dtype(base_types.visibility_type).itemsize) + #casted complex visibilities
+				      (self._no_channels*self._no_polarization_correlations*np.dtype(base_types.weight_type).itemsize) + #casted weight
 				      (self._no_channels*self._no_polarization_correlations*np.dtype(np.bool_).itemsize) + #visibility flags
 				      (np.dtype(np.bool_).itemsize) + #row flags
 				      (4*np.dtype(np.intc).itemsize) + #antenna 1 & 2, FIELD_ID and DATA_DESCRIPTION_ID
@@ -169,12 +169,12 @@ class data_set_loader(object):
         Grab the uvw coordinates (these are not yet measured in terms of wavelength!)
         This should have dimensions [0...time * baseline -1][0...num_channels-1][0...num_correlations-1][3]
         '''
-        self._arr_uvw = casa_ms_table.getcol("UVW",startrow=start_row,nrow=no_rows).astype(np.float32)
+        self._arr_uvw = casa_ms_table.getcol("UVW",startrow=start_row,nrow=no_rows).astype(base_types.uvw_type)
           
         '''
             the data variable has dimensions: [0...obs_time_range*baselines-1][0...num_channels-1][0...num_correlations-1] 
         '''
-        self._arr_data = casa_ms_table.getcol(data_column,startrow=start_row,nrow=no_rows).astype(np.complex64)
+        self._arr_data = casa_ms_table.getcol(data_column,startrow=start_row,nrow=no_rows).astype(base_types.visibility_type)
         '''
             the weights column has dimensions: [0...obs_time_range*baselines-1][0...num_correlations-1]
             However this column only contains the averages accross all channels. The weight_spectrum column
@@ -193,11 +193,11 @@ class data_set_loader(object):
             With faceting the directional dependent effects can move out of the all-sky integral (Smirnov II, 2011)
         '''
 	try:
-	  self._arr_weights = casa_ms_table.getcol("WEIGHT_SPECTRUM",startrow=start_row,nrow=no_rows).astype(np.float32)
+	  self._arr_weights = casa_ms_table.getcol("WEIGHT_SPECTRUM",startrow=start_row,nrow=no_rows).astype(base_types.weight_type)
 	  print "THIS MEASUREMENT SET HAS VISIBILITY WEIGHTS PER CHANNEL, LOADING [WEIGHT_SPECTRUM] INSTEAD OF [WEIGHT]" 
 	except:
 	  print "WARNING: THIS MEASUREMENT SET ONLY HAS AVERAGED VISIBILITY WEIGHTS (PER BASELINE), LOADING [WEIGHT]"
-	  self._arr_weights = np.zeros([no_rows,self._no_channels,self._no_polarization_correlations]).astype(np.float32)
+	  self._arr_weights = np.zeros([no_rows,self._no_channels,self._no_polarization_correlations]).astype(base_types.weight_type)
         
 	  self._arr_weights[:,0:1,:] = casa_ms_table.getcol("WEIGHT",startrow=start_row,nrow=no_rows).reshape([no_rows,1,self._no_polarization_correlations])
         
@@ -260,10 +260,12 @@ class data_set_loader(object):
 	if self._should_read_jones_terms:
 	  try:
 	    casa_ms_table = table(self._MSName+"/DDE_CALIBRATION",ack=False,readonly=True)
-	    jones_timestamp_size = self._no_antennae*self._cal_no_dirs*self._no_spw*self._no_channels
+	    jones_timestamp_size = self._no_antennae*self._cal_no_dirs*self._no_spw
 	    print "READING JONES TERMS FROM TIMESTAMP %d TO %d" % (self._last_starting_point,self._last_starting_point+self._no_timestamps_read-1)
-	    self._jones_terms = casa_ms_table.getcol("JONES",startrow=self._last_starting_point*jones_timestamp_size,nrow=self._no_timestamps_read*jones_timestamp_size).astype(np.complex64)
+	    self._jones_terms = casa_ms_table.getcol("JONES",startrow=self._last_starting_point*jones_timestamp_size,nrow=self._no_timestamps_read*jones_timestamp_size).astype(base_types.visibility_type)
 	    casa_ms_table.close()
 	  except:
-	    print "WARNING: MEASUREMENT SET DOES NOT CONTAIN OPTIONAL SUBTABLE 'DDE_CALIBRATION'" 
+	    print "WARNING: MEASUREMENT SET DOES NOT CONTAIN OPTIONAL SUBTABLE 'DDE_CALIBRATION'"
+	    import traceback
+	    print traceback.format_exc()
 	self._last_starting_point += timestamp_index #finally set the last timestamp read, this will be the starting point in the DDE_CALIBRATION table

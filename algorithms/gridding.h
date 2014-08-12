@@ -128,7 +128,6 @@ namespace imaging {
 				on b. Rather than running though all the visibilities twice we compute uvw, -uvw, V and V*. We should be able to save ourselves some compuation on phase
 				shifts, etc by so doing. All gridder policies must reflect this and support gridding both the complex visibility and its conjugate. 
 				*/
-				
 				active_convolution_policy.convolve(uvw, &polarization_gridding_policy_type::grid_polarization_terms);
  				active_convolution_policy.convolve(-uvw, &polarization_gridding_policy_type::grid_polarization_conjugate_terms);
                         }

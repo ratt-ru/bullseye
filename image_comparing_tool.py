@@ -60,6 +60,10 @@ if __name__ == "__main__":
 	stddev_img1 = np.std(normalized_img1)
 	stddev_img2 = np.std(normalized_img2)
 	stddev_model = np.std(normalized_model)
+	rms_img1 = np.sqrt(np.mean(normalized_img1**2))
+	rms_img2 = np.sqrt(np.mean(normalized_img2**2))
+	dr_img1 = 10*math.log10(max_img1 / rms_img1)
+	dr_img2 = 10*math.log10(max_img2 / rms_img2)
 	print "\033[93m<DONE>\033[0m"
 
 	print("\033[44;33mComputing difference map and errors... "),
@@ -102,11 +106,13 @@ if __name__ == "__main__":
 	print "\033[33m\tStandard deviation: %f" % stddev_img1
 	print "\033[33m\tMean Squared Error between image and model: %f" %mse_model_img1
 	print "\033[33m\tPeak Signal to Noise (model to difference): %fdB" % snr_img1
+	print "\033[33m\tDynamic range (peak to rms): %fdB" % dr_img1
 	print "\033[93m%s [image 2] (normalized):" % parser_args["input_fits_2"]
 	print "\033[33m\tAverage: %f" % avg_img2
 	print "\033[33m\tStandard deviation: %f" % stddev_img2
 	print "\033[33m\tMean Squared Error between image and model: %f" %mse_model_img2
 	print "\033[33m\tPeak Signal to Noise (model to difference): %fdB" % snr_img2
+	print "\033[33m\tDynamic range (peak to rms): %fdB" % dr_img2
 	print "\033[93m%s [model image] (normalized):" % parser_args["model_image"]
 	print "\033[33m\tAverage: %f" % avg_model
 	print "\033[33m\tStandard deviation: %f" % stddev_model

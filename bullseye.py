@@ -10,6 +10,7 @@ from helpers import data_set_loader
 from helpers import fft_utils
 from helpers import convolution_filter
 from helpers import fits_export
+from helpers import base_types
 import ctypes
 libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
 	   
@@ -74,7 +75,7 @@ if __name__ == "__main__":
   num_facet_centres = 0
   if (parser_args['facet_centres'] != None):
     num_facet_centres = len(parser_args['facet_centres'])
-    facet_centres = np.array(parser_args['facet_centres']).astype(np.float32)
+    facet_centres = np.array(parser_args['facet_centres']).astype(base_types.uvw_type)
   if parser_args['do_jones_corrections'] and num_facet_centres != data._cal_no_dirs:
     raise argparse.ArgumentTypeError("Number of calibrated directions does not correspond to number of directions being faceted")
   
@@ -85,7 +86,7 @@ if __name__ == "__main__":
     pol_index = data._polarization_correlations.tolist().index(pol_options[parser_args['pol']])
     
     num_grids = 1 if (num_facet_centres == 0) else num_facet_centres
-    g = np.zeros([num_grids,1,parser_args['npix_l'],parser_args['npix_m']],dtype=np.complex64)
+    g = np.zeros([num_grids,1,parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.grid_type)
     for chunk_index in range(0,no_chunks):
       chunk_lbound = chunk_index * chunk_size
       chunk_ubound = min((chunk_index+1) * chunk_size,data._no_rows)
@@ -103,8 +104,8 @@ if __name__ == "__main__":
 				   data._arr_weights.ctypes.data_as(ctypes.c_void_p),
 				   ctypes.c_size_t(parser_args['npix_l']),
 				   ctypes.c_size_t(parser_args['npix_m']),
-				   ctypes.c_float(parser_args['cell_l']),
-				   ctypes.c_float(parser_args['cell_m']),
+				   base_types.uvw_ctypes_convert_type(parser_args['cell_l']),
+				   base_types.uvw_ctypes_convert_type(parser_args['cell_m']),
 				   conv._conv_FIR.ctypes.data_as(ctypes.c_void_p),
 				   ctypes.c_size_t(parser_args['conv_sup']),
 				   ctypes.c_size_t(parser_args['conv_oversamp']),
@@ -125,10 +126,10 @@ if __name__ == "__main__":
 				    data._arr_weights.ctypes.data_as(ctypes.c_void_p),
 				    ctypes.c_size_t(parser_args['npix_l']),
 				    ctypes.c_size_t(parser_args['npix_m']),
-				    ctypes.c_float(parser_args['cell_l']),
-				    ctypes.c_float(parser_args['cell_m']),
-				    ctypes.c_float(data._field_centres[parser_args['field_id'],0,0]),
-				    ctypes.c_float(data._field_centres[parser_args['field_id'],0,1]),
+				    base_types.uvw_ctypes_convert_type(parser_args['cell_l']),
+				    base_types.uvw_ctypes_convert_type(parser_args['cell_m']),
+				    base_types.uvw_ctypes_convert_type(data._field_centres[parser_args['field_id'],0,0]),
+				    base_types.uvw_ctypes_convert_type(data._field_centres[parser_args['field_id'],0,1]),
 				    facet_centres.ctypes.data_as(ctypes.c_void_p) if (num_facet_centres != 0) else None, 
 				    ctypes.c_size_t(num_facet_centres), 
 				    conv._conv_FIR.ctypes.data_as(ctypes.c_void_p),
@@ -144,7 +145,7 @@ if __name__ == "__main__":
     gridded_vis = g[:,0,:,:]
   else: # the user want to derive one of the stokes terms (I,Q,U,V) from the correlation terms:
     num_polarized_grids = 1 if (num_facet_centres == 0) else num_facet_centres
-    g = np.zeros([num_polarized_grids,4,parser_args['npix_l'],parser_args['npix_m']],dtype=np.complex64)
+    g = np.zeros([num_polarized_grids,4,parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.grid_type)
     for chunk_index in range(0,no_chunks):
       chunk_lbound = chunk_index * chunk_size
       chunk_ubound = min((chunk_index+1) * chunk_size,data._no_rows)
@@ -162,8 +163,8 @@ if __name__ == "__main__":
 			      data._arr_weights.ctypes.data_as(ctypes.c_void_p),
 			      ctypes.c_size_t(parser_args['npix_l']),
 			      ctypes.c_size_t(parser_args['npix_m']),
-			      ctypes.c_float(parser_args['cell_l']),
-			      ctypes.c_float(parser_args['cell_m']),
+			      base_types.uvw_ctypes_convert_type(parser_args['cell_l']),
+			      base_types.uvw_ctypes_convert_type(parser_args['cell_m']),
 			      conv._conv_FIR.ctypes.data_as(ctypes.c_void_p),
 			      ctypes.c_size_t(parser_args['conv_sup']),
 			      ctypes.c_size_t(parser_args['conv_oversamp']),
@@ -183,10 +184,10 @@ if __name__ == "__main__":
 					   data._arr_weights.ctypes.data_as(ctypes.c_void_p),
 					   ctypes.c_size_t(parser_args['npix_l']),
 					   ctypes.c_size_t(parser_args['npix_m']),
-					   ctypes.c_float(parser_args['cell_l']),
-					   ctypes.c_float(parser_args['cell_m']),
-					   ctypes.c_float(data._field_centres[parser_args['field_id'],0,0]),
-					   ctypes.c_float(data._field_centres[parser_args['field_id'],0,1]),
+					   base_types.uvw_ctypes_convert_type(parser_args['cell_l']),
+					   base_types.uvw_ctypes_convert_type(parser_args['cell_m']),
+					   base_types.uvw_ctypes_convert_type(data._field_centres[parser_args['field_id'],0,0]),
+					   base_types.uvw_ctypes_convert_type(data._field_centres[parser_args['field_id'],0,1]),
 					   facet_centres.ctypes.data_as(ctypes.c_void_p) if (num_facet_centres != 0) else None, 
 					   ctypes.c_size_t(num_facet_centres), 
 					   conv._conv_FIR.ctypes.data_as(ctypes.c_void_p),
@@ -217,10 +218,10 @@ if __name__ == "__main__":
 			       data._arr_weights.ctypes.data_as(ctypes.c_void_p),
 			       ctypes.c_size_t(parser_args['npix_l']),
 			       ctypes.c_size_t(parser_args['npix_m']),
-			       ctypes.c_float(parser_args['cell_l']),
-			       ctypes.c_float(parser_args['cell_m']),
-			       ctypes.c_float(data._field_centres[parser_args['field_id'],0,0]),
-			       ctypes.c_float(data._field_centres[parser_args['field_id'],0,1]),
+			       base_types.uvw_ctypes_convert_type(parser_args['cell_l']),
+			       base_types.uvw_ctypes_convert_type(parser_args['cell_m']),
+			       base_types.uvw_ctypes_convert_type(data._field_centres[parser_args['field_id'],0,0]),
+			       base_types.uvw_ctypes_convert_type(data._field_centres[parser_args['field_id'],0,1]),
 			       facet_centres.ctypes.data_as(ctypes.c_void_p) if (num_facet_centres != 0) else None, 
 			       ctypes.c_size_t(num_facet_centres), 
 			       conv._conv_FIR.ctypes.data_as(ctypes.c_void_p),
@@ -258,7 +259,11 @@ if __name__ == "__main__":
 	
   #now invert, detaper and write out all the facets to disk:  
   if parser_args['facet_centres'] == None:
-    dirty = np.real(fft_utils.ifft2(gridded_vis[0,:,:]))/(conv._F_detaper)
+    dirty = np.abs(fft_utils.ifft2(gridded_vis[0,:,:]))
+    dirty_max = np.max(dirty)
+    dirty_min = np.min(dirty)
+    dirty = ((dirty - dirty_min)*((1-0)/(dirty_max-dirty_min))+0)
+    dirty = (dirty / conv._F_detaper).astype(np.float32)
     if parser_args['output_format'] == 'png':
       i = pylab.imshow(dirty[::-1,:],interpolation='nearest',cmap = pylab.get_cmap('hot'),
 		       extent=[0, parser_args['npix_l']-1, 0, parser_args['npix_m']-1])
@@ -274,7 +279,11 @@ if __name__ == "__main__":
 				     dirty)
   else:
     for f in range(0, num_facet_centres):
-      dirty = (np.real(fft_utils.ifft2(gridded_vis[f,:,:]))/conv._F_detaper).reshape(parser_args['npix_l'],parser_args['npix_m'])
+      dirty = (np.abs(fft_utils.ifft2(gridded_vis[f,:,:]))).reshape(parser_args['npix_l'],parser_args['npix_m'])
+      dirty_max = np.max(dirty)
+      dirty_min = np.min(dirty)
+      dirty = ((dirty - dirty_min)*((1-0)/(dirty_max-dirty_min))+0)
+      dirty = (dirty / conv._F_detaper).astype(np.float32)
       if parser_args['output_format'] == 'png':
 	i = pylab.imshow(dirty[::-1,:],interpolation='nearest',cmap = pylab.get_cmap('hot'),
 		       extent=[0, parser_args['npix_l']-1, 0, parser_args['npix_m']-1])

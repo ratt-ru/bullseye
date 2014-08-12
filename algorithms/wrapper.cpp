@@ -256,8 +256,8 @@ extern "C" {
         assert(number_of_polarization_terms == 4); //Only supports 4 correlation visibilties in this mode
 
         size_t no_facet_pixels = facet_nx*facet_ny;
-	printf("INVERTING %zu JONES MATRICIES...\n", no_timestamps_read*antenna_count*num_facet_centres*spw_count*channel_count);
 	if (should_invert_jones_terms)
+	      printf("INVERTING %zu JONES MATRICIES...\n", no_timestamps_read*antenna_count*num_facet_centres*spw_count*channel_count);
 	      invert_all<visibility_base_type>((jones_2x2<visibility_base_type>*)jones_terms,no_timestamps_read*antenna_count*num_facet_centres*spw_count*channel_count);
         for (size_t facet_index = 0; facet_index < num_facet_centres; ++facet_index) {
             uvw_base_type new_phase_ra = facet_centres[2*facet_index];

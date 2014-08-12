@@ -43,7 +43,7 @@ namespace imaging {
     std::size_t _oversampling_factor;
     const convolution_base_type * __restrict__ _conv;
     std::size_t _conv_dim_size;
-    std::size_t _conv_dim_centre;
+    uvw_base_type _conv_dim_centre;
     uvw_base_type _conv_scale; 
     gridding_policy_type & __restrict__ _active_gridding_policy;
   public:
@@ -59,35 +59,31 @@ namespace imaging {
 			_nx(nx), _ny(ny), _grid_size_in_pixels(nx*ny), _grid_u_centre(nx / 2), _grid_v_centre(ny / 2),
 			_convolution_support(convolution_support), _oversampling_factor(oversampling_factor), 
 			_conv(conv), _conv_dim_size(convolution_support * oversampling_factor),
-			_conv_dim_centre(_conv_dim_size / 2),
+			_conv_dim_centre(convolution_support / 2.0),
 			_conv_scale(1/uvw_base_type(oversampling_factor)), //convolution pixel is oversample times smaller than scaled grid cell size
 			_active_gridding_policy(active_gridding_policy)
 			{}
     inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
 			 void (gridding_policy_type::*gridding_function)(std::size_t,convolution_base_type)) const __restrict__ {
-	
 	uvw_base_type translated_grid_u = uvw._u + _grid_u_centre;
 	uvw_base_type translated_grid_v = uvw._v + _grid_v_centre;
-	
         for (std::size_t conv_v = 0; conv_v < _conv_dim_size; ++conv_v) {
-            std::size_t disc_grid_v = translated_grid_v + (conv_v - _conv_dim_centre)*_conv_scale;
+            std::size_t disc_grid_v = floor(translated_grid_v + conv_v*_conv_scale - _conv_dim_centre);
             if (disc_grid_v >= _ny) continue;
 
-            for (std::size_t conv_u = 0; conv_u < _conv_dim_size; ++conv_u) {
-                std::size_t disc_grid_u = translated_grid_u + (conv_u - _conv_dim_centre)*_conv_scale;
+            for (int conv_u = 0; conv_u < _conv_dim_size; ++conv_u) {
+                std::size_t disc_grid_u = floor(translated_grid_u + conv_u*_conv_scale - _conv_dim_centre);
                 if (disc_grid_u >= _nx) continue;
                 
                 std::size_t conv_flat_index = (conv_v * _conv_dim_size + conv_u); //flatten convolution index
                 //by definition the convolution FIR is 0 outside the support region:
-                convolution_base_type conv_weight = (convolution_base_type) ( (conv_u < _conv_dim_size &&
-                                                    conv_v < _conv_dim_size) ? _conv[conv_flat_index] : 0);
+                convolution_base_type conv_weight = _conv[conv_flat_index];
                 std::size_t grid_flat_index = ((disc_grid_v)*_nx+(disc_grid_u)); //flatten grid index
                 
                 // Call the gridding policy function (this can either be the normal gridding function or the conjugate gridding function:
-                ((_active_gridding_policy).*gridding_function)(grid_flat_index,conv_weight);		 
+                ((_active_gridding_policy).*gridding_function)(grid_flat_index,conv_weight);
             }
         }
-        
     }
   };
 }

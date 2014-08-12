@@ -6,7 +6,7 @@ Created on Mar 20, 2014
 import numpy as np
 import math
 import fft_utils
-
+import base_types
 class convolution_filter(object):
   '''
   classdocs
@@ -53,8 +53,8 @@ class convolution_filter(object):
   def keiser_bessel_fourier(self,l,m,grid_max_u,grid_max_v):
     sqrt_term_l_sq = (math.pi*l)**2 - self.beta_u**2 #assuming W = 1
     sqrt_term_m_sq = (math.pi*m)**2 - self.beta_v**2 #assuming W = 1
-    sqrt_term_l = np.sqrt(sqrt_term_l_sq) if sqrt_term_l_sq > 0 else 0.000001 #ignore imaginary component since the image is supposed to be real anyway
-    sqrt_term_m = np.sqrt(sqrt_term_m_sq) if sqrt_term_m_sq > 0 else 0.000001 #ignore imaginary component since the image is supposed to be real anyway
+    sqrt_term_l = np.sqrt(sqrt_term_l_sq) if sqrt_term_l_sq > 0 else 0.00000001 #ignore imaginary component since the image is supposed to be real anyway
+    sqrt_term_m = np.sqrt(sqrt_term_m_sq) if sqrt_term_m_sq > 0 else 0.00000001 #ignore imaginary component since the image is supposed to be real anyway
     return np.sin(sqrt_term_l)/sqrt_term_l*math.sin(sqrt_term_m)/sqrt_term_m
 
   '''
@@ -70,7 +70,7 @@ class convolution_filter(object):
     convolution_size_v = convolution_fir_support_v * oversampling_factor
     convolution_centre_u = convolution_size_u / 2
     convolution_centre_v = convolution_size_v / 2
-    self._conv_FIR = np.zeros([convolution_size_u,convolution_size_v],dtype=np.float32)
+    self._conv_FIR = np.zeros([convolution_size_u,convolution_size_v],dtype=base_types.fir_type)
     for vi in range(0,convolution_size_v):
       for ui in range(0,convolution_size_u):
 	self._conv_FIR[ui,vi] = convolution_func[function_to_use]((ui - convolution_centre_u)/float(convolution_size_u),
@@ -83,7 +83,7 @@ class convolution_filter(object):
     detaper_centre_l = grid_size_l / 2
     detaper_centre_m = grid_size_m / 2
 	
-    self._F_detaper = np.zeros([grid_size_l,grid_size_m],dtype=np.float32)
+    self._F_detaper = np.zeros([grid_size_l,grid_size_m],dtype=base_types.detaper_type)
     for mi in range(0,grid_size_m):
       for li in range(0,grid_size_l):
 	self._F_detaper[li,mi] = detaper_func[function_to_use]((li-detaper_centre_l)/float(detaper_centre_l), 

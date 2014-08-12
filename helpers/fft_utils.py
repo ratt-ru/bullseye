@@ -12,7 +12,7 @@ Fs=scipy.fftpack.fftshift
 iFs=scipy.fftpack.ifftshift
 
 def fft2(A):
-    FA= Fs(F2(iFs(A)))/(np.float64(A.size))
+    FA= Fs(F2(Fs(A)))/(np.float64(A.size))
     return FA
  
 def ifft2(A):    
