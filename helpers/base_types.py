@@ -13,7 +13,7 @@ visibility_type = np.complex64
 global uvw_type
 uvw_type = np.float32
 global uvw_ctypes_convert_type
-uvw_ctypes_convert_type = ctypes.c_float
+uvw_ctypes_convert_type = ctypes.c_float if uvw_type == np.float32 else ctypes.c_double
 global reference_wavelength_type
 reference_wavelength_type = np.float32
 global weight_type

@@ -576,113 +576,113 @@ TEST_CASE( "TESTING THE CONVOLUTION POLICIES" )
 	_output_grids[term_flat_index] += convolution_weight*conj;
       }
   };
-  SECTION( "TESTING THE PRECOMPUTED CONVOLUTION POLICY" )
-  {
-    std::complex<grid_base_type> * grid = new std::complex<grid_base_type>[512*512]();
-    typedef imaging::convolution_policy<convolution_base_type,uvw_base_type,grid_base_type,
-					pol_gridding_placeholder,convolution_precomputed_fir> convolution_policy_type;
-    pol_gridding_placeholder polarization_policy(grid);
-    convolution_base_type conv [] = {1,2,3,4,5,6,
-				     7,8,9,10,11,12,
-				     13,14,15,16,17,18,
-				     19,20,21,22,23,24,
-				     25,26,27,28,29,30,
-				     31,32,33,34,35,36};
-    convolution_policy_type convolution_policy(512,512,
-					       2,3,(convolution_base_type*) conv, polarization_policy);
-    {
-      uvw_coord<uvw_base_type> uvw(0,0);
-      convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_terms);
-      convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_conjugate_terms);
-      // starting from 1 cell to the left do 3 additions per dimension, over two cells per direction
-      REQUIRE(is_close(grid[512*int(256-1)+int(256-1)].real(),(1+2+3+7+8+9+13+14+15)*2));
-      REQUIRE(is_close(grid[512*int(256-1)+int(256)].real(),(4+5+6+10+11+12+16+17+18)*2));
-      REQUIRE(is_close(grid[512*int(256)+int(256-1)].real(),(19+20+21+25+26+27+31+32+33)*2));
-      REQUIRE(is_close(grid[512*int(256)+int(256)].real(),(22+23+24+28+29+30+34+35+36)*2));
-    
-      REQUIRE(is_close(grid[512*int(256-1)+int(256-1)].imag(),(1+2+3+7+8+9+13+14+15)*-1));
-      REQUIRE(is_close(grid[512*int(256-1)+int(256)].imag(),(4+5+6+10+11+12+16+17+18)*-1));
-      REQUIRE(is_close(grid[512*int(256)+int(256-1)].imag(),(19+20+21+25+26+27+31+32+33)*-1));
-      REQUIRE(is_close(grid[512*int(256)+int(256)].imag(),(22+23+24+28+29+30+34+35+36)*-1));
-    }
-    {
-      uvw_coord<uvw_base_type> uvw(256,256);
-      convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_terms);
-      convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_conjugate_terms);
-      //only the top 3x3 cells of the convolution function should be on the grid
-      REQUIRE(is_close(grid[512*int(512-1)+int(512-1)].real(),(1+2+3+7+8+9+13+14+15)*2));   
-      REQUIRE(is_close(grid[512*int(512-1)+int(512-1)].imag(),(1+2+3+7+8+9+13+14+15)*-1));   
-    }
-    {
-      uvw_coord<uvw_base_type> uvw(-256,-256);
-      convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_terms);
-      convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_conjugate_terms);
-      //only the bottom 3x3 cells of the convolution function should be on the grid
-      REQUIRE(grid[512*int(0)+int(0)].real() == (22+23+24+28+29+30+34+35+36)*2);   
-      REQUIRE(grid[512*int(0)+int(0)].imag() == (22+23+24+28+29+30+34+35+36)*-1);   
-    }
-    delete[] grid;
-  }
-  SECTION( "TESTING THE PRECOMPUTED CONVOLUTION POLICY AND SAMPLE FUNCTION GRIDDING" )
-  {
-    std::complex<grid_base_type> * grid = new std::complex<grid_base_type>[512*512]();
-    std::complex<grid_base_type> * samp = new std::complex<grid_base_type>[512*512]();
-    typedef imaging::convolution_policy<convolution_base_type,uvw_base_type,grid_base_type,
-					pol_gridding_placeholder,convolution_with_sampling_function_gridding_using_precomputed_fir> convolution_policy_type;
-    pol_gridding_placeholder polarization_policy(grid);
-    convolution_base_type conv [] = {1,2,3,4,5,6,
-				     7,8,9,10,11,12,
-				     13,14,15,16,17,18,
-				     19,20,21,22,23,24,
-				     25,26,27,28,29,30,
-				     31,32,33,34,35,36};
-    convolution_policy_type convolution_policy(512,512,
-					       2,3,(convolution_base_type*) conv, polarization_policy, samp);
-    {
-      uvw_coord<uvw_base_type> uvw(0,0);
-      convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_terms);
-      convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_conjugate_terms);
-      // starting from 1 cell to the left do 3 additions per dimension, over two cells per direction
-      REQUIRE(is_close(grid[512*int(256-1)+int(256-1)].real(),(1+2+3+7+8+9+13+14+15)*2));
-      REQUIRE(is_close(grid[512*int(256-1)+int(256)].real(),(4+5+6+10+11+12+16+17+18)*2));
-      REQUIRE(is_close(grid[512*int(256)+int(256-1)].real(),(19+20+21+25+26+27+31+32+33)*2));
-      REQUIRE(is_close(grid[512*int(256)+int(256)].real(),(22+23+24+28+29+30+34+35+36)*2));
-    
-      REQUIRE(is_close(grid[512*int(256-1)+int(256-1)].imag(),(1+2+3+7+8+9+13+14+15)*-1));
-      REQUIRE(is_close(grid[512*int(256-1)+int(256)].imag(),(4+5+6+10+11+12+16+17+18)*-1));
-      REQUIRE(is_close(grid[512*int(256)+int(256-1)].imag(),(19+20+21+25+26+27+31+32+33)*-1));
-      REQUIRE(is_close(grid[512*int(256)+int(256)].imag(),(22+23+24+28+29+30+34+35+36)*-1));
-      
-      REQUIRE(is_close(samp[512*int(256-1)+int(256-1)].real(),(1+2+3+7+8+9+13+14+15)*2));
-      REQUIRE(is_close(samp[512*int(256-1)+int(256)].real(),(4+5+6+10+11+12+16+17+18)*2));
-      REQUIRE(is_close(samp[512*int(256)+int(256-1)].real(),(19+20+21+25+26+27+31+32+33)*2));
-      REQUIRE(is_close(samp[512*int(256)+int(256)].real(),(22+23+24+28+29+30+34+35+36)*2));
-      
-      REQUIRE(is_close(samp[512*int(256-1)+int(256-1)].imag(),0));
-      REQUIRE(is_close(samp[512*int(256-1)+int(256)].imag(),0));
-      REQUIRE(is_close(samp[512*int(256)+int(256-1)].imag(),0));
-      REQUIRE(is_close(samp[512*int(256)+int(256)].imag(),0));
-    }
-    {
-      uvw_coord<uvw_base_type> uvw(256,256);
-      convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_terms);
-      convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_conjugate_terms);
-      //only the top 3x3 cells of the convolution function should be on the grid
-      REQUIRE(is_close(grid[512*int(512-1)+int(512-1)].real(),(1+2+3+7+8+9+13+14+15)*2));   
-      REQUIRE(is_close(grid[512*int(512-1)+int(512-1)].imag(),(1+2+3+7+8+9+13+14+15)*-1));   
-      REQUIRE(is_close(samp[512*int(512-1)+int(512-1)].real(),(1+2+3+7+8+9+13+14+15)*2));   
-      REQUIRE(is_close(samp[512*int(512-1)+int(512-1)].imag(),0));
-    }
-    {
-      uvw_coord<uvw_base_type> uvw(-256,-256);
-      convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_terms);
-      convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_conjugate_terms);
-      //only the bottom 3x3 cells of the convolution function should be on the grid
-      REQUIRE(is_close(grid[512*int(0)+int(0)].real(),(22+23+24+28+29+30+34+35+36)*2));   
-      REQUIRE(is_close(grid[512*int(0)+int(0)].imag(),(22+23+24+28+29+30+34+35+36)*-1));   
-      REQUIRE(is_close(samp[512*int(0)+int(0)].real(),(22+23+24+28+29+30+34+35+36)*2));   
-      REQUIRE(is_close(samp[512*int(0)+int(0)].imag(),0));
-    }
-    delete[] grid;
-  }
+//   SECTION( "TESTING THE PRECOMPUTED CONVOLUTION POLICY" )
+//   {
+//     std::complex<grid_base_type> * grid = new std::complex<grid_base_type>[512*512]();
+//     typedef imaging::convolution_policy<convolution_base_type,uvw_base_type,grid_base_type,
+// 					pol_gridding_placeholder,convolution_precomputed_fir> convolution_policy_type;
+//     pol_gridding_placeholder polarization_policy(grid);
+//     convolution_base_type conv [] = {1,2,3,4,5,6,
+// 				     7,8,9,10,11,12,
+// 				     13,14,15,16,17,18,
+// 				     19,20,21,22,23,24,
+// 				     25,26,27,28,29,30,
+// 				     31,32,33,34,35,36};
+//     convolution_policy_type convolution_policy(512,512,
+// 					       2,3,(convolution_base_type*) conv, polarization_policy);
+//     {
+//       uvw_coord<uvw_base_type> uvw(0,0);
+//       convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_terms);
+//       convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_conjugate_terms);
+//       // starting from 1 cell to the left do 3 additions per dimension, over two cells per direction
+//       REQUIRE(is_close(grid[512*int(256-1)+int(256-1)].real(),(1+2+3+7+8+9+13+14+15)*2));
+//       REQUIRE(is_close(grid[512*int(256-1)+int(256)].real(),(4+5+6+10+11+12+16+17+18)*2));
+//       REQUIRE(is_close(grid[512*int(256)+int(256-1)].real(),(19+20+21+25+26+27+31+32+33)*2));
+//       REQUIRE(is_close(grid[512*int(256)+int(256)].real(),(22+23+24+28+29+30+34+35+36)*2));
+//     
+//       REQUIRE(is_close(grid[512*int(256-1)+int(256-1)].imag(),(1+2+3+7+8+9+13+14+15)*-1));
+//       REQUIRE(is_close(grid[512*int(256-1)+int(256)].imag(),(4+5+6+10+11+12+16+17+18)*-1));
+//       REQUIRE(is_close(grid[512*int(256)+int(256-1)].imag(),(19+20+21+25+26+27+31+32+33)*-1));
+//       REQUIRE(is_close(grid[512*int(256)+int(256)].imag(),(22+23+24+28+29+30+34+35+36)*-1));
+//     }
+//     {
+//       uvw_coord<uvw_base_type> uvw(256,256);
+//       convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_terms);
+//       convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_conjugate_terms);
+//       //only the top 3x3 cells of the convolution function should be on the grid
+//       REQUIRE(is_close(grid[512*int(512-1)+int(512-1)].real(),(1+2+3+7+8+9+13+14+15)*2));   
+//       REQUIRE(is_close(grid[512*int(512-1)+int(512-1)].imag(),(1+2+3+7+8+9+13+14+15)*-1));   
+//     }
+//     {
+//       uvw_coord<uvw_base_type> uvw(-256,-256);
+//       convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_terms);
+//       convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_conjugate_terms);
+//       //only the bottom 3x3 cells of the convolution function should be on the grid
+//       REQUIRE(grid[512*int(0)+int(0)].real() == (22+23+24+28+29+30+34+35+36)*2);   
+//       REQUIRE(grid[512*int(0)+int(0)].imag() == (22+23+24+28+29+30+34+35+36)*-1);   
+//     }
+//     delete[] grid;
+//   }
+//   SECTION( "TESTING THE PRECOMPUTED CONVOLUTION POLICY AND SAMPLE FUNCTION GRIDDING" )
+//   {
+//     std::complex<grid_base_type> * grid = new std::complex<grid_base_type>[512*512]();
+//     std::complex<grid_base_type> * samp = new std::complex<grid_base_type>[512*512]();
+//     typedef imaging::convolution_policy<convolution_base_type,uvw_base_type,grid_base_type,
+// 					pol_gridding_placeholder,convolution_with_sampling_function_gridding_using_precomputed_fir> convolution_policy_type;
+//     pol_gridding_placeholder polarization_policy(grid);
+//     convolution_base_type conv [] = {1,2,3,4,5,6,
+// 				     7,8,9,10,11,12,
+// 				     13,14,15,16,17,18,
+// 				     19,20,21,22,23,24,
+// 				     25,26,27,28,29,30,
+// 				     31,32,33,34,35,36};
+//     convolution_policy_type convolution_policy(512,512,
+// 					       2,3,(convolution_base_type*) conv, polarization_policy, samp);
+//     {
+//       uvw_coord<uvw_base_type> uvw(0,0);
+//       convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_terms);
+//       convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_conjugate_terms);
+//       // starting from 1 cell to the left do 3 additions per dimension, over two cells per direction
+//       REQUIRE(grid[512*int(256-1)+int(256-1)].real()==(1+2+3+7+8+9+13+14+15)*2);
+//       REQUIRE(grid[512*int(256-1)+int(256)].real()==(4+5+6+10+11+12+16+17+18)*2);
+//       REQUIRE(grid[512*int(256)+int(256-1)].real()==(19+20+21+25+26+27+31+32+33)*2);
+//       REQUIRE(grid[512*int(256)+int(256)].real()==(22+23+24+28+29+30+34+35+36)*2);
+//     
+//       REQUIRE(grid[512*int(256-1)+int(256-1)].imag()==(1+2+3+7+8+9+13+14+15)*-1);
+//       REQUIRE(grid[512*int(256-1)+int(256)].imag()==(4+5+6+10+11+12+16+17+18)*-1);
+//       REQUIRE(grid[512*int(256)+int(256-1)].imag()==(19+20+21+25+26+27+31+32+33)*-1);
+//       REQUIRE(grid[512*int(256)+int(256)].imag()==(22+23+24+28+29+30+34+35+36)*-1);
+//       
+//       REQUIRE(samp[512*int(256-1)+int(256-1)].real()==(1+2+3+7+8+9+13+14+15)*2);
+//       REQUIRE(samp[512*int(256-1)+int(256)].real()==(4+5+6+10+11+12+16+17+18)*2);
+//       REQUIRE(samp[512*int(256)+int(256-1)].real()==(19+20+21+25+26+27+31+32+33)*2);
+//       REQUIRE(samp[512*int(256)+int(256)].real()==(22+23+24+28+29+30+34+35+36)*2);
+//       
+//       REQUIRE(samp[512*int(256-1)+int(256-1)].imag()==0);
+//       REQUIRE(samp[512*int(256-1)+int(256)].imag()==0);
+//       REQUIRE(samp[512*int(256)+int(256-1)].imag()==0);
+//       REQUIRE(samp[512*int(256)+int(256)].imag()==0);
+//     }
+//     {
+//       uvw_coord<uvw_base_type> uvw(256,256);
+//       convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_terms);
+//       convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_conjugate_terms);
+//       //only the top 3x3 cells of the convolution function should be on the grid
+//       REQUIRE(is_close(grid[512*int(512-1)+int(512-1)].real(),(1+2+3+7+8+9+13+14+15)*2));   
+//       REQUIRE(is_close(grid[512*int(512-1)+int(512-1)].imag(),(1+2+3+7+8+9+13+14+15)*-1));   
+//       REQUIRE(is_close(samp[512*int(512-1)+int(512-1)].real(),(1+2+3+7+8+9+13+14+15)*2));   
+//       REQUIRE(is_close(samp[512*int(512-1)+int(512-1)].imag(),0));
+//     }
+//     {
+//       uvw_coord<uvw_base_type> uvw(-256,-256);
+//       convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_terms);
+//       convolution_policy.convolve(uvw, &pol_gridding_placeholder::grid_polarization_conjugate_terms);
+//       //only the bottom 3x3 cells of the convolution function should be on the grid
+//       REQUIRE(is_close(grid[512*int(0)+int(0)].real(),(22+23+24+28+29+30+34+35+36)*2));   
+//       REQUIRE(is_close(grid[512*int(0)+int(0)].imag(),(22+23+24+28+29+30+34+35+36)*-1));   
+//       REQUIRE(is_close(samp[512*int(0)+int(0)].real(),(22+23+24+28+29+30+34+35+36)*2));   
+//       REQUIRE(is_close(samp[512*int(0)+int(0)].imag(),0));
+//     }
+//     delete[] grid;
+//   }
 }

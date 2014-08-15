@@ -70,11 +70,11 @@ namespace imaging {
 	uvw_base_type translated_grid_u = uvw._u + _grid_u_centre;
 	uvw_base_type translated_grid_v = uvw._v + _grid_v_centre;
         for (std::size_t conv_v = 0; conv_v < _conv_dim_size; ++conv_v) {
-            std::size_t disc_grid_v = floor(translated_grid_v + conv_v*_conv_scale - _conv_dim_centre);
+            std::size_t disc_grid_v = round(translated_grid_v + conv_v*_conv_scale - _conv_dim_centre);
             if (disc_grid_v >= _ny) continue;
 
             for (int conv_u = 0; conv_u < _conv_dim_size; ++conv_u) {
-                std::size_t disc_grid_u = floor(translated_grid_u + conv_u*_conv_scale - _conv_dim_centre);
+                std::size_t disc_grid_u = round(translated_grid_u + conv_u*_conv_scale - _conv_dim_centre);
                 if (disc_grid_u >= _nx) continue;
                 
                 std::size_t conv_flat_index = (conv_v * _conv_dim_size + conv_u); //flatten convolution index
@@ -133,11 +133,11 @@ namespace imaging {
 	uvw_base_type translated_grid_u = uvw._u + _grid_u_centre;
 	uvw_base_type translated_grid_v = uvw._v + _grid_v_centre;
         for (std::size_t conv_v = 0; conv_v < _conv_dim_size; ++conv_v) {
-            std::size_t disc_grid_v = floor(translated_grid_v + conv_v*_conv_scale - _conv_dim_centre);
+            std::size_t disc_grid_v = round(translated_grid_v + conv_v*_conv_scale - _conv_dim_centre);
             if (disc_grid_v >= _ny) continue;
 
             for (int conv_u = 0; conv_u < _conv_dim_size; ++conv_u) {
-                std::size_t disc_grid_u = floor(translated_grid_u + conv_u*_conv_scale - _conv_dim_centre);
+                std::size_t disc_grid_u = round(translated_grid_u + conv_u*_conv_scale - _conv_dim_centre);
                 if (disc_grid_u >= _nx) continue;
                 
                 std::size_t conv_flat_index = (conv_v * _conv_dim_size + conv_u); //flatten convolution index

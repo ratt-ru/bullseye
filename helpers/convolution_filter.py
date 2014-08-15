@@ -36,8 +36,8 @@ class convolution_filter(object):
   '''
 
   def set_keiser_bessel_beta(self,conv_support_u,conv_support_v):
-    self.beta_u = 1.678933333*conv_support_u-0.959033333 # from Jackson et al. this line seems to fit the tabled betas very well
-    self.beta_v = 1.678933333*conv_support_v-0.959033333 # from Jackson et al. this line seems to fit the tabled betas very well
+    self.beta_u = 1.9980 if conv_support_u == 1 else 1.678933333*conv_support_u-0.959033333 # from Jackson et al. this line seems to fit the tabled betas very well
+    self.beta_v = 1.9980 if conv_support_v == 1 else 1.678933333*conv_support_v-0.959033333 # from Jackson et al. this line seems to fit the tabled betas very well
   
   def modified_zero_order_bessel_first_kind(self,z):
     max_k = 15 
