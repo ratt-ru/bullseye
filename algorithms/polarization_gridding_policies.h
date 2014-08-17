@@ -133,6 +133,100 @@ namespace imaging {
       }
   };
   
+  /**
+   Policy to define gridding behaviour for 2 user-specified polarizations
+   This policy makes provision for computing I, Q, U, V stokes images from two polarizations
+   */
+  template <typename visibility_base_type,typename uvw_base_type,
+	    typename weights_base_type,typename convolution_base_type,typename grid_base_type,
+	    typename phase_transformation_policy_type>
+  class polarization_gridding_policy <visibility_base_type,uvw_base_type,weights_base_type,
+				      convolution_base_type,grid_base_type,phase_transformation_policy_type,gridding_double_pol>{
+  protected:
+      typedef polarization_gridding_trait<visibility_base_type,weights_base_type,gridding_double_pol> trait_type;
+      
+      const phase_transformation_policy_type & __restrict__ _phase_transform_term;
+      std::complex<grid_base_type> * __restrict__ _output_grids;
+      const std::complex<visibility_base_type> *  __restrict__ _visibilities;
+      const weights_base_type * __restrict__ _weights;
+      const bool * __restrict__ _flags;
+      typename trait_type::pol_vis_type _visibility;
+      typename trait_type::pol_vis_type _conj_visibility;
+      std::size_t _no_polarizations_in_data;
+      std::size_t _first_polarization_index;
+      std::size_t _second_polarization_index;
+      std::size_t _grid_no_pixels;
+      std::size_t _channel_count;
+  public:
+      /**
+       Arguements:
+       phase_transform_term: active phase transform policy to be applied to all polarizations
+       output_grid: pointer to nx x ny pre-allocated buffer
+       visibilities: set of complex visibility terms (flat-indexed: visibility[b x t][c][p] with the last index the fast-varying index)
+       weights: set of weights to apply (per correlation) to each channel. This corresponds to the WEIGHT_SPECTRUM column. If this 
+		column is not available the WEIGHT column gives the averages over all channels. In such an event each average should 
+		be duplicated accross all the channels. It is however preferable to have a weight per channel. See for instance the 
+		imaging chapter of Synthesis Imaging II.
+       flags: flat-indexed boolean flagging array of dimensions timestamp_count x baseline_count x channel_count x polarization_term_count
+       no_polarizations_in_data: this is the number of polarizations in the input data
+       first_polarization_index: index of the first polarization to grid
+       second_polarization_index: index of the second polarization to grid
+       channel_count: Number of channels per spectral window
+      */
+      polarization_gridding_policy(const phase_transformation_policy_type & phase_transform_term,
+				   std::complex<grid_base_type> * output_grids,
+				   const std::complex<visibility_base_type> * visibilities,
+				   const weights_base_type * weights,
+				   const bool * flags,
+				   std::size_t no_polarizations_in_data,
+				   std::size_t first_polarization_index,
+				   std::size_t second_polarization_index,
+				   std::size_t grid_no_pixels,
+				   std::size_t channel_count
+				  ):
+				   _phase_transform_term(phase_transform_term), _output_grids(output_grids), 
+				   _visibilities(visibilities),
+				   _weights(weights), 
+				   _flags(flags),
+				   _no_polarizations_in_data(no_polarizations_in_data),
+				   _first_polarization_index(first_polarization_index),
+				   _second_polarization_index(second_polarization_index),
+				   _grid_no_pixels(grid_no_pixels),
+				   _channel_count(channel_count){}
+      inline void transform(std::size_t baseline_time_index, std::size_t spw_index, std::size_t channel_index, 
+			    const uvw_coord<uvw_base_type> & uvw) __restrict__ {
+	//fetch four complex visibility terms from memory at a time:
+	std::size_t visibility_flat_index = (baseline_time_index * _channel_count + channel_index) * _no_polarizations_in_data;
+	_visibility.v[0] = _visibilities[visibility_flat_index + _first_polarization_index]; 
+	_visibility.v[1] = _visibilities[visibility_flat_index + _second_polarization_index];
+	/*
+	 MS v2.0: weights are applied for each visibility term (baseline x channel x correlation)
+	*/
+	typename trait_type::pol_vis_weight_type weight = {_weights[visibility_flat_index + _first_polarization_index],
+							   _weights[visibility_flat_index + _second_polarization_index]};
+	typename trait_type::pol_vis_flag_type flag = {_flags[visibility_flat_index + _first_polarization_index],
+						       _flags[visibility_flat_index + _second_polarization_index]};
+	/*
+	 do faceting phase shift (Cornwell & Perley, 1992) if enabled (through policy)
+	 This faceting phase shift is a scalar matrix and commutes with everything (Smirnov, 2011), so 
+	 we can apply it to the visibility immediately.
+	*/
+	_phase_transform_term.transform(_visibility.v[0],uvw);
+	_phase_transform_term.transform(_visibility.v[1],uvw);
+	_visibility.v[0] *= weight.w[0] * (int)(!flag.f[0]); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
+	_visibility.v[1] *= weight.w[1] * (int)(!flag.f[1]); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
+	_conj_visibility.v[0] = conj(_visibility.v[0]);
+	_conj_visibility.v[1] = conj(_visibility.v[1]);
+      }
+      inline void grid_polarization_terms(std::size_t term_flat_index, convolution_base_type convolution_weight) __restrict__ {
+	_output_grids[term_flat_index] += convolution_weight * _visibility.v[0];
+	_output_grids[term_flat_index + _grid_no_pixels] += convolution_weight * _visibility.v[1];
+      }
+      inline void grid_polarization_conjugate_terms(std::size_t term_flat_index, convolution_base_type convolution_weight) __restrict__ {
+	_output_grids[term_flat_index] += convolution_weight * _conj_visibility.v[0];
+	_output_grids[term_flat_index + _grid_no_pixels] += convolution_weight * _conj_visibility.v[1];
+      }
+  };
   
   /**
    Policy to define gridding behaviour for 2x2 polarized visibilities 

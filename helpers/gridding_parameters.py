@@ -31,6 +31,7 @@ gridding_parameters._fields_ = [
   ("conv_oversample",c_size_t),
   #Correlation index specifier for gridding a single stokes/correlation term
   ("polarization_index",c_size_t),
+  ("second_polarization_index",c_size_t),
   #Preallocated gridding buffer
   ("output_buffer",c_void_p),
   #Faceting information
