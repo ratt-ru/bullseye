@@ -212,35 +212,39 @@ if __name__ == "__main__":
       #no need to grid more than one of the correlations if the user isn't interrested in imaging one of the stokes terms (I,Q,U,V) or the stokes terms are the correlation products:
       if len(correlations_to_grid) == 1 and not parser_args['do_jones_corrections']:
 	pol_index = data._polarization_correlations.tolist().index(correlations_to_grid[0])
-	params.polarization_index = ctypes.c_size_t(pol_index)
+	params.polarization_index = ctypes.c_size_t(pol_index) #stays constant between strides
 	if (parser_args['facet_centres'] == None):
 	  libimaging.grid_single_pol(ctypes.byref(params))
 	else: #facet single correlation term
-	  params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p)
-	  params.num_facet_centres = ctypes.c_size_t(num_facet_centres)
+	  params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p) #stays constant between strides
+	  params.num_facet_centres = ctypes.c_size_t(num_facet_centres) #stays constant between strides
 	  libimaging.facet_single_pol(ctypes.byref(params))
       elif len(correlations_to_grid) == 2 and not parser_args['do_jones_corrections']: #the user want to derive one of the stokes terms (I,Q,U,V)
 	pol_index = data._polarization_correlations.tolist().index(correlations_to_grid[0])
 	pol_index_2 = data._polarization_correlations.tolist().index(correlations_to_grid[1])
-	params.polarization_index = ctypes.c_size_t(pol_index)
-	params.second_polarization_index = ctypes.c_size_t(pol_index_2)
+	params.polarization_index = ctypes.c_size_t(pol_index) #stays constant between strides
+	params.second_polarization_index = ctypes.c_size_t(pol_index_2) #stays constant between strides
 	if (parser_args['facet_centres'] == None):
 	  libimaging.grid_single_pol(ctypes.byref(params))
 	else: #facet single correlation term
-	  params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p)
-	  params.num_facet_centres = ctypes.c_size_t(num_facet_centres)
+	  params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p) #stays constant between strides
+	  params.num_facet_centres = ctypes.c_size_t(num_facet_centres) #stays constant between strides
 	  libimaging.facet_single_pol(ctypes.byref(params))
       else: #the user want to apply corrective terms
 	if (parser_args['facet_centres'] == None): #don't do faceting
 	  libimaging.grid_4_cor(ctypes.byref(params))
 	else:
 	  params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p)
-	  params.num_facet_centres = ctypes.c_size_t(num_facet_centres)
+	  params.num_facet_centres = ctypes.c_size_t(num_facet_centres) #stays constant between strides
 	  if parser_args['do_jones_corrections']: #do faceting with jones corrections
-	    params.jones_terms = data._jones_terms.ctypes.data_as(ctypes.c_void_p)
-	    params.antenna_1_ids = data._arr_antenna_1.ctypes.data_as(ctypes.c_void_p)
-	    params.antenna_2_ids = data._arr_antenna_2.ctypes.data_as(ctypes.c_void_p)
-	    params.timestamp_ids = data._time_indicies.ctypes.data_as(ctypes.c_void_p)
+	    jones_terms_cpy = data._jones_terms #gridding will operate with deep copied data
+	    params.jones_terms = jones_terms_cpy.ctypes.data_as(ctypes.c_void_p) 
+	    arr_antenna_1_cpy = data._arr_antenna_1 #gridding will operate with deep copied data
+	    params.antenna_1_ids = arr_antenna_1_cpy.ctypes.data_as(ctypes.c_void_p)
+	    arr_antenna_2_cpy = data._arr_antenna_2 #gridding will operate with deep copied data
+	    params.antenna_2_ids = arr_antenna_2_cpy.ctypes.data_as(ctypes.c_void_p)
+	    arr_time_indicies_cpy = data._time_indicies #gridding will operate with deep copied data
+	    params.timestamp_ids = arr_time_indicies_cpy.ctypes.data_as(ctypes.c_void_p)
 	    libimaging.facet_4_cor_corrections(ctypes.byref(params))
 	  else: #skip the jones corrections
 	    libimaging.facet_4_cor(ctypes.byref(params))

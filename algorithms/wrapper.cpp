@@ -405,8 +405,8 @@ extern "C" {
         });
     }
     void facet_4_cor_corrections(gridding_parameters & params) {
-        gridding_barrier();
-        gridding_future = std::async(std::launch::async, [params] () {
+        //gridding_barrier();
+        //gridding_future = std::async(std::launch::async, [params] () {
 	    gridding_timer.start();
             using namespace imaging;
             assert(params.number_of_polarization_terms == 4); //Only supports 4 correlation visibilties in this mode
@@ -475,6 +475,6 @@ extern "C" {
                 printf(" <DONE>\n");
             }
             gridding_timer.stop();
-        });
+       // });
     }
 }
