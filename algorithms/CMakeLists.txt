@@ -7,7 +7,7 @@ find_package(Boost REQUIRED)
 include_directories(${Boost_INCLUDE_DIRS})
 
 set(CMAKE_BUILD_TYPE Release)
-set(CMAKE_CXX_FLAGS "-std=c++0x -O3")
+set(CMAKE_CXX_FLAGS "-std=c++0x -O3 -pthread")
 include_directories(/usr/include/python2.7 /usr/lib/python2.7/dist-packages/numpy/core/include/numpy /usr/include/casacore/ /usr/local/include/casacore)
 
 add_library(imaging SHARED wrapper.cpp)

@@ -13,7 +13,9 @@ import time
 import datetime
 import pylab
 import base_types
+from timer import timer
 class data_set_loader(object):
+    time_to_load_chunks = timer()
     '''
     classdocs
     '''
@@ -22,7 +24,7 @@ class data_set_loader(object):
         Constructor
         '''
         self._MSName = MSName
-        self._should_read_jones_terms = read_jones_terms
+        self._should_read_jones_terms = read_jones_terms    
     '''
         Read some stats about the MS
         Assume this method only gets called from __init__
@@ -132,13 +134,9 @@ class data_set_loader(object):
       Assumes read_head has been called prior to this call
     '''
     def compute_number_of_rows_to_read_from_mem_requirements(self,max_bytes_available):
-	
 	return int(max_bytes_available / ((3*8) + #uvw data
 				      (self._no_channels*self._no_polarization_correlations*2*8) + #complex visibilities
 				      (self._no_channels*self._no_polarization_correlations*8) + #weight
-				      (3*np.dtype(base_types.uvw_type).itemsize) + #casted uvw data
-				      (self._no_channels*self._no_polarization_correlations*np.dtype(base_types.visibility_type).itemsize) + #casted complex visibilities
-				      (self._no_channels*self._no_polarization_correlations*np.dtype(base_types.weight_type).itemsize) + #casted weight
 				      (self._no_channels*self._no_polarization_correlations*np.dtype(np.bool_).itemsize) + #visibility flags
 				      (np.dtype(np.bool_).itemsize) + #row flags
 				      (4*np.dtype(np.intc).itemsize) + #antenna 1 & 2, FIELD_ID and DATA_DESCRIPTION_ID
@@ -169,12 +167,14 @@ class data_set_loader(object):
         Grab the uvw coordinates (these are not yet measured in terms of wavelength!)
         This should have dimensions [0...time * baseline -1][0...num_channels-1][0...num_correlations-1][3]
         '''
-        self._arr_uvw = casa_ms_table.getcol("UVW",startrow=start_row,nrow=no_rows).astype(base_types.uvw_type)
+        with data_set_loader.time_to_load_chunks:
+	  self._arr_uvw = casa_ms_table.getcol("UVW",startrow=start_row,nrow=no_rows).astype(base_types.uvw_type,copy = False)
           
         '''
             the data variable has dimensions: [0...obs_time_range*baselines-1][0...num_channels-1][0...num_correlations-1] 
         '''
-        self._arr_data = casa_ms_table.getcol(data_column,startrow=start_row,nrow=no_rows).astype(base_types.visibility_type)
+        with data_set_loader.time_to_load_chunks:
+	  self._arr_data = casa_ms_table.getcol(data_column,startrow=start_row,nrow=no_rows).astype(base_types.visibility_type)
         '''
             the weights column has dimensions: [0...obs_time_range*baselines-1][0...num_correlations-1]
             However this column only contains the averages accross all channels. The weight_spectrum column
@@ -193,49 +193,58 @@ class data_set_loader(object):
             With faceting the directional dependent effects can move out of the all-sky integral (Smirnov II, 2011)
         '''
 	try:
-	  self._arr_weights = casa_ms_table.getcol("WEIGHT_SPECTRUM",startrow=start_row,nrow=no_rows).astype(base_types.weight_type)
+	  with data_set_loader.time_to_load_chunks:
+	    self._arr_weights = casa_ms_table.getcol("WEIGHT_SPECTRUM",startrow=start_row,nrow=no_rows).astype(base_types.weight_type,copy = False)
 	  print "THIS MEASUREMENT SET HAS VISIBILITY WEIGHTS PER CHANNEL, LOADING [WEIGHT_SPECTRUM] INSTEAD OF [WEIGHT]" 
 	except:
 	  print "WARNING: THIS MEASUREMENT SET ONLY HAS AVERAGED VISIBILITY WEIGHTS (PER BASELINE), LOADING [WEIGHT]"
-	  self._arr_weights = np.zeros([no_rows,self._no_channels,self._no_polarization_correlations]).astype(base_types.weight_type)
+	  with data_set_loader.time_to_load_chunks:
+	    self._arr_weights = np.zeros([no_rows,self._no_channels,self._no_polarization_correlations]).astype(base_types.weight_type,copy = False)
         
-	  self._arr_weights[:,0:1,:] = casa_ms_table.getcol("WEIGHT",startrow=start_row,nrow=no_rows).reshape([no_rows,1,self._no_polarization_correlations])
+	    self._arr_weights[:,0:1,:] = casa_ms_table.getcol("WEIGHT",startrow=start_row,nrow=no_rows).reshape([no_rows,1,self._no_polarization_correlations])
         
-	  for c in range(1,self._no_channels):
-	    self._arr_weights[:,c:c+1,:] = self._arr_weights[:,0:1,:] #apply the same average to each channel per baseline
+	    for c in range(1,self._no_channels):
+	      self._arr_weights[:,c:c+1,:] = self._arr_weights[:,0:1,:] #apply the same average to each channel per baseline
 
         '''
             the flag column has dimensions: [0...obs_time_range*baselines-1][0...num_channels-1][0...num_correlations-1]
             of type boolean
         '''
-        self._arr_flaged = casa_ms_table.getcol("FLAG",startrow=start_row,nrow=no_rows)
+        with data_set_loader.time_to_load_chunks:
+	  self._arr_flaged = casa_ms_table.getcol("FLAG",startrow=start_row,nrow=no_rows)
         '''
 	    the flag row column has dimensions [0...obs_time_range*baselines-1] and must be taken into account
 	    even though there is a more fine-grained flag column
         '''
-        self._arr_flagged_rows = casa_ms_table.getcol("FLAG_ROW",startrow=start_row,nrow=no_rows)
+        with data_set_loader.time_to_load_chunks:
+	  self._arr_flagged_rows = casa_ms_table.getcol("FLAG_ROW",startrow=start_row,nrow=no_rows)
         '''
 	  Grab the DATA_DESCRIPTION_ID column (which will describe which reference frequency (per baseline to use)
         '''
-        self._description_col = casa_ms_table.getcol("DATA_DESC_ID",startrow=start_row,nrow=no_rows)
+        with data_set_loader.time_to_load_chunks:
+	  self._description_col = casa_ms_table.getcol("DATA_DESC_ID",startrow=start_row,nrow=no_rows)
         '''
 	  Grab the two antenna id arrays specifying the two antennas defining each baseline (in uvw space)
 	'''
-	self._arr_antenna_1 = casa_ms_table.getcol("ANTENNA1",startrow=start_row,nrow=no_rows)
-	self._arr_antenna_2 = casa_ms_table.getcol("ANTENNA2",startrow=start_row,nrow=no_rows)
+	with data_set_loader.time_to_load_chunks:
+	  self._arr_antenna_1 = casa_ms_table.getcol("ANTENNA1",startrow=start_row,nrow=no_rows)
+	  self._arr_antenna_2 = casa_ms_table.getcol("ANTENNA2",startrow=start_row,nrow=no_rows)
 	'''
 	  Grab the FIELD_ID column in case there is more than a single pointing
 	'''
-	self._row_field_id = casa_ms_table.getcol("FIELD_ID",startrow=start_row,nrow=no_rows)
+	with data_set_loader.time_to_load_chunks:
+	  self._row_field_id = casa_ms_table.getcol("FIELD_ID",startrow=start_row,nrow=no_rows)
         
 	'''
 	  Compute how many timeslices this slice of the MAIN table actually contains
 	  This cannot be predicted without breaking general MS support, because
 	  the number of baselines per timeslice can be anywhere in 0 <= x < no_baselines
 	'''
-	time_window_centre = casa_ms_table.getcol("TIME",startrow=start_row,nrow=no_rows)
+	with data_set_loader.time_to_load_chunks:
+	  time_window_centre = casa_ms_table.getcol("TIME",startrow=start_row,nrow=no_rows)
 	casa_ms_table.close()
-	self._time_indicies = np.zeros(no_rows,dtype=np.intp)
+	with data_set_loader.time_to_load_chunks:
+	  self._time_indicies = np.zeros(no_rows,dtype=np.intp)
 	
 	timestamp_index = 0 #this index always refers to the index numbers of the timesteps in the current data slice
 	try:
@@ -246,13 +255,15 @@ class data_set_loader(object):
 	except:
 	  self._last_timestamp_time = time_window_centre[0] #first slice being read, set equal to the first window centre
 	  self._last_starting_point = 0
-	for r in range(0,no_rows):
-	  current_time = time_window_centre[r]
-	  if current_time > self._last_timestamp_time:
-	    timestamp_index+=1
-	    self._last_timestamp_time = current_time
-	  self._time_indicies[r] = timestamp_index
-	self._no_timestamps_read = timestamp_index + 1  #the last timestamp may be partially read depending on memory constraints
+	  
+	with data_set_loader.time_to_load_chunks:
+	  for r in range(0,no_rows):
+	    current_time = time_window_centre[r]
+	    if current_time > self._last_timestamp_time:
+	      timestamp_index+=1
+	      self._last_timestamp_time = current_time
+	    self._time_indicies[r] = timestamp_index
+	  self._no_timestamps_read = timestamp_index + 1  #the last timestamp may be partially read depending on memory constraints
         
         '''
 	Read set of jones matricies from disk
@@ -262,10 +273,12 @@ class data_set_loader(object):
 	    casa_ms_table = table(self._MSName+"/DDE_CALIBRATION",ack=False,readonly=True)
 	    jones_timestamp_size = self._no_antennae*self._cal_no_dirs*self._no_spw
 	    print "READING JONES TERMS FROM TIMESTAMP %d TO %d" % (self._last_starting_point,self._last_starting_point+self._no_timestamps_read-1)
-	    self._jones_terms = casa_ms_table.getcol("JONES",startrow=self._last_starting_point*jones_timestamp_size,nrow=self._no_timestamps_read*jones_timestamp_size).astype(base_types.visibility_type)
+	    with data_set_loader.time_to_load_chunks:
+	      self._jones_terms = casa_ms_table.getcol("JONES",startrow=self._last_starting_point*jones_timestamp_size,nrow=self._no_timestamps_read*jones_timestamp_size).astype(base_types.visibility_type,copy = False)
 	    casa_ms_table.close()
 	  except:
 	    print "WARNING: MEASUREMENT SET DOES NOT CONTAIN OPTIONAL SUBTABLE 'DDE_CALIBRATION'"
 	    import traceback
 	    print traceback.format_exc()
 	self._last_starting_point += timestamp_index #finally set the last timestamp read, this will be the starting point in the DDE_CALIBRATION table
+      
