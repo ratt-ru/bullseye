@@ -32,6 +32,8 @@ if __name__ == "__main__":
   
   total_run_time = timer.timer()
   total_run_time.start()
+  inversion_timer = timer.timer()
+  filter_creation_timer = timer.timer()
   parser = argparse.ArgumentParser(description='Bullseye: An implementation of targetted facet-based synthesis imaging in radio astronomy.')
   pol_options = {'I' : 1, 'Q' : 2, 'U' : 3, 'V' : 4, 'RR' : 5, 'RL' : 6, 'LR' : 7, 'LL' : 8, 'XX' : 9, 'XY' : 10, 'YX' : 11, 'YY' : 12} # as per Stokes.h in casacore, the rest is left unimplemented
   '''
@@ -124,10 +126,10 @@ if __name__ == "__main__":
     
     if parser_args['field_id'] not in range(0,len(data._field_centre_names)):
       raise argparse.ArgumentTypeError("Specified field does not exist Must be in 0 ... %d for this Measurement Set" % (len(data._field_centre_names) - 1))
-  
-    conv = convolution_filter.convolution_filter(parser_args['conv_sup'],parser_args['conv_sup'],
-						 parser_args['conv_oversamp'],parser_args['npix_l'],
-						 parser_args['npix_m'],parser_args['conv'])
+    with filter_creation_timer:
+      conv = convolution_filter.convolution_filter(parser_args['conv_sup'],
+						   parser_args['conv_oversamp'],parser_args['npix_l'],
+						   parser_args['npix_m'],parser_args['conv'])
     print "IMAGING ONLY FIELD %s" % data._field_centre_names[parser_args['field_id']]
   
     #check how many facets we have to create (if none we'll do normal gridding without any transformations)
@@ -341,10 +343,12 @@ if __name__ == "__main__":
     else:
       pass #any cases not stated here should be flagged by sanity checks on the program arguement list
   #now invert, detaper and write out all the facets to disk:  
+  
   for f in range(0, max(1,num_facet_centres)):
     image_prefix = parser_args['output_prefix'] if num_facet_centres == 0 else parser_args['output_prefix']+".facet"+str(f)
     if parser_args['output_format'] == 'png':
-      dirty = (np.real(fft_utils.ifft2(gridded_vis[f,0,:,:].reshape(parser_args['npix_l'],parser_args['npix_m']))) / conv._F_detaper).astype(np.float32)
+      with inversion_timer:
+	dirty = (np.real(fft_utils.ifft2(gridded_vis[f,0,:,:].reshape(parser_args['npix_l'],parser_args['npix_m']))) / conv._F_detaper).astype(np.float32)
       png_export.png_export(dirty,image_prefix,None)
       '''
       TODO: FIX
@@ -353,7 +357,8 @@ if __name__ == "__main__":
 	png_export.png_export(psf,image_prefix+'.psf',None)
       '''
     else: #export to FITS cube
-      dirty = (np.real(fft_utils.ifft2(gridded_vis[f,0,:,:].reshape(parser_args['npix_l'],parser_args['npix_m']))) / conv._F_detaper).astype(np.float32)
+      with inversion_timer:
+	dirty = (np.real(fft_utils.ifft2(gridded_vis[f,0,:,:].reshape(parser_args['npix_l'],parser_args['npix_m']))) / conv._F_detaper).astype(np.float32)
       fits_export.save_to_fits_image(image_prefix+'.fits',
 				     parser_args['npix_l'],parser_args['npix_m'],
 				     quantity(parser_args['cell_l'],'arcsec'),quantity(parser_args['cell_m'],'arcsec'),
@@ -376,6 +381,9 @@ if __name__ == "__main__":
   print "FINISHED WORK SUCCESSFULLY"
   total_run_time.stop()
   print "STATISTICS:"
-  print "\tData loading and conversion time: %f secs" % data_set_loader.data_set_loader.time_to_load_chunks.elapsed()
-  #print "\tGridding time: %f secs" % gridding_timer.elapsed()
+  print "\tConvolution filter and detapering function creation time: %f secs" % filter_creation_timer.elapsed()
+  print "\t[In Parallel] Data loading and conversion time: %f secs" % data_set_loader.data_set_loader.time_to_load_chunks.elapsed()
+  libimaging.get_gridding_walltime.restype = ctypes.c_double
+  print "\t[In Parallel] Gridding time: %f secs" % libimaging.get_gridding_walltime()
+  print "\tFourier inversion time: %f secs" % inversion_timer.elapsed()
   print "\tTotal runtime: %f secs" % total_run_time.elapsed()

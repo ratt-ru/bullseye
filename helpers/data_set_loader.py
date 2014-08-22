@@ -143,7 +143,7 @@ class data_set_loader(object):
 				      (np.dtype(np.float64).itemsize) + #timestamp window centre (MAIN/TIME)
 				      (1*np.dtype(np.intp).itemsize) + #timestamp id (computed when data is read)
 				      (self._no_antennae*self._cal_no_dirs*self._no_spw*self._no_channels*4*8*2/float(self._no_baselines)) #average jones contibution per row if all baselines are present per timestamp
-				     ))
+				     ) / 2.0) #we're using double the amount of memory in order to buffer IO while doing compute
     '''
       Computes the number of iterations required to read entire file, given memory constraints (in bytes)
       Assumes read_head has been called prior to this call

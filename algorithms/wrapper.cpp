@@ -4,6 +4,7 @@
 #include <thread>
 #include <future>
 
+#include "timer.h"
 #include "uvw_coord.h"
 #include "baseline_transform_policies.h"
 #include "phase_transform_policies.h"
@@ -68,6 +69,10 @@ struct gridding_parameters {
 };
 
 extern "C" {
+    utils::timer gridding_timer;
+    double get_gridding_walltime() {
+      return gridding_timer.duration();
+    }
     std::future<void> gridding_future;
     void gridding_barrier() {
         if (gridding_future.valid())
@@ -76,6 +81,7 @@ extern "C" {
     void grid_single_pol(gridding_parameters & params) {
         gridding_barrier();
         gridding_future = std::async(std::launch::async, [params] () {
+	    gridding_timer.start();
             using namespace imaging;
             printf("GRIDDING...");
             typedef baseline_transform_policy<uvw_base_type, transform_disable_facet_rotation> baseline_transform_policy_type;
@@ -118,11 +124,13 @@ extern "C" {
                      params.row_count,params.reference_wavelengths,params.field_array,
                      params.imaging_field,params.spw_index_array);
             printf(" <DONE>\n");
+	    gridding_timer.stop();
         });
     }
     void facet_single_pol(gridding_parameters & params) {
         gridding_barrier();
         gridding_future = std::async(std::launch::async, [params] () {
+	    gridding_timer.start();
             using namespace imaging;
             size_t no_facet_pixels = params.nx*params.ny;
             for (size_t facet_index = 0; facet_index < params.num_facet_centres; ++facet_index) {
@@ -174,11 +182,13 @@ extern "C" {
                                                  params.imaging_field,params.spw_index_array);
                 printf(" <DONE>\n");
             }
+            gridding_timer.stop();
         });
     }
     void grid_duel_pol(gridding_parameters & params) {
         gridding_barrier();
         gridding_future = std::async(std::launch::async, [params] () {
+	    gridding_timer.start();
             using namespace imaging;
             printf("GRIDDING...");
             typedef baseline_transform_policy<uvw_base_type, transform_disable_facet_rotation> baseline_transform_policy_type;
@@ -223,12 +233,14 @@ extern "C" {
                      params.row_count,params.reference_wavelengths,params.field_array,
                      params.imaging_field,params.spw_index_array);
             printf(" <DONE>\n");
+	    gridding_timer.stop();
         });
     }
 
     void facet_duel_pol(gridding_parameters & params) {
         gridding_barrier();
         gridding_future = std::async(std::launch::async, [params] () {
+	    gridding_timer.start();
             using namespace imaging;
             size_t no_facet_pixels = params.nx*params.ny;
             for (size_t facet_index = 0; facet_index < params.num_facet_centres; ++facet_index) {
@@ -282,11 +294,13 @@ extern "C" {
                                                  params.imaging_field,params.spw_index_array);
                 printf(" <DONE>\n");
             }
+            gridding_timer.stop();
         });
     }
     void grid_4_cor(gridding_parameters & params) {
         gridding_barrier();
         gridding_future = std::async(std::launch::async, [params] () {
+	    gridding_timer.start();
             using namespace imaging;
             assert(params.number_of_polarization_terms == 4); //Only supports 4 correlation visibilties in this mode
             printf("GRIDDING...");
@@ -328,11 +342,13 @@ extern "C" {
                      params.row_count,params.reference_wavelengths,params.field_array,
                      params.imaging_field,params.spw_index_array);
             printf(" <DONE>\n");
+	    gridding_timer.stop();
         });
     }
     void facet_4_cor(gridding_parameters & params) {
         gridding_barrier();
         gridding_future = std::async(std::launch::async, [params] () {
+	    gridding_timer.start();
             using namespace imaging;
             assert(params.number_of_polarization_terms == 4); //Only supports 4 correlation visibilties in this mode
 
@@ -385,11 +401,13 @@ extern "C" {
                                                  params.imaging_field,params.spw_index_array);
                 printf(" <DONE>\n");
             }
+            gridding_timer.stop();
         });
     }
     void facet_4_cor_corrections(gridding_parameters & params) {
         gridding_barrier();
         gridding_future = std::async(std::launch::async, [params] () {
+	    gridding_timer.start();
             using namespace imaging;
             assert(params.number_of_polarization_terms == 4); //Only supports 4 correlation visibilties in this mode
 
@@ -456,6 +474,7 @@ extern "C" {
                                                  params.imaging_field,params.spw_index_array);
                 printf(" <DONE>\n");
             }
+            gridding_timer.stop();
         });
     }
 }
