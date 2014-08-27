@@ -41,7 +41,7 @@ def save_to_fits_image(name,size_l,size_m,
     raise Exception("Data size must be equal to size_l * size_m")
   if not (data.dtype == np.float32 or data.dtype == np.float64):
     raise Exception("Expected float or double typed data but got %s" % data.dtype)
-  fortran_ordered_data = data.copy("F").reshape(1,1,size_m,size_l)
+  fortran_ordered_data = data.astype(data.dtype,order="F",copy=False).reshape(1,1,size_m,size_l)
   pri_hdr = pyfits.PrimaryHDU(fortran_ordered_data,do_not_scale_image_data=True)
   pri_hdr.header.append(("CRPIX1",size_l/2,"Pixel coordinate of reference point"))
   pri_hdr.header.append(("CDELT1",cell_l.get_value("deg"),"step per l pixel"))

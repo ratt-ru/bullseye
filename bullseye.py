@@ -386,8 +386,9 @@ if __name__ == "__main__":
   total_run_time.stop()
   print "STATISTICS:"
   print "\tConvolution filter and detapering function creation time: %f secs" % filter_creation_timer.elapsed()
-  print "\t[In Parallel] Data loading and conversion time: %f secs" % data_set_loader.data_set_loader.time_to_load_chunks.elapsed()
+  print "\tIn Parallel:"
+  print "\t\tData loading and conversion time: %f secs" % data_set_loader.data_set_loader.time_to_load_chunks.elapsed()
   libimaging.get_gridding_walltime.restype = ctypes.c_double
-  print "\t[In Parallel] Gridding time: %f secs" % libimaging.get_gridding_walltime()
+  print "\t\tGridding time: %f secs" % libimaging.get_gridding_walltime()
   print "\tFourier inversion time: %f secs" % inversion_timer.elapsed()
   print "\tTotal runtime: %f secs" % total_run_time.elapsed()

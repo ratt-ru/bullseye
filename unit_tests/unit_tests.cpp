@@ -262,9 +262,11 @@ TEST_CASE( "Testing polarization handling policies" ){
 							  pols,0,ch);
     for (size_t r = 0; r < rows; ++r){
 	for (size_t c = 0; c < ch; ++c){
-	  polarization_policy.transform(r,spw[r],c,uvw);
-	  polarization_policy.grid_polarization_terms(25*nx+25,1);
-	  polarization_policy.grid_polarization_conjugate_terms(25*nx+26,1);
+	  typename polarization_gridding_policy_type::trait_type::pol_vis_type vis;
+	  typename polarization_gridding_policy_type::trait_type::pol_vis_type conj;
+	  polarization_policy.transform(r,spw[r],c,uvw,vis,conj);
+	  polarization_policy.grid_polarization_terms(25*nx+25,vis,1);
+	  polarization_policy.grid_polarization_conjugate_terms(25*nx+26,conj,1);
 	}
     }
     REQUIRE(uvw._u == 1);
@@ -319,9 +321,11 @@ TEST_CASE( "Testing polarization handling policies" ){
 							  (bool*)flags,nx*ny,ch);
     for (size_t r = 0; r < rows; ++r){
 	for (size_t c = 0; c < ch; ++c){
-	  polarization_policy.transform(r,spw[r],c,uvw);
-	  polarization_policy.grid_polarization_terms(25*nx+25,1);
-	  polarization_policy.grid_polarization_conjugate_terms(25*nx+26,1);
+	  typename polarization_gridding_policy_type::trait_type::pol_vis_type vis;
+	  typename polarization_gridding_policy_type::trait_type::pol_vis_type conj;
+	  polarization_policy.transform(r,spw[r],c,uvw,vis,conj);
+	  polarization_policy.grid_polarization_terms(25*nx+25,vis,1);
+	  polarization_policy.grid_polarization_conjugate_terms(25*nx+26,conj,1);
 	}
     }
     REQUIRE(uvw._u == 1);
@@ -525,9 +529,11 @@ TEST_CASE( "Testing polarization handling policies" ){
  							);
     for (size_t r = 0; r < rows; ++r){
 	for (size_t c = 0; c < ch; ++c){
-	  polarization_policy.transform(r,spw[r],c,uvw);
-	  polarization_policy.grid_polarization_terms(25*nx+25,1);
-	  polarization_policy.grid_polarization_conjugate_terms(25*nx+26,1); 
+	  typename polarization_gridding_policy_type::trait_type::pol_vis_type vis;
+	  typename polarization_gridding_policy_type::trait_type::pol_vis_type conj;
+	  polarization_policy.transform(r,spw[r],c,uvw,vis,conj);
+	  polarization_policy.grid_polarization_terms(25*nx+25,vis,1);
+	  polarization_policy.grid_polarization_conjugate_terms(25*nx+26,conj,1); 
 	}
     }
     REQUIRE(uvw._u == 1);

@@ -10,6 +10,11 @@ namespace imaging {
   template <typename visibility_base_type,typename weights_base_type,typename T>
   class polarization_gridding_trait {
     //Undefined base class
+    class undefined_type {};
+  public:
+    typedef undefined_type pol_vis_type;
+    typedef undefined_type pol_vis_weight_type;
+    typedef undefined_type pol_vis_flag_type;
   };
   
   template <typename visibility_base_type,typename weights_base_type>

@@ -18,6 +18,8 @@ namespace imaging {
 	    typename phase_transformation_policy_type,typename gridding_mode>
   class polarization_gridding_policy {
   public:
+    typedef polarization_gridding_trait<visibility_base_type,weights_base_type,float> trait_type;
+    
     polarization_gridding_policy() { throw std::runtime_error("Undefined behaviour"); }
     /**
      Serves as proxy to future implementations. Subsequent headers should conform to the following:
@@ -26,19 +28,24 @@ namespace imaging {
      channel_index: channel in current row
      channel_count
      uvw: coordinate of current row
+     visibility: reference to visibility to read into and transform (if applicable)
+     conj_visibility: reference to conjugate visibility to read into and transform (if applicable)
      */
     inline void transform(std::size_t baseline_time_index, std::size_t spw_index, std::size_t channel_index, 
-			  const uvw_coord<uvw_base_type> & uvw) __restrict__ {
+			  const uvw_coord<uvw_base_type> & __restrict__ uvw,
+			  typename trait_type::pol_vis_type & __restrict__ visibility,
+			  typename trait_type::pol_vis_type & __restrict__ conj_visibility) __restrict__ {
       throw std::runtime_error("Undefined behaviour");
     }
     /**
      Serves as proxy to future implementations. Subsequent headers should conform to the following:
      term_flat_index: flat index of the individual polarization grids. Subsequent implementations should offset this index to the correct
 		      grid automatically.
-     grid_no_pixels: number of pixels per polarization grid (nx * ny)
+     visibility: reference to visibility being gridded
      convolution_weight: convolution weight to be applied to each polarization
     */
-    inline void grid_polarization_terms(std::size_t term_flat_index, std::size_t grid_no_pixels, convolution_base_type convolution_weight) __restrict__ {
+    inline void grid_polarization_terms(std::size_t term_flat_index, const typename trait_type::pol_vis_type & __restrict__ visibility,
+					convolution_base_type convolution_weight) __restrict__ {
       throw std::runtime_error("Undefined behaviour");
     }
     /**
@@ -46,10 +53,11 @@ namespace imaging {
      Subsequent headers should conform to the following:
      term_flat_index: flat index of the individual polarization grids. Subsequent implementations should offset this index to the correct
 		      grid automatically.
-     grid_no_pixels: number of pixels per polarization grid (nx * ny)
+     conj_visibility: reference to conjugate visibility being gridded
      convolution_weight: convolution weight to be applied to each polarization
     */
-    inline void grid_polarization_conjugate_terms(std::size_t term_flat_index, std::size_t grid_no_pixels, convolution_base_type convolution_weight) __restrict__ {
+    inline void grid_polarization_conjugate_terms(std::size_t term_flat_index, const typename trait_type::pol_vis_type & __restrict__ conj_visibility,
+						  convolution_base_type convolution_weight) __restrict__ {
       throw std::runtime_error("Undefined behaviour");
     }
   };
@@ -63,16 +71,14 @@ namespace imaging {
 	    typename phase_transformation_policy_type>
   class polarization_gridding_policy <visibility_base_type,uvw_base_type,weights_base_type,
 				      convolution_base_type,grid_base_type,phase_transformation_policy_type,gridding_single_pol>{
-  protected:
+  public:
       typedef polarization_gridding_trait<visibility_base_type,weights_base_type,gridding_single_pol> trait_type;
-      
+  protected:
       const phase_transformation_policy_type & __restrict__ _phase_transform_term;
       std::complex<grid_base_type> * __restrict__ _output_grids;
       const typename trait_type::pol_vis_type * __restrict__ _visibilities;
       const typename trait_type::pol_vis_weight_type * __restrict__ _weights;
       const typename trait_type::pol_vis_flag_type * __restrict__ _flags;
-      typename trait_type::pol_vis_type _visibility;
-      typename trait_type::pol_vis_type _conj_visibility;
       std::size_t _no_polarizations_in_data;
       std::size_t _polarization_index;
       std::size_t _channel_count;
@@ -107,10 +113,13 @@ namespace imaging {
 				   _polarization_index(polarization_index),
 				   _channel_count(channel_count){}
       inline void transform(std::size_t baseline_time_index, std::size_t spw_index, std::size_t channel_index, 
-			    const uvw_coord<uvw_base_type> & uvw) __restrict__ {
+			    const uvw_coord<uvw_base_type> & __restrict__ uvw,
+			    typename trait_type::pol_vis_type & __restrict__ visibility,
+			    typename trait_type::pol_vis_type & __restrict__ conj_visibility
+ 			  ) __restrict__ {
 	//fetch four complex visibility terms from memory at a time:
 	std::size_t visibility_flat_index = (baseline_time_index * _channel_count + channel_index) * _no_polarizations_in_data + _polarization_index;
-	_visibility = _visibilities[visibility_flat_index];
+	visibility = _visibilities[visibility_flat_index];
 	/*
 	 MS v2.0: weights are applied for each visibility term (baseline x channel x correlation)
 	*/
@@ -121,15 +130,17 @@ namespace imaging {
 	 This faceting phase shift is a scalar matrix and commutes with everything (Smirnov, 2011), so 
 	 we can apply it to the visibility immediately.
 	*/
-	_phase_transform_term.transform(_visibility,uvw);
-	_visibility *= weight * (int)(!flag); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
-	_conj_visibility = conj(_visibility);
+	_phase_transform_term.transform(visibility,uvw);
+	visibility *= weight * (int)(!flag); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
+	conj_visibility = conj(visibility);
       }
-      inline void grid_polarization_terms(std::size_t term_flat_index, convolution_base_type convolution_weight) __restrict__ {
-	_output_grids[term_flat_index] += convolution_weight * _visibility;
+      inline void grid_polarization_terms(std::size_t term_flat_index, const typename trait_type::pol_vis_type & __restrict__ visibility,
+					  convolution_base_type convolution_weight) __restrict__ {
+	_output_grids[term_flat_index] += convolution_weight * visibility;
       }
-      inline void grid_polarization_conjugate_terms(std::size_t term_flat_index, convolution_base_type convolution_weight) __restrict__ {
-	_output_grids[term_flat_index] += convolution_weight * _conj_visibility;
+      inline void grid_polarization_conjugate_terms(std::size_t term_flat_index, const typename trait_type::pol_vis_type & __restrict__ conj_visibility,
+						    convolution_base_type convolution_weight) __restrict__ {
+	_output_grids[term_flat_index] += convolution_weight * conj_visibility;
       }
   };
   
@@ -142,16 +153,14 @@ namespace imaging {
 	    typename phase_transformation_policy_type>
   class polarization_gridding_policy <visibility_base_type,uvw_base_type,weights_base_type,
 				      convolution_base_type,grid_base_type,phase_transformation_policy_type,gridding_double_pol>{
-  protected:
+  public:
       typedef polarization_gridding_trait<visibility_base_type,weights_base_type,gridding_double_pol> trait_type;
-      
+  protected: 
       const phase_transformation_policy_type & __restrict__ _phase_transform_term;
       std::complex<grid_base_type> * __restrict__ _output_grids;
       const std::complex<visibility_base_type> *  __restrict__ _visibilities;
       const weights_base_type * __restrict__ _weights;
       const bool * __restrict__ _flags;
-      typename trait_type::pol_vis_type _visibility;
-      typename trait_type::pol_vis_type _conj_visibility;
       std::size_t _no_polarizations_in_data;
       std::size_t _first_polarization_index;
       std::size_t _second_polarization_index;
@@ -194,11 +203,14 @@ namespace imaging {
 				   _grid_no_pixels(grid_no_pixels),
 				   _channel_count(channel_count){}
       inline void transform(std::size_t baseline_time_index, std::size_t spw_index, std::size_t channel_index, 
-			    const uvw_coord<uvw_base_type> & uvw) __restrict__ {
+			    const uvw_coord<uvw_base_type> & __restrict__ uvw,
+			    typename trait_type::pol_vis_type & __restrict__ visibility,
+			    typename trait_type::pol_vis_type & __restrict__ conj_visibility
+ 			  ) __restrict__ {
 	//fetch four complex visibility terms from memory at a time:
 	std::size_t visibility_flat_index = (baseline_time_index * _channel_count + channel_index) * _no_polarizations_in_data;
-	_visibility.v[0] = _visibilities[visibility_flat_index + _first_polarization_index]; 
-	_visibility.v[1] = _visibilities[visibility_flat_index + _second_polarization_index];
+	visibility.v[0] = _visibilities[visibility_flat_index + _first_polarization_index]; 
+	visibility.v[1] = _visibilities[visibility_flat_index + _second_polarization_index];
 	/*
 	 MS v2.0: weights are applied for each visibility term (baseline x channel x correlation)
 	*/
@@ -211,20 +223,22 @@ namespace imaging {
 	 This faceting phase shift is a scalar matrix and commutes with everything (Smirnov, 2011), so 
 	 we can apply it to the visibility immediately.
 	*/
-	_phase_transform_term.transform(_visibility.v[0],uvw);
-	_phase_transform_term.transform(_visibility.v[1],uvw);
-	_visibility.v[0] *= weight.w[0] * (int)(!flag.f[0]); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
-	_visibility.v[1] *= weight.w[1] * (int)(!flag.f[1]); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
-	_conj_visibility.v[0] = conj(_visibility.v[0]);
-	_conj_visibility.v[1] = conj(_visibility.v[1]);
+	_phase_transform_term.transform(visibility.v[0],uvw);
+	_phase_transform_term.transform(visibility.v[1],uvw);
+	visibility.v[0] *= weight.w[0] * (int)(!flag.f[0]); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
+	visibility.v[1] *= weight.w[1] * (int)(!flag.f[1]); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
+	conj_visibility.v[0] = conj(visibility.v[0]);
+	conj_visibility.v[1] = conj(visibility.v[1]);
       }
-      inline void grid_polarization_terms(std::size_t term_flat_index, convolution_base_type convolution_weight) __restrict__ {
-	_output_grids[term_flat_index] += convolution_weight * _visibility.v[0];
-	_output_grids[term_flat_index + _grid_no_pixels] += convolution_weight * _visibility.v[1];
+      inline void grid_polarization_terms(std::size_t term_flat_index, const typename trait_type::pol_vis_type & __restrict__ visibility,
+					  convolution_base_type convolution_weight) __restrict__ {
+	_output_grids[term_flat_index] += convolution_weight * visibility.v[0];
+	_output_grids[term_flat_index + _grid_no_pixels] += convolution_weight * visibility.v[1];
       }
-      inline void grid_polarization_conjugate_terms(std::size_t term_flat_index, convolution_base_type convolution_weight) __restrict__ {
-	_output_grids[term_flat_index] += convolution_weight * _conj_visibility.v[0];
-	_output_grids[term_flat_index + _grid_no_pixels] += convolution_weight * _conj_visibility.v[1];
+      inline void grid_polarization_conjugate_terms(std::size_t term_flat_index, const typename trait_type::pol_vis_type & __restrict__ conj_visibility,
+						    convolution_base_type convolution_weight) __restrict__ {
+	_output_grids[term_flat_index] += convolution_weight * conj_visibility.v[0];
+	_output_grids[term_flat_index + _grid_no_pixels] += convolution_weight * conj_visibility.v[1];
       }
   };
   
@@ -236,16 +250,14 @@ namespace imaging {
 	    typename phase_transformation_policy_type>
   class polarization_gridding_policy <visibility_base_type,uvw_base_type,weights_base_type,
 				      convolution_base_type,grid_base_type,phase_transformation_policy_type,gridding_4_pol>{
-  protected:
+  public:
       typedef polarization_gridding_trait<visibility_base_type,weights_base_type,gridding_4_pol> trait_type;
-      
+  protected:    
       const phase_transformation_policy_type & __restrict__ _phase_transform_term;
       std::complex<grid_base_type> * __restrict__ _output_grids;
       const typename trait_type::pol_vis_type * __restrict__ _visibilities;
       const typename trait_type::pol_vis_weight_type * __restrict__ _weights;
       const typename trait_type::pol_vis_flag_type * __restrict__ _flags;
-      typename trait_type::pol_vis_type _visibility_polarizations;
-      typename trait_type::pol_vis_type _conj_visibility_polarizations;
       std::size_t _grid_no_pixels;
       std::size_t _channel_count; 
   public:
@@ -277,10 +289,12 @@ namespace imaging {
 				   _channel_count(channel_count){}
       __attribute__((optimize("unroll-loops")))
       inline void transform(std::size_t baseline_time_index, std::size_t spw_index, std::size_t channel_index, 
-			    const uvw_coord<uvw_base_type> & uvw) __restrict__ {
+			    const uvw_coord<uvw_base_type> & __restrict__ uvw,
+			    typename trait_type::pol_vis_type & __restrict__ visibility,
+			    typename trait_type::pol_vis_type & __restrict__ conj_visibility) __restrict__ {
 	//fetch four complex visibility terms from memory at a time:
 	std::size_t visibility_jones_flat_index = baseline_time_index * _channel_count + channel_index;
-	_visibility_polarizations = _visibilities[visibility_jones_flat_index];
+	visibility = _visibilities[visibility_jones_flat_index];
 	//MS v2.0: weights are applied per polarization, over all channels for each (baseline x time) step (row of the primary table):
 	typename trait_type::pol_vis_weight_type weights = _weights[visibility_jones_flat_index];
 	typename trait_type::pol_vis_flag_type flags = _flags[visibility_jones_flat_index];
@@ -290,23 +304,25 @@ namespace imaging {
 	 we can apply it to the visibility immediately.
 	*/
 	for (std::size_t i = 0; i < 4; ++i){
-	  _phase_transform_term.transform(_visibility_polarizations.correlations[i],uvw);
-	  _visibility_polarizations.correlations[i] *= weights.w[i] * (int)(!flags.f[i]); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
-	  _conj_visibility_polarizations.correlations[i] = conj(_visibility_polarizations.correlations[i]);
+	  _phase_transform_term.transform(visibility.correlations[i],uvw);
+	  visibility.correlations[i] *= weights.w[i] * (int)(!flags.f[i]); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
+	  conj_visibility.correlations[i] = conj(visibility.correlations[i]);
 	}
       }
       __attribute__((optimize("unroll-loops")))
-      inline void grid_polarization_terms(std::size_t term_flat_index, convolution_base_type convolution_weight) __restrict__ {
+      inline void grid_polarization_terms(std::size_t term_flat_index, const typename trait_type::pol_vis_type & __restrict__ visibility,
+					  convolution_base_type convolution_weight) __restrict__ {
 	for (std::size_t i = 0; i < 4; ++i){
 	  std::size_t grid_offset = i * _grid_no_pixels;
-	  _output_grids[grid_offset + term_flat_index] += convolution_weight * _visibility_polarizations.correlations[i];
+	  _output_grids[grid_offset + term_flat_index] += convolution_weight * visibility.correlations[i];
 	}
       }
       __attribute__((optimize("unroll-loops")))
-      inline void grid_polarization_conjugate_terms(std::size_t term_flat_index, convolution_base_type convolution_weight) __restrict__ {
+      inline void grid_polarization_conjugate_terms(std::size_t term_flat_index, const typename trait_type::pol_vis_type & __restrict__ conj_visibility,
+						    convolution_base_type convolution_weight) __restrict__ {
 	for (std::size_t i = 0; i < 4; ++i){
 	  std::size_t grid_offset = i * _grid_no_pixels;
-	  _output_grids[grid_offset + term_flat_index] += convolution_weight * _conj_visibility_polarizations.correlations[i];
+	  _output_grids[grid_offset + term_flat_index] += convolution_weight * conj_visibility.correlations[i];
 	}
       }
   };
@@ -327,9 +343,9 @@ namespace imaging {
 				      gridding_4_pol_enable_facet_based_jones_corrections> : 
 				      public polarization_gridding_policy <visibility_base_type,uvw_base_type,weights_base_type,
 				      convolution_base_type,grid_base_type,phase_transformation_policy_type,gridding_4_pol>{
-  protected:
+  public:
       typedef polarization_gridding_trait<visibility_base_type,weights_base_type,gridding_4_pol_enable_facet_based_jones_corrections> trait_type;
-    
+  protected:  
       const jones_2x2<visibility_base_type> * __restrict__ _inverted_jones_terms;
       std::size_t _direction_index;
       std::size_t _direction_count;
@@ -394,10 +410,12 @@ namespace imaging {
 								  channel_count){}
       __attribute__((optimize("unroll-loops")))
       inline void transform(std::size_t baseline_time_index, std::size_t spw_index, std::size_t channel_index, 
-			    const uvw_coord<uvw_base_type> & uvw) __restrict__ {
+			    const uvw_coord<uvw_base_type> & __restrict__ uvw,
+			    typename trait_type::pol_vis_type & __restrict__ visibility,
+			    typename trait_type::pol_vis_type & __restrict__ conj_visibility) __restrict__ {
 	//fetch four complex visibility terms from memory at a time:
 	std::size_t visibility_jones_flat_index = baseline_time_index * this->_channel_count + channel_index;
-	this->_visibility_polarizations = this->_visibilities[visibility_jones_flat_index];
+	visibility = this->_visibilities[visibility_jones_flat_index];
 	//MS v2.0: weights are applied per polarization, over all channels for each (baseline x time) step (row of the primary table):
 	typename trait_type::pol_vis_weight_type weights = this->_weights[visibility_jones_flat_index];
 	typename trait_type::pol_vis_flag_type flags = this->_flags[visibility_jones_flat_index];
@@ -407,8 +425,8 @@ namespace imaging {
 	 we can apply it to the visibility immediately.
 	*/
 	for (std::size_t i = 0; i < 4; ++i){
-	  this->_phase_transform_term.transform(this->_visibility_polarizations.correlations[i],uvw);
-	  this->_visibility_polarizations.correlations[i] *= weights.w[i] * (int)(!flags.f[i]); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
+	  this->_phase_transform_term.transform(visibility.correlations[i],uvw);
+	  visibility.correlations[i] *= weights.w[i] * (int)(!flags.f[i]); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
 	}
 	/*
 	 fetch antenna 1 and antenna 2 jones matricies (flat-indexed). Assume there is a Jones matrix per 
@@ -433,10 +451,10 @@ namespace imaging {
 	*/
 	do_hermitian_transpose<visibility_base_type>(antenna_2_jones);
 	jones_2x2<visibility_base_type> tmp;
-	inner_product<visibility_base_type>(this->_visibility_polarizations,antenna_2_jones,tmp);
-	inner_product<visibility_base_type>(antenna_1_jones,tmp,this->_visibility_polarizations);
+	inner_product<visibility_base_type>(visibility,antenna_2_jones,tmp);
+	inner_product<visibility_base_type>(antenna_1_jones,tmp,visibility);
 	for (std::size_t i = 0; i < 4; ++i){
-	  this->_conj_visibility_polarizations.correlations[i] = conj(this->_visibility_polarizations.correlations[i]);
+	  conj_visibility.correlations[i] = conj(visibility.correlations[i]);
 	}	
       }
   };

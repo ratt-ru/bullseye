@@ -15,7 +15,7 @@
 
 
 //Enable this if you want some progress printed out:
-#define GRIDDER_PRINT_PROGRESS
+//#define GRIDDER_PRINT_PROGRESS
 
 namespace imaging {
 	/**
@@ -59,7 +59,7 @@ namespace imaging {
 		  const uvw_coord<uvw_base_type> * __restrict__ uvw_coords,
 		  const bool * __restrict__ flagged_rows,
 		  std::size_t nx, std::size_t ny, casa::Quantity cellx, casa::Quantity celly,
-		  std::size_t timestamp_count, std::size_t baseline_count, std::size_t channel_count,
+		  std::size_t channel_count,
 		  std::size_t row_count,
 		  const reference_wavelengths_base_type *__restrict__ reference_wavelengths,
 		  const unsigned int * __restrict__ field_array,
@@ -114,8 +114,9 @@ namespace imaging {
 				 
 				 Refer to Cornwell & Perley (1992), Synthesis Imaging II (1999) and Smirnov I (2011)
 				*/
-
-				active_polarization_gridding_policy.transform(bt,spw_index,c,uvw); //reads and transforms the current visibility
+				typename polarization_gridding_policy_type::trait_type::pol_vis_type vis;
+				typename polarization_gridding_policy_type::trait_type::pol_vis_type conj;
+				active_polarization_gridding_policy.transform(bt,spw_index,c,uvw,vis,conj); //reads and transforms the current visibility
 				//as per Cornwell and Perley... then we rotate the uvw coordinate...
 				active_baseline_transform_policy.transform(uvw);
 				
@@ -130,8 +131,8 @@ namespace imaging {
 				on b. Rather than running though all the visibilities twice we compute uvw, -uvw, V and V*. We should be able to save ourselves some compuation on phase
 				shifts, etc by so doing. All gridder policies must reflect this and support gridding both the complex visibility and its conjugate. 
 				*/
-				active_convolution_policy.convolve(uvw, &polarization_gridding_policy_type::grid_polarization_terms);
- 				active_convolution_policy.convolve(-uvw, &polarization_gridding_policy_type::grid_polarization_conjugate_terms);
+				active_convolution_policy.convolve(uvw, vis, &polarization_gridding_policy_type::grid_polarization_terms);
+ 				active_convolution_policy.convolve(-uvw, conj, &polarization_gridding_policy_type::grid_polarization_conjugate_terms);
                         }
                 }
                 

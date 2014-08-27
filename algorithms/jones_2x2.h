@@ -50,6 +50,7 @@ namespace imaging {
    */
   template <typename visibility_base_type>
   inline void invert_all(jones_2x2<visibility_base_type> * __restrict__ mat, std::size_t jones_count) {
+    #pragma omp parallel for
     for (std::size_t j = 0; j < jones_count; ++j){
       if (det(mat[j]) == std::complex<visibility_base_type>(0,0)){
 	throw std::runtime_error("JONES MATRIX SET CONTAINS SINGULAR MATRICIES. ABORTING.");

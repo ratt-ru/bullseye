@@ -4,6 +4,7 @@
 #include <thread>
 #include <future>
 
+#include "gridding_parameters.h"
 #include "timer.h"
 #include "uvw_coord.h"
 #include "baseline_transform_policies.h"
@@ -11,62 +12,6 @@
 #include "polarization_gridding_policies.h"
 #include "convolution_policies.h"
 #include "gridding.h"
-
-//just swap these for doubles if you're passing double precission numpy arrays through!
-typedef float visibility_base_type;
-typedef float uvw_base_type;
-typedef float reference_wavelengths_base_type;
-typedef float convolution_base_type;
-typedef float visibility_weights_base_type;
-typedef float grid_base_type;
-
-struct gridding_parameters {
-    //Mandatory data necessary for gridding:
-    const std::complex<visibility_base_type> * visibilities;
-    const imaging::uvw_coord<uvw_base_type> * uvw_coords;
-    const reference_wavelengths_base_type * reference_wavelengths;
-    const visibility_weights_base_type * visibility_weights;
-    const bool * flags;
-    const bool * flagged_rows;
-    const unsigned int * field_array;
-    const unsigned int * spw_index_array;
-    unsigned int imaging_field; //mandatory: used to seperate different pointings in the MS 2.0 specification
-    //Mandatory count fields necessary for gridding:
-    size_t baseline_count;
-    size_t row_count;
-    size_t channel_count;
-    size_t number_of_polarization_terms;
-    size_t spw_count;
-    size_t no_timestamps_read;
-    //Mandatory image scaling fields necessary for scaling the IFFT correctly
-    size_t nx;
-    size_t ny;
-    uvw_base_type cell_size_x;
-    uvw_base_type cell_size_y;
-    //Fields in use for specifying externally computed convolution function
-    convolution_base_type * conv;
-    size_t conv_support;
-    size_t conv_oversample;
-    //Correlation index specifier for gridding a single stokes/correlation term
-    size_t polarization_index;
-    size_t second_polarization_index;//only in use when gridding two correlation terms
-    //Preallocated buffers
-    std::complex<grid_base_type> * output_buffer;
-    //Faceting information
-    uvw_base_type phase_centre_ra;
-    uvw_base_type phase_centre_dec;
-    const uvw_base_type * facet_centres;
-    size_t num_facet_centres;
-    //Fields required to specify jones facet_4_cor_corrections
-    std::complex<visibility_base_type> * jones_terms;
-    bool should_invert_jones_terms;
-    const unsigned int * antenna_1_ids;
-    const unsigned int * antenna_2_ids;
-    const std::size_t * timestamp_ids;
-    size_t antenna_count;
-    //Preallocated buffer to store the sampling function
-    std::complex<grid_base_type> * sampling_function_buffer;
-};
 
 extern "C" {
     utils::timer gridding_timer;
@@ -83,7 +28,7 @@ extern "C" {
         gridding_future = std::async(std::launch::async, [params] () {
 	    gridding_timer.start();
             using namespace imaging;
-            printf("GRIDDING...");
+            printf("GRIDDING...\n");
             typedef baseline_transform_policy<uvw_base_type, transform_disable_facet_rotation> baseline_transform_policy_type;
             typedef phase_transform_policy<visibility_base_type,
                     uvw_base_type,
@@ -120,10 +65,9 @@ extern "C" {
                      params.nx,params.ny,
                      casa::Quantity(params.cell_size_x,"arcsec"),
                      casa::Quantity(params.cell_size_y,"arcsec"),
-                     params.no_timestamps_read,params.baseline_count,params.channel_count,
+                     params.channel_count,
                      params.row_count,params.reference_wavelengths,params.field_array,
                      params.imaging_field,params.spw_index_array);
-            printf(" <DONE>\n");
 	    gridding_timer.stop();
         });
     }
@@ -137,7 +81,7 @@ extern "C" {
                 uvw_base_type new_phase_ra = params.facet_centres[2*facet_index];
                 uvw_base_type new_phase_dec = params.facet_centres[2*facet_index + 1];
 
-                printf("FACETING (%f,%f,%f,%f) %lu / %lu...",params.phase_centre_ra,params.phase_centre_dec,new_phase_ra,new_phase_dec,facet_index+1, params.num_facet_centres);
+                printf("FACETING (%f,%f,%f,%f) %lu / %lu...\n",params.phase_centre_ra,params.phase_centre_dec,new_phase_ra,new_phase_dec,facet_index+1, params.num_facet_centres);
                 fflush(stdout);
 
 
@@ -177,7 +121,7 @@ extern "C" {
                                                  params.flagged_rows,
                                                  params.nx,params.ny,
                                                  casa::Quantity(params.cell_size_x,"arcsec"),casa::Quantity(params.cell_size_y,"arcsec"),
-                                                 params.no_timestamps_read,params.baseline_count,params.channel_count,
+                                                 params.channel_count,
                                                  params.row_count,params.reference_wavelengths,params.field_array,
                                                  params.imaging_field,params.spw_index_array);
                 printf(" <DONE>\n");
@@ -229,10 +173,9 @@ extern "C" {
                      params.nx,params.ny,
                      casa::Quantity(params.cell_size_x,"arcsec"),
                      casa::Quantity(params.cell_size_y,"arcsec"),
-                     params.no_timestamps_read,params.baseline_count,params.channel_count,
+                     params.channel_count,
                      params.row_count,params.reference_wavelengths,params.field_array,
                      params.imaging_field,params.spw_index_array);
-            printf(" <DONE>\n");
 	    gridding_timer.stop();
         });
     }
@@ -247,7 +190,7 @@ extern "C" {
                 uvw_base_type new_phase_ra = params.facet_centres[2*facet_index];
                 uvw_base_type new_phase_dec = params.facet_centres[2*facet_index + 1];
 
-                printf("FACETING (%f,%f,%f,%f) %lu / %lu...",params.phase_centre_ra,params.phase_centre_dec,new_phase_ra,new_phase_dec,facet_index+1, params.num_facet_centres);
+                printf("FACETING (%f,%f,%f,%f) %lu / %lu...\n",params.phase_centre_ra,params.phase_centre_dec,new_phase_ra,new_phase_dec,facet_index+1, params.num_facet_centres);
                 fflush(stdout);
 
 
@@ -289,10 +232,9 @@ extern "C" {
                                                  params.flagged_rows,
                                                  params.nx,params.ny,
                                                  casa::Quantity(params.cell_size_x,"arcsec"),casa::Quantity(params.cell_size_y,"arcsec"),
-                                                 params.no_timestamps_read,params.baseline_count,params.channel_count,
+                                                 params.channel_count,
                                                  params.row_count,params.reference_wavelengths,params.field_array,
                                                  params.imaging_field,params.spw_index_array);
-                printf(" <DONE>\n");
             }
             gridding_timer.stop();
         });
@@ -303,7 +245,7 @@ extern "C" {
 	    gridding_timer.start();
             using namespace imaging;
             assert(params.number_of_polarization_terms == 4); //Only supports 4 correlation visibilties in this mode
-            printf("GRIDDING...");
+            printf("GRIDDING...\n");
             typedef baseline_transform_policy<uvw_base_type, transform_disable_facet_rotation> baseline_transform_policy_type;
             typedef phase_transform_policy<visibility_base_type,
                     uvw_base_type,
@@ -338,10 +280,9 @@ extern "C" {
                      params.nx,params.ny,
                      casa::Quantity(params.cell_size_x,"arcsec"),
                      casa::Quantity(params.cell_size_y,"arcsec"),
-                     params.no_timestamps_read,params.baseline_count,params.channel_count,
+                     params.channel_count,
                      params.row_count,params.reference_wavelengths,params.field_array,
                      params.imaging_field,params.spw_index_array);
-            printf(" <DONE>\n");
 	    gridding_timer.stop();
         });
     }
@@ -396,17 +337,16 @@ extern "C" {
                                                  params.flagged_rows,
                                                  params.nx,params.ny,
                                                  casa::Quantity(params.cell_size_x,"arcsec"),casa::Quantity(params.cell_size_y,"arcsec"),
-                                                 params.no_timestamps_read,params.baseline_count,params.channel_count,
+                                                 params.channel_count,
                                                  params.row_count,params.reference_wavelengths,params.field_array,
                                                  params.imaging_field,params.spw_index_array);
-                printf(" <DONE>\n");
             }
             gridding_timer.stop();
         });
     }
     void facet_4_cor_corrections(gridding_parameters & params) {
-        //gridding_barrier();
-        //gridding_future = std::async(std::launch::async, [params] () {
+        gridding_barrier();
+        gridding_future = std::async(std::launch::async, [params] () {
 	    gridding_timer.start();
             using namespace imaging;
             assert(params.number_of_polarization_terms == 4); //Only supports 4 correlation visibilties in this mode
@@ -421,7 +361,7 @@ extern "C" {
                 uvw_base_type new_phase_ra = params.facet_centres[2*facet_index];
                 uvw_base_type new_phase_dec = params.facet_centres[2*facet_index + 1];
 
-                printf("FACETING (%f,%f,%f,%f) %lu / %lu...",params.phase_centre_ra,params.phase_centre_dec,new_phase_ra,new_phase_dec,facet_index+1, params.num_facet_centres);
+                printf("FACETING (%f,%f,%f,%f) %lu / %lu...\n",params.phase_centre_ra,params.phase_centre_dec,new_phase_ra,new_phase_dec,facet_index+1, params.num_facet_centres);
                 fflush(stdout);
 
                 typedef imaging::baseline_transform_policy<uvw_base_type,
@@ -469,12 +409,11 @@ extern "C" {
                                                  params.flagged_rows,
                                                  params.nx,params.ny,
                                                  casa::Quantity(params.cell_size_x,"arcsec"),casa::Quantity(params.cell_size_y,"arcsec"),
-                                                 params.no_timestamps_read,params.baseline_count,params.channel_count,
+                                                 params.channel_count,
                                                  params.row_count,params.reference_wavelengths,params.field_array,
                                                  params.imaging_field,params.spw_index_array);
-                printf(" <DONE>\n");
             }
             gridding_timer.stop();
-       // });
+        });
     }
 }

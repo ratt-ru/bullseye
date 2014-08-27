@@ -25,7 +25,9 @@ namespace imaging {
      gridding_function: pointer to member function of active gridding policy
      */
     inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
-			 void (gridding_policy_type::*gridding_function)(std::size_t,convolution_base_type)) const __restrict__ {
+			 void (gridding_policy_type::*gridding_function)(std::size_t,
+									 const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__,
+									 convolution_base_type)) const __restrict__ {
       throw std::exception("Undefined behaviour");
     }
   };
@@ -66,24 +68,26 @@ namespace imaging {
 			_active_gridding_policy(active_gridding_policy)
 			{}
     inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
-			 void (gridding_policy_type::*gridding_function)(std::size_t,convolution_base_type)) const __restrict__ {
-	uvw_base_type translated_grid_u = uvw._u + _grid_u_centre;
-	uvw_base_type translated_grid_v = uvw._v + _grid_v_centre;
+			 const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__ vis,
+			 void (gridding_policy_type::*gridding_function)(std::size_t,
+									 const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__,
+									 convolution_base_type)) const __restrict__ {
+	uvw_base_type translated_grid_u = uvw._u + _grid_u_centre - _conv_dim_centre;
+	uvw_base_type translated_grid_v = uvw._v + _grid_v_centre - _conv_dim_centre;
+	
         for (std::size_t conv_v = 0; conv_v < _conv_dim_size; ++conv_v) {
-            std::size_t disc_grid_v = round(translated_grid_v + conv_v*_conv_scale - _conv_dim_centre);
+            std::size_t disc_grid_v = round(translated_grid_v + conv_v*_conv_scale);
             if (disc_grid_v >= _ny) continue;
-
+	    std::size_t grid_flat_index_v = (disc_grid_v)*_nx;
+	    std::size_t conv_flat_index_v = conv_v * _conv_dim_size;
             for (int conv_u = 0; conv_u < _conv_dim_size; ++conv_u) {
-                std::size_t disc_grid_u = round(translated_grid_u + conv_u*_conv_scale - _conv_dim_centre);
+                std::size_t disc_grid_u = round(translated_grid_u + conv_u*_conv_scale);
                 if (disc_grid_u >= _nx) continue;
-                
-                std::size_t conv_flat_index = (conv_v * _conv_dim_size + conv_u); //flatten convolution index
                 //by definition the convolution FIR is 0 outside the support region:
-                convolution_base_type conv_weight = _conv[conv_flat_index];
-                std::size_t grid_flat_index = ((disc_grid_v)*_nx+(disc_grid_u)); //flatten grid index
+                convolution_base_type conv_weight = _conv[conv_flat_index_v + conv_u];
                 
                 // Call the gridding policy function (this can either be the normal gridding function or the conjugate gridding function:
-                ((_active_gridding_policy).*gridding_function)(grid_flat_index,conv_weight);
+                ((_active_gridding_policy).*gridding_function)(grid_flat_index_v + disc_grid_u, vis, conv_weight);
             }
         }
     }
