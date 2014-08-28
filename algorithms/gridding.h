@@ -75,12 +75,15 @@ namespace imaging {
 		*/
                 uvw_base_type u_scale=nx*cellx.getValue("rad");
                 uvw_base_type v_scale=ny*celly.getValue("rad");
-		
+		auto uv_scale = uvw_coord<uvw_base_type>(u_scale,-v_scale);
+		std::size_t channel_loop_unroll_rem_lbound = channel_count / 8;
+		std::size_t channel_loop_unroll_rem_ubound = channel_loop_unroll_rem_lbound + channel_count % 8;
 		#ifdef GRIDDER_PRINT_PROGRESS
 		//give some indication of progress:
 		float progress_step_size = 10.0;
 		float next_progress_step = progress_step_size;
 		#endif
+		#pragma omp parallel for
                 for (std::size_t bt = 0; bt < row_count; ++bt){ //this corresponds to the rows of the MS 2.0 MAIN table definition
 			#ifdef GRIDDER_PRINT_PROGRESS
 			float progress = bt/float(row_count)*100.0f;
@@ -99,6 +102,7 @@ namespace imaging {
 				 Get uvw coords
 				*/
 				uvw_coord<uvw_base_type> uvw = uvw_coords[bt];
+				
 				/*
 				 * Now measure the uvw coordinates in terms of wavelength
 				 */
@@ -115,24 +119,20 @@ namespace imaging {
 				 Refer to Cornwell & Perley (1992), Synthesis Imaging II (1999) and Smirnov I (2011)
 				*/
 				typename polarization_gridding_policy_type::trait_type::pol_vis_type vis;
-				typename polarization_gridding_policy_type::trait_type::pol_vis_type conj;
-				active_polarization_gridding_policy.transform(bt,spw_index,c,uvw,vis,conj); //reads and transforms the current visibility
+				active_polarization_gridding_policy.transform(bt,spw_index,c,uvw,vis); //reads and transforms the current visibility
 				//as per Cornwell and Perley... then we rotate the uvw coordinate...
 				active_baseline_transform_policy.transform(uvw);
-				
 				/*
 				 Now that all the transformations are done, convert and scale the uv coords down to the desired FOV (this scales the IFFT by the simularity theorem):
 				*/
-				uvw *= uvw_coord<uvw_base_type>(u_scale,-v_scale);
+				uvw *= uv_scale;
 				
 				/*				
 				On page 25-26 of Synthesis Imaging II Thompson notes that the correlator output is a measure of the visibility at two points on the
 				uv grid. This corresponds to the baseline and the reversed baseline direction: b and -b. The latter represents the complex conjugate of the visibility
-				on b. Rather than running though all the visibilities twice we compute uvw, -uvw, V and V*. We should be able to save ourselves some compuation on phase
-				shifts, etc by so doing. All gridder policies must reflect this and support gridding both the complex visibility and its conjugate. 
+				on b. This hermitian symetric component need not be gridded and relates to a 2x improvement in runtime
 				*/
-				active_convolution_policy.convolve(uvw, vis, &polarization_gridding_policy_type::grid_polarization_terms);
- 				active_convolution_policy.convolve(-uvw, conj, &polarization_gridding_policy_type::grid_polarization_conjugate_terms);
+				active_convolution_policy.convolve(uvw, vis);
                         }
                 }
                 

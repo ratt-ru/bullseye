@@ -264,9 +264,8 @@ TEST_CASE( "Testing polarization handling policies" ){
 	for (size_t c = 0; c < ch; ++c){
 	  typename polarization_gridding_policy_type::trait_type::pol_vis_type vis;
 	  typename polarization_gridding_policy_type::trait_type::pol_vis_type conj;
-	  polarization_policy.transform(r,spw[r],c,uvw,vis,conj);
+	  polarization_policy.transform(r,spw[r],c,uvw,vis);
 	  polarization_policy.grid_polarization_terms(25*nx+25,vis,1);
-	  polarization_policy.grid_polarization_conjugate_terms(25*nx+26,conj,1);
 	}
     }
     REQUIRE(uvw._u == 1);
@@ -274,7 +273,6 @@ TEST_CASE( "Testing polarization handling policies" ){
     REQUIRE(uvw._w == 3);
     //grid all the even numbers 0,2,4,6 (pol 0), weighted 1,3,5,7, but the last one is flagged
     REQUIRE(is_close(uv_grid[25*nx+25].imag(),9));
-    REQUIRE(is_close(uv_grid[25*nx+26].imag(),-9)); //conjugate gridding
   }
   SECTION( "Testing the 4 correlation term polarization policy" ){
     typedef float visibility_base_type;
@@ -322,10 +320,8 @@ TEST_CASE( "Testing polarization handling policies" ){
     for (size_t r = 0; r < rows; ++r){
 	for (size_t c = 0; c < ch; ++c){
 	  typename polarization_gridding_policy_type::trait_type::pol_vis_type vis;
-	  typename polarization_gridding_policy_type::trait_type::pol_vis_type conj;
-	  polarization_policy.transform(r,spw[r],c,uvw,vis,conj);
+	  polarization_policy.transform(r,spw[r],c,uvw,vis);
 	  polarization_policy.grid_polarization_terms(25*nx+25,vis,1);
-	  polarization_policy.grid_polarization_conjugate_terms(25*nx+26,conj,1);
 	}
     }
     REQUIRE(uvw._u == 1);
@@ -340,15 +336,6 @@ TEST_CASE( "Testing polarization handling policies" ){
     REQUIRE(uv_grid[nx*ny*2 + 25*nx+25].imag() == 3);
     REQUIRE(uv_grid[nx*ny*3 + 25*nx+25].real() == 8);
     REQUIRE(uv_grid[nx*ny*3 + 25*nx+25].imag() == 12);
-    //conjugates
-    REQUIRE(uv_grid[nx*ny*0 + 25*nx+26].real() == 18);
-    REQUIRE(uv_grid[nx*ny*0 + 25*nx+26].imag() == -10);
-    REQUIRE(uv_grid[nx*ny*1 + 25*nx+26].real() == 6);
-    REQUIRE(uv_grid[nx*ny*1 + 25*nx+26].imag() == -12);
-    REQUIRE(uv_grid[nx*ny*2 + 25*nx+26].real() == 15);
-    REQUIRE(uv_grid[nx*ny*2 + 25*nx+26].imag() == -3);
-    REQUIRE(uv_grid[nx*ny*3 + 25*nx+26].real() == 8);
-    REQUIRE(uv_grid[nx*ny*3 + 25*nx+26].imag() == -12);
   }
   SECTION( "Testing the 4 correlation jones correcting policy" ){
     typedef float visibility_base_type;
@@ -530,10 +517,8 @@ TEST_CASE( "Testing polarization handling policies" ){
     for (size_t r = 0; r < rows; ++r){
 	for (size_t c = 0; c < ch; ++c){
 	  typename polarization_gridding_policy_type::trait_type::pol_vis_type vis;
-	  typename polarization_gridding_policy_type::trait_type::pol_vis_type conj;
-	  polarization_policy.transform(r,spw[r],c,uvw,vis,conj);
+	  polarization_policy.transform(r,spw[r],c,uvw,vis);
 	  polarization_policy.grid_polarization_terms(25*nx+25,vis,1);
-	  polarization_policy.grid_polarization_conjugate_terms(25*nx+26,conj,1); 
 	}
     }
     REQUIRE(uvw._u == 1);
@@ -548,15 +533,6 @@ TEST_CASE( "Testing polarization handling policies" ){
     REQUIRE(uv_grid[nx*ny*2 + 25*nx+25].imag() == -10068);
     REQUIRE(uv_grid[nx*ny*3 + 25*nx+25].real() == -11576);
     REQUIRE(uv_grid[nx*ny*3 + 25*nx+25].imag() == -2064);
-    //conjugates
-    REQUIRE(uv_grid[nx*ny*0 + 25*nx+26].real() == 4465);
-    REQUIRE(uv_grid[nx*ny*0 + 25*nx+26].imag() == -220);
-    REQUIRE(uv_grid[nx*ny*1 + 25*nx+26].real() == 3174);
-    REQUIRE(uv_grid[nx*ny*1 + 25*nx+26].imag() == 5736);
-    REQUIRE(uv_grid[nx*ny*2 + 25*nx+26].real() == 4067);
-    REQUIRE(uv_grid[nx*ny*2 + 25*nx+26].imag() == 10068);
-    REQUIRE(uv_grid[nx*ny*3 + 25*nx+26].real() == -11576);
-    REQUIRE(uv_grid[nx*ny*3 + 25*nx+26].imag() == 2064);
   }  
 }
 

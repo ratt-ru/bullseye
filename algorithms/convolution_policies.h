@@ -68,10 +68,7 @@ namespace imaging {
 			_active_gridding_policy(active_gridding_policy)
 			{}
     inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
-			 const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__ vis,
-			 void (gridding_policy_type::*gridding_function)(std::size_t,
-									 const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__,
-									 convolution_base_type)) const __restrict__ {
+			 const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__ vis) const __restrict__ {
 	uvw_base_type translated_grid_u = uvw._u + _grid_u_centre - _conv_dim_centre;
 	uvw_base_type translated_grid_v = uvw._v + _grid_v_centre - _conv_dim_centre;
 	
@@ -86,8 +83,7 @@ namespace imaging {
                 //by definition the convolution FIR is 0 outside the support region:
                 convolution_base_type conv_weight = _conv[conv_flat_index_v + conv_u];
                 
-                // Call the gridding policy function (this can either be the normal gridding function or the conjugate gridding function:
-                ((_active_gridding_policy).*gridding_function)(grid_flat_index_v + disc_grid_u, vis, conv_weight);
+                _active_gridding_policy.grid_polarization_terms(grid_flat_index_v + disc_grid_u, vis, conv_weight);
             }
         }
     }
