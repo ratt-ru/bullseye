@@ -6,6 +6,7 @@
 #include <string>
 #include <casa/Quanta/Quantum.h>
 #include <cmath>
+#include <cfenv>
 
 #include "uvw_coord.h"
 #include "baseline_transform_policies.h"
@@ -73,6 +74,7 @@ namespace imaging {
 		-(Ny * celly)/2 < m < (Ny * celly)/2
 		Scaling the uv coordinates will translate to scaling the FFT
 		*/
+		std::fesetround(FE_TONEAREST);
                 uvw_base_type u_scale=nx*cellx.getValue("rad");
                 uvw_base_type v_scale=ny*celly.getValue("rad");
 		auto uv_scale = uvw_coord<uvw_base_type>(u_scale,-v_scale);

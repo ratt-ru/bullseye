@@ -31,6 +31,8 @@ namespace imaging {
       throw std::exception("Undefined behaviour");
     }
   };
+
+  
   
   /**
    * Default oversampled convolution (using precomputed filter) of size "full support" * "oversampling factor" 
@@ -48,7 +50,9 @@ namespace imaging {
     const convolution_base_type * __restrict__ _conv;
     std::size_t _conv_dim_size;
     uvw_base_type _conv_dim_centre;
-    uvw_base_type _conv_scale; 
+    uvw_base_type _conv_scale;
+    std::size_t _unrolled_inner_loop_lbound;
+    std::size_t _unrolled_inner_loop_ubound;
     gridding_policy_type & __restrict__ _active_gridding_policy;
   public:
     /**
@@ -64,21 +68,20 @@ namespace imaging {
 			_convolution_support(convolution_support), _oversampling_factor(oversampling_factor), 
 			_conv(conv), _conv_dim_size(convolution_support * oversampling_factor),
 			_conv_dim_centre(convolution_support / 2.0),
-			_conv_scale(1/uvw_base_type(oversampling_factor)), //convolution pixel is oversample times smaller than scaled grid cell size
+			_conv_scale(1/uvw_base_type(oversampling_factor)), //convolution pixel is oversample times smaller than scaled grid cell size			
 			_active_gridding_policy(active_gridding_policy)
 			{}
     inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
 			 const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__ vis) const __restrict__ {
 	uvw_base_type translated_grid_u = uvw._u + _grid_u_centre - _conv_dim_centre;
 	uvw_base_type translated_grid_v = uvw._v + _grid_v_centre - _conv_dim_centre;
-	
         for (std::size_t conv_v = 0; conv_v < _conv_dim_size; ++conv_v) {
-            std::size_t disc_grid_v = round(translated_grid_v + conv_v*_conv_scale);
+            std::size_t disc_grid_v = std::lrint(translated_grid_v + conv_v*_conv_scale);
             if (disc_grid_v >= _ny) continue;
 	    std::size_t grid_flat_index_v = (disc_grid_v)*_nx;
 	    std::size_t conv_flat_index_v = conv_v * _conv_dim_size;
             for (int conv_u = 0; conv_u < _conv_dim_size; ++conv_u) {
-                std::size_t disc_grid_u = round(translated_grid_u + conv_u*_conv_scale);
+                std::size_t disc_grid_u = std::lrint(translated_grid_u + conv_u*_conv_scale);
                 if (disc_grid_u >= _nx) continue;
                 //by definition the convolution FIR is 0 outside the support region:
                 convolution_base_type conv_weight = _conv[conv_flat_index_v + conv_u];
