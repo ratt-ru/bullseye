@@ -121,10 +121,11 @@ namespace imaging {
       inline void grid_polarization_terms(std::size_t term_flat_index, const typename trait_type::pol_vis_type & __restrict__ visibility,
 					  convolution_base_type convolution_weight) __restrict__ {
 	
+	term_flat_index = term_flat_index << 1;
 	#pragma omp atomic
-	_output_grids[term_flat_index*2] += convolution_weight * visibility.real();
+	_output_grids[term_flat_index] += convolution_weight * visibility.real();
 	#pragma omp atomic
-	_output_grids[term_flat_index*2 + 1] += convolution_weight * visibility.imag();
+	_output_grids[term_flat_index + 1] += convolution_weight * visibility.imag();
       }
   };
   
@@ -214,13 +215,13 @@ namespace imaging {
       inline void grid_polarization_terms(std::size_t term_flat_index, const typename trait_type::pol_vis_type & __restrict__ visibility,
 					  convolution_base_type convolution_weight) __restrict__ {
 	#pragma omp atomic
-	_output_grids[term_flat_index*2] += convolution_weight * visibility.v[0].real();
+	_output_grids[term_flat_index << 1] += convolution_weight * visibility.v[0].real();
 	#pragma omp atomic
-	_output_grids[term_flat_index*2] += convolution_weight * visibility.v[1].real();
+	_output_grids[term_flat_index << 1] += convolution_weight * visibility.v[1].real();
 	#pragma omp atomic
-	_output_grids[(term_flat_index + _grid_no_pixels)*2 + 1] += convolution_weight * visibility.v[1].imag();
+	_output_grids[(term_flat_index + _grid_no_pixels) << 1 + 1] += convolution_weight * visibility.v[1].imag();
 	#pragma omp atomic
-	_output_grids[(term_flat_index + _grid_no_pixels)*2 + 1] += convolution_weight * visibility.v[1].imag();
+	_output_grids[(term_flat_index + _grid_no_pixels) << 1 + 1] += convolution_weight * visibility.v[1].imag();
       }
   };
   
@@ -295,8 +296,10 @@ namespace imaging {
 					  convolution_base_type convolution_weight) __restrict__ {
 	for (std::size_t i = 0; i < 4; ++i){
 	  std::size_t grid_offset = i * _grid_no_pixels;
-	  _output_grids[(grid_offset + term_flat_index)*2] += convolution_weight * visibility.correlations[i].real();
-	  _output_grids[(grid_offset + term_flat_index)*2 + 1] += convolution_weight * visibility.correlations[i].imag();
+	  #pragma omp atomic
+	  _output_grids[(grid_offset + term_flat_index) << 1] += convolution_weight * visibility.correlations[i].real();
+	  #pragma omp atomic
+	  _output_grids[(grid_offset + term_flat_index) << 1 + 1] += convolution_weight * visibility.correlations[i].imag();
 	}
       }
   };
