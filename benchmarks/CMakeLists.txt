@@ -7,7 +7,7 @@ find_package(Boost REQUIRED)
 include_directories(${Boost_INCLUDE_DIRS})
 
 set(CMAKE_BUILD_TYPE Release)
-set(CMAKE_CXX_FLAGS "-std=c++0x -O3 -pg -fopenmp")
+set(CMAKE_CXX_FLAGS "-std=c++0x -O3 -pg")
 include_directories(/usr/include/casacore/ /usr/local/include/casacore)
 
 add_executable(benchmark benchmark.cpp)

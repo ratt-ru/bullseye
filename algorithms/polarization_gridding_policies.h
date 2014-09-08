@@ -219,9 +219,9 @@ namespace imaging {
 	#pragma omp atomic
 	_output_grids[term_flat_index << 1] += convolution_weight * visibility.v[1].real();
 	#pragma omp atomic
-	_output_grids[(term_flat_index + _grid_no_pixels) << 1 + 1] += convolution_weight * visibility.v[1].imag();
+	_output_grids[((term_flat_index + _grid_no_pixels) << 1) + 1] += convolution_weight * visibility.v[1].imag();
 	#pragma omp atomic
-	_output_grids[(term_flat_index + _grid_no_pixels) << 1 + 1] += convolution_weight * visibility.v[1].imag();
+	_output_grids[((term_flat_index + _grid_no_pixels) << 1) + 1] += convolution_weight * visibility.v[1].imag();
       }
   };
   
@@ -297,9 +297,9 @@ namespace imaging {
 	for (std::size_t i = 0; i < 4; ++i){
 	  std::size_t grid_offset = i * _grid_no_pixels;
 	  #pragma omp atomic
-	  _output_grids[(grid_offset + term_flat_index) << 1] += convolution_weight * visibility.correlations[i].real();
+	  _output_grids[((grid_offset + term_flat_index) << 1)] += convolution_weight * visibility.correlations[i].real();
 	  #pragma omp atomic
-	  _output_grids[(grid_offset + term_flat_index) << 1 + 1] += convolution_weight * visibility.correlations[i].imag();
+	  _output_grids[((grid_offset + term_flat_index) << 1) + 1] += convolution_weight * visibility.correlations[i].imag();
 	}
       }
   };
@@ -426,6 +426,7 @@ namespace imaging {
 	 This will save us a lot of computation later on. We will only need to take the Hermitian transpose to avoid essentially, doubling 
 	 the storage requirements to keep these matricies in memory
 	*/
+	
 	do_hermitian_transpose<visibility_base_type>(antenna_2_jones);
 	jones_2x2<visibility_base_type> tmp;
 	inner_product<visibility_base_type>(visibility,antenna_2_jones,tmp);
