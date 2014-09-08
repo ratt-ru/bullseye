@@ -1,7 +1,6 @@
 #pragma once
 #include <stdexcept>
 #include <complex>
-#include <xmmintrin.h>
 #include "uvw_coord.h"
 
 namespace imaging {
@@ -76,12 +75,13 @@ namespace imaging {
 			 const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__ vis) const __restrict__ {
 	uvw_base_type translated_grid_u = uvw._u + _grid_u_centre - _conv_dim_centre;
 	uvw_base_type translated_grid_v = uvw._v + _grid_v_centre - _conv_dim_centre;
+	
         for (std::size_t conv_v = 0; conv_v < _conv_dim_size; ++conv_v) {
             std::size_t disc_grid_v = std::lrint(translated_grid_v + conv_v*_conv_scale);
             if (disc_grid_v >= _ny) continue;
 	    std::size_t grid_flat_index_v = (disc_grid_v)*_nx;
 	    std::size_t conv_flat_index_v = conv_v * _conv_dim_size;
-            for (int conv_u = 0; conv_u < _conv_dim_size; ++conv_u) {
+	    for (int conv_u = 0; conv_u < _conv_dim_size; ++conv_u) {
                 std::size_t disc_grid_u = std::lrint(translated_grid_u + conv_u*_conv_scale);
                 if (disc_grid_u >= _nx) continue;
                 //by definition the convolution FIR is 0 outside the support region:

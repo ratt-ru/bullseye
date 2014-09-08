@@ -67,11 +67,12 @@ if __name__ == "__main__":
   }
   parser.add_argument('input_ms', help='Name of the measurement set(s) to read. Multiple MSs must be comma-delimited without any separating spaces, eg. "\'one.ms\',\'two.ms\'"', type=str)
   parser.add_argument('--output_prefix', help='Prefix for the output FITS images. Facets will be indexed as [prefix_1.fits ... prefix_n.fits]', type=str, default='out.bullseye')
-  parser.add_argument('--facet_centres', help='List of coordinate tupples indicating facet centres (RA,DEC). If none present default pointing centre will be used', type=coords, nargs='+', default=None)
+  parser.add_argument('--facet_centres', help='List of coordinate tupples indicating facet centres (RA,DEC). ' 
+		      'If none are specified and n_facet_l and/or n_facet_m are not set, the default pointing centre will be used', type=coords, nargs='+', default=None)
   parser.add_argument('--npix_l', help='Number of facet pixels in l', type=int, default=256)
   parser.add_argument('--npix_m', help='Number of facet pixels in m', type=int, default=256)
   parser.add_argument('--cell_l', help='Size of a pixel in l (arcsecond)', type=float, default=1)
-  parser.add_argument('--cell_m', help='Size of a pixel in l (arcsecond)', type=float, default=1)
+  parser.add_argument('--cell_m', help='Size of a pixel in m (arcsecond)', type=float, default=1)
   parser.add_argument('--pol', help='Specify image polarization', choices=pol_options.keys(), default="XX")
   parser.add_argument('--conv', help='Specify gridding convolution function type', choices=['gausian','keiser bessel'], default='keiser bessel')
   parser.add_argument('--conv_sup', help='Specify gridding convolution function support area (number of grid cells)', type=int, default=1)
@@ -82,6 +83,8 @@ if __name__ == "__main__":
   parser.add_argument('--data_column', help='Specify the measurement set data column being imaged', type=str, default='DATA')
   parser.add_argument('--do_jones_corrections',help='Enables applying corrective jones terms per facet. Requires number of'
 						    ' facet centers to be the same as the number of directions in the calibration.',type=bool,default=False)
+  parser.add_argument('--n_facets_l', help='Automatically add coordinates for this number of facets in l', type=int, default=0)
+  parser.add_argument('--n_facets_m', help='Automatically add coordinates for this number of facets in m', type=int, default=0)
   '''
   TODO: FIX
   parser.add_argument('--output_psf',help='Outputs the point-spread-function',type=bool,default=False)
@@ -130,14 +133,22 @@ if __name__ == "__main__":
     print "IMAGING ONLY FIELD %s" % data._field_centre_names[parser_args['field_id']]
   
     #check how many facets we have to create (if none we'll do normal gridding without any transformations)
-    facet_centres = None
-    num_facet_centres = 0
+    num_facet_centres = parser_args['n_facets_l'] * parser_args['n_facets_m']
     if (parser_args['facet_centres'] != None):
-      num_facet_centres = len(parser_args['facet_centres'])
-      facet_centres = np.array(parser_args['facet_centres']).astype(base_types.uvw_type)
+      num_facet_centres += len(parser_args['facet_centres'])
+    facet_centres = np.empty([parser_args['n_facets_m'],parser_args['n_facets_l'],2],dtype=base_types.uvw_type)
+    facet_centres[:parser_args['n_facets_m'],:parser_args['n_facets_l'],0] = np.tile((np.arange(0,parser_args['n_facets_l']) + 1 - np.ceil(parser_args['n_facets_l']/2.0))*parser_args['npix_l']*parser_args['cell_l'] + data._field_centres[parser_args['field_id'],0,0],[parser_args['n_facets_m'],1])
+    facet_centres[:parser_args['n_facets_m'],:parser_args['n_facets_l'],1] = np.repeat((np.arange(0,parser_args['n_facets_m']) + 1 - np.ceil(parser_args['n_facets_m']/2.0))*parser_args['npix_m']*parser_args['cell_m'] + data._field_centres[parser_args['field_id'],0,1],parser_args['n_facets_l']).reshape(parser_args['n_facets_m'],parser_args['n_facets_l'])
+    facet_centres = facet_centres.reshape(parser_args['n_facets_l']*parser_args['n_facets_m'],2)
+    
+    if (parser_args['facet_centres'] != None):
+      facet_centres = np.append(facet_centres,np.array(parser_args['facet_centres']).astype(base_types.uvw_type)).reshape(num_facet_centres,2)
+    #print facet_centres
+    #sys.exit()
+    
     if parser_args['do_jones_corrections'] and num_facet_centres != data._cal_no_dirs:
       raise argparse.ArgumentTypeError("Number of calibrated directions does not correspond to number of directions being faceted")
-  
+    
     #allocate enough memory to compute image and or facets (only before gridding the first MS)
     if not parser_args['do_jones_corrections']:
 	if gridded_vis == None:
@@ -210,7 +221,7 @@ if __name__ == "__main__":
       if len(correlations_to_grid) == 1 and not parser_args['do_jones_corrections']:
 	pol_index = data._polarization_correlations.tolist().index(correlations_to_grid[0])
 	params.polarization_index = ctypes.c_size_t(pol_index) #stays constant between strides
-	if (parser_args['facet_centres'] == None):
+	if (num_facet_centres == 0):
 	  libimaging.grid_single_pol(ctypes.byref(params))
 	else: #facet single correlation term
 	  params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p) #stays constant between strides
@@ -221,14 +232,14 @@ if __name__ == "__main__":
 	pol_index_2 = data._polarization_correlations.tolist().index(correlations_to_grid[1])
 	params.polarization_index = ctypes.c_size_t(pol_index) #stays constant between strides
 	params.second_polarization_index = ctypes.c_size_t(pol_index_2) #stays constant between strides
-	if (parser_args['facet_centres'] == None):
+	if (num_facet_centres == 0):
 	  libimaging.grid_single_pol(ctypes.byref(params))
 	else: #facet single correlation term
 	  params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p) #stays constant between strides
 	  params.num_facet_centres = ctypes.c_size_t(num_facet_centres) #stays constant between strides
 	  libimaging.facet_single_pol(ctypes.byref(params))
       else: #the user want to apply corrective terms
-	if (parser_args['facet_centres'] == None): #don't do faceting
+	if (num_facet_centres == 0): #don't do faceting
 	  libimaging.grid_4_cor(ctypes.byref(params))
 	else:
 	  params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p)
