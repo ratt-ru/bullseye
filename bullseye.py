@@ -137,14 +137,17 @@ if __name__ == "__main__":
     if (parser_args['facet_centres'] != None):
       num_facet_centres += len(parser_args['facet_centres'])
     facet_centres = np.empty([parser_args['n_facets_m'],parser_args['n_facets_l'],2],dtype=base_types.uvw_type)
-    facet_centres[:parser_args['n_facets_m'],:parser_args['n_facets_l'],0] = np.tile((np.arange(0,parser_args['n_facets_l']) + 1 - np.ceil(parser_args['n_facets_l']/2.0))*parser_args['npix_l']*parser_args['cell_l'] + data._field_centres[parser_args['field_id'],0,0],[parser_args['n_facets_m'],1])
-    facet_centres[:parser_args['n_facets_m'],:parser_args['n_facets_l'],1] = np.repeat((np.arange(0,parser_args['n_facets_m']) + 1 - np.ceil(parser_args['n_facets_m']/2.0))*parser_args['npix_m']*parser_args['cell_m'] + data._field_centres[parser_args['field_id'],0,1],parser_args['n_facets_l']).reshape(parser_args['n_facets_m'],parser_args['n_facets_l'])
+    facet_centres[:parser_args['n_facets_m'],:parser_args['n_facets_l'],0] = np.tile((np.arange(0,parser_args['n_facets_l']) + 1 - np.ceil(parser_args['n_facets_l']/2.0))*parser_args['npix_l']*parser_args['cell_l'] +
+										     data._field_centres[parser_args['field_id'],0,0],[parser_args['n_facets_m'],1])
+    facet_centres[:parser_args['n_facets_m'],:parser_args['n_facets_l'],1] = np.repeat((np.arange(0,parser_args['n_facets_m']) + 1 - np.ceil(parser_args['n_facets_m']/2.0))*parser_args['npix_m']*parser_args['cell_m'] +
+										     data._field_centres[parser_args['field_id'],0,1],parser_args['n_facets_l']).reshape(parser_args['n_facets_m'],parser_args['n_facets_l'])
     facet_centres = facet_centres.reshape(parser_args['n_facets_l']*parser_args['n_facets_m'],2)
     
     if (parser_args['facet_centres'] != None):
       facet_centres = np.append(facet_centres,np.array(parser_args['facet_centres']).astype(base_types.uvw_type)).reshape(num_facet_centres,2)
-    #print facet_centres
-    #sys.exit()
+    print "REQUESTED FACET CENTRES:"
+    for i,c in enumerate(facet_centres):
+      print "\tFACET %d RA: %s DEC: %s" % (i,quantity(c[0],'arcsec').get('deg'),quantity(c[1],'arcsec').get('deg'))
     
     if parser_args['do_jones_corrections'] and num_facet_centres != data._cal_no_dirs:
       raise argparse.ArgumentTypeError("Number of calibrated directions does not correspond to number of directions being faceted")
@@ -371,11 +374,13 @@ if __name__ == "__main__":
     else: #export to FITS cube
       with inversion_timer:
 	dirty = (np.real(fft_utils.ifft2(gridded_vis[f,0,:,:].reshape(parser_args['npix_l'],parser_args['npix_m']))) / conv._F_detaper).astype(np.float32)
+      ra = data._field_centres[parser_args['field_id'],0,0] if num_facet_centres == 0 else facet_centres[f,0]
+      dec = data._field_centres[parser_args['field_id'],0,1] if num_facet_centres == 0 else facet_centres[f,1]
       fits_export.save_to_fits_image(image_prefix+'.fits',
 				     parser_args['npix_l'],parser_args['npix_m'],
 				     quantity(parser_args['cell_l'],'arcsec'),quantity(parser_args['cell_m'],'arcsec'),
-				     quantity(data._field_centres[parser_args['field_id'],0,0],'arcsec'),
-				     quantity(data._field_centres[parser_args['field_id'],0,1],'arcsec'),
+				     quantity(ra,'arcsec'),
+				     quantity(dec,'arcsec'),
 				     parser_args['pol'],
 				     dirty)
       '''
