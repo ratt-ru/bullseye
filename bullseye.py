@@ -249,7 +249,7 @@ if __name__ == "__main__":
 	else: #facet single correlation term
 	  params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p) #stays constant between strides
 	  params.num_facet_centres = ctypes.c_size_t(num_facet_centres) #stays constant between strides
-	  libimaging.facet_single_pol(ctypes.byref(params))
+	  libimaging.facet_duel_pol(ctypes.byref(params))
       else: #the user want to apply corrective terms
 	if (num_facet_centres == 0): #don't do faceting
 	  libimaging.grid_4_cor(ctypes.byref(params))

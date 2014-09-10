@@ -190,7 +190,7 @@ extern "C" {
                 uvw_base_type new_phase_ra = params.facet_centres[2*facet_index];
                 uvw_base_type new_phase_dec = params.facet_centres[2*facet_index + 1];
 
-                printf("FACETING (%f,%f,%f,%f) %lu / %lu...\n",params.phase_centre_ra,params.phase_centre_dec,new_phase_ra,new_phase_dec,facet_index+1, params.num_facet_centres);
+                printf("FACETING DUEL POL (%f,%f,%f,%f) %lu / %lu...\n",params.phase_centre_ra,params.phase_centre_dec,new_phase_ra,new_phase_dec,facet_index+1, params.num_facet_centres);
                 fflush(stdout);
 
 
@@ -210,7 +210,7 @@ extern "C" {
                         casa::Quantity(new_phase_ra,"arcsec"),casa::Quantity(new_phase_dec,"arcsec")); //lm faceting
 
                 polarization_gridding_policy_type polarization_policy(phase_transform,
-                        params.output_buffer + no_facet_pixels*facet_index,
+                        params.output_buffer + no_facet_pixels*facet_index*2,
                         params.visibilities,
                         params.visibility_weights,
                         params.flags,

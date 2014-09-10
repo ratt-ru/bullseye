@@ -215,11 +215,11 @@ namespace imaging {
       inline void grid_polarization_terms(std::size_t term_flat_index, const typename trait_type::pol_vis_type & __restrict__ visibility,
 					  convolution_base_type convolution_weight) __restrict__ {
 	#pragma omp atomic
-	_output_grids[term_flat_index << 1] += convolution_weight * visibility.v[0].real();
+	_output_grids[(term_flat_index << 1)] += convolution_weight * visibility.v[0].real();
 	#pragma omp atomic
-	_output_grids[term_flat_index << 1] += convolution_weight * visibility.v[1].real();
+	_output_grids[(term_flat_index << 1) + 1] += convolution_weight * visibility.v[0].imag();
 	#pragma omp atomic
-	_output_grids[((term_flat_index + _grid_no_pixels) << 1) + 1] += convolution_weight * visibility.v[1].imag();
+	_output_grids[(term_flat_index + _grid_no_pixels) << 1] += convolution_weight * visibility.v[1].real();
 	#pragma omp atomic
 	_output_grids[((term_flat_index + _grid_no_pixels) << 1) + 1] += convolution_weight * visibility.v[1].imag();
       }
