@@ -1,10 +1,13 @@
 #!/usr/bin/python
 import sys
+import os
+import shutil
 import argparse
 from pyparsing import commaSeparatedList
 import numpy as np
 import pylab
 import re
+from os.path import *
 from pyrap.quanta import quantity
 
 from helpers import data_set_loader
@@ -85,6 +88,7 @@ if __name__ == "__main__":
 						    ' facet centers to be the same as the number of directions in the calibration.',type=bool,default=False)
   parser.add_argument('--n_facets_l', help='Automatically add coordinates for this number of facets in l', type=int, default=0)
   parser.add_argument('--n_facets_m', help='Automatically add coordinates for this number of facets in m', type=int, default=0)
+  parser.add_argument('--stitch_facets', help="Will attempt to stitch facets together using Montage", type=bool, default=False)
   '''
   TODO: FIX
   parser.add_argument('--output_psf',help='Outputs the point-spread-function',type=bool,default=False)
@@ -136,6 +140,11 @@ if __name__ == "__main__":
     num_facet_centres = parser_args['n_facets_l'] * parser_args['n_facets_m']
     if (parser_args['facet_centres'] != None):
       num_facet_centres += len(parser_args['facet_centres'])
+    if parser_args['stitch_facets']:
+      if num_facet_centres < 2:
+	raise argparse.ArgumentTypeError("Need at least two facets to perform stitching")
+      if parser_args['output_format'] != 'fits':
+	raise argparse.ArgumentTypeError("Facet output format must be of type FITS")
     facet_centres = np.empty([parser_args['n_facets_m'],parser_args['n_facets_l'],2],dtype=base_types.uvw_type)
     facet_centres[:parser_args['n_facets_m'],:parser_args['n_facets_l'],0] = np.tile((np.arange(0,parser_args['n_facets_l']) + 1 - np.ceil(parser_args['n_facets_l']/2.0))*parser_args['npix_l']*parser_args['cell_l'] +
 										     data._field_centres[parser_args['field_id'],0,0],[parser_args['n_facets_m'],1])
@@ -360,7 +369,7 @@ if __name__ == "__main__":
   #now invert, detaper and write out all the facets to disk:  
   
   for f in range(0, max(1,num_facet_centres)):
-    image_prefix = parser_args['output_prefix'] if num_facet_centres == 0 else parser_args['output_prefix']+".facet"+str(f)
+    image_prefix = parser_args['output_prefix'] if num_facet_centres == 0 else parser_args['output_prefix']+"_facet"+str(f)
     if parser_args['output_format'] == 'png':
       with inversion_timer:
 	dirty = (np.real(fft_utils.ifft2(gridded_vis[f,0,:,:].reshape(parser_args['npix_l'],parser_args['npix_m']))) / conv._F_detaper).astype(np.float32)
@@ -395,6 +404,52 @@ if __name__ == "__main__":
 				       parser_args['pol'],
 				       psf)
       '''
+  #attempt to stitch the facets together:
+  if parser_args['stitch_facets']: #we've already checked that there are multiple facets before this line
+    file_names = [basename(parser_args['output_prefix'] + '_facet' + str(i) + '.fits') for i in range(0,num_facet_centres)]
+    facet_image_list_filename = dirname(parser_args['output_prefix']) + '/facets.lst'
+    f_file_list = open(facet_image_list_filename,'w')
+    f_file_list.writelines(["|%sfname|\n" % (" "*(max([len(item) for item in file_names])-5)),
+			    "|%schar|\n" % (" "*(max([len(item) for item in file_names])-4))
+			   ])
+    f_file_list.writelines([" %s\n" % item for item in file_names])
+    f_file_list.close()
+    montage_unprojected_img_table = dirname(parser_args['output_prefix']) + '/facets.montage.tbl'
+    os.system('mImgtbl -t %s %s %s' % (facet_image_list_filename,
+				       dirname(parser_args['output_prefix']),
+				       montage_unprojected_img_table
+				      )
+	     )
+    montage_proj_template_hdr = dirname(parser_args['output_prefix']) + '/projected_template.hdr'
+    os.system('mMakeHdr %s %s' % (montage_unprojected_img_table,
+				  montage_proj_template_hdr
+				 )
+	     )
+    proj_dir = dirname(parser_args['output_prefix']) + '/projected_facets'
+    if exists(proj_dir):
+      shutil.rmtree(proj_dir)
+    os.makedirs(proj_dir)
+    montage_stats_file = dirname(parser_args['output_prefix']) + '/stats.tbl'
+    os.system('mProjExec -p %s %s %s %s %s' % (dirname(parser_args['output_prefix']),
+					       montage_unprojected_img_table,
+					       montage_proj_template_hdr,
+					       proj_dir,
+					       montage_stats_file
+					      )
+	     )
+    montage_unprojected_img_table = dirname(parser_args['output_prefix']) + '/facets.montage.proj.tbl'
+    os.system('mImgtbl %s %s' % (proj_dir,
+				 montage_unprojected_img_table
+				)
+	     )
+    #mAdd -p proj facets.tbl combined.hdr widefield.combined.fits
+    montage_combined_img = parser_args['output_prefix'] + '.combined.fits'
+    os.system('mAdd -p %s %s %s %s' % (proj_dir,
+				       montage_unprojected_img_table,
+				       montage_proj_template_hdr,
+				       montage_combined_img
+				      )
+	     )
   print "FINISHED WORK SUCCESSFULLY"
   total_run_time.stop()
   print "STATISTICS:"
