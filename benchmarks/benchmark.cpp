@@ -71,7 +71,11 @@ int main (int argc, char ** argv) {
         std::generate(conv.get(),conv.get() + conv_oversample*conv_support*conv_oversample*conv_support, [ref_wavelength]() {
             return 1;
         });
-
+	std::unique_ptr<std::size_t> chan_grid_indicies(new std::size_t[chan_no*1]()); //init all to 0
+	std::unique_ptr<bool> enabled_chans(new bool[chan_no*1]);
+	std::generate(enabled_chans.get(),enabled_chans.get() + chan_no*1, []() {
+            return true;
+        });
         typedef baseline_transform_policy<uvw_base_type, transform_disable_facet_rotation> baseline_transform_policy_type;
         typedef phase_transform_policy<visibility_base_type,
                 uvw_base_type,
@@ -93,7 +97,7 @@ int main (int argc, char ** argv) {
                 pol_count,
                 0,
                 chan_no);
-        convolution_policy_type convolution_policy(nx,ny,conv_support,conv_oversample,
+        convolution_policy_type convolution_policy(nx,ny,pol_count,conv_support,conv_oversample,
                 conv.get(), polarization_policy);
 
         imaging::grid<visibility_base_type,uvw_base_type,
@@ -112,7 +116,9 @@ int main (int argc, char ** argv) {
                  reference_wavelengths.get(),
                  field_array.get(),
                  0,
-                 spw_array.get());
+                 spw_array.get(),
+		 chan_grid_indicies.get(),
+		 enabled_chans.get());
         printf("BENCHMARK TERMINATED SUCCESSFULLY\n");
     }
     return 0;

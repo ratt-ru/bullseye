@@ -36,13 +36,15 @@ def save_to_fits_image(name,size_l,size_m,
 		   cell_l,cell_m,
 		   pointing_ra,pointing_dec,
 		   polarization_term,
+		   ref_wavelength,
+		   delta_wavelength,
+		   cube_channel_dim_size,
 		   data):
-  if data.size != size_l*size_m:
-    raise Exception("Data size must be equal to size_l * size_m")
+  if data.size != size_l*size_m*cube_channel_dim_size:
+    raise Exception("Data size must be equal to size_l * size_m * no_channels_in_cube")
   if not (data.dtype == np.float32 or data.dtype == np.float64):
     raise Exception("Expected float or double typed data but got %s" % data.dtype)
-  #fortran_ordered_data = data.astype(data.dtype,order="F",copy=False).reshape(1,1,size_m,size_l)
-  fortran_ordered_data = data.astype(data.dtype,order="F",copy=False).reshape(size_m,size_l)
+  fortran_ordered_data = data.astype(data.dtype,order="F",copy=False).reshape(cube_channel_dim_size,1,size_m,size_l)
   pri_hdr = pyfits.PrimaryHDU(fortran_ordered_data,do_not_scale_image_data=True)
   pri_hdr.header.append(("CRPIX1",size_l/2,"Pixel coordinate of reference point"))
   pri_hdr.header.append(("CDELT1",-cell_l.get_value("deg"),"step per l pixel"))
@@ -54,16 +56,16 @@ def save_to_fits_image(name,size_l,size_m,
   pri_hdr.header.append(("CTYPE2","DEC--SIN","Orthog projection"))
   pri_hdr.header.append(("CRVAL2",pointing_dec.get_value("deg"),"DEC value"))
   pri_hdr.header.append(("CUNIT2","deg","units are always degrees"))
-  #pri_hdr.header.append(("CRPIX3",1,"Pixel coordinate of reference point"))
-  #pri_hdr.header.append(("CDELT3",1,"dummy value"))
-  #pri_hdr.header.append(("CTYPE3","STOKES","Polarization"))
-  #pri_hdr.header.append(("CRVAL3",FITS_POLARIZATION_CLASSIFIERS[polarization_term],"Polarization identifier"))
-  #pri_hdr.header.append(("CUNIT3"," ","Polarization term is unitless"))
-  #pri_hdr.header.append(("CRPIX4",1,"Pixel coordinate of reference point"))
-  #pri_hdr.header.append(("CDELT4",0,"dummy velocity value"))
-  #pri_hdr.header.append(("CTYPE4","VELOCITY",""))
-  #pri_hdr.header.append(("CRVAL4",0,"dummy value"))
-  #pri_hdr.header.append(("CUNIT4","m/s","velocity in m/s"))
+  pri_hdr.header.append(("CRPIX3",1,"Pixel coordinate of reference point"))
+  pri_hdr.header.append(("CDELT3",1,"dummy value"))
+  pri_hdr.header.append(("CTYPE3","STOKES","Polarization"))
+  pri_hdr.header.append(("CRVAL3",FITS_POLARIZATION_CLASSIFIERS[polarization_term],"Polarization identifier"))
+  pri_hdr.header.append(("CUNIT3"," ","Polarization term is unitless"))
+  pri_hdr.header.append(("CRPIX4",1,"Pixel coordinate of reference point"))
+  pri_hdr.header.append(("CDELT4",delta_wavelength,"dummy velocity value"))
+  pri_hdr.header.append(("CTYPE4","WAVELENGTH","Wavelength in metres"))
+  pri_hdr.header.append(("CRVAL4",ref_wavelength,"first wavelength in the cube"))
+  pri_hdr.header.append(("CUNIT4","m","wavelength in m"))
   #pri_hdr.header.append(("LONPOLE",180 if pointing_dec.get_value("deg") < 0 else 0,"Native longitude of celestial pole"))
   fits = pyfits.HDUList([pri_hdr])
   fits.writeto(name,clobber=True)

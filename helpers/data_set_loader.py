@@ -66,6 +66,7 @@ class data_set_loader(object):
         casa_ms_table = table(self._MSName+"::SPECTRAL_WINDOW",ack=False,readonly=True)
         self._no_channels = casa_ms_table.getcell("NUM_CHAN", 0) #Note: assuming all spectral windows will have an equal number of channels
         self._no_spw = casa_ms_table.nrows()
+        self._spw_centres = casa_ms_table.getcol("REF_FREQUENCY")
         print "%d CHANNELS IN OBSERVATION" % self._no_channels
         print "%d SPECTRAL WINDOWS IN OBSERVATION" % self._no_spw
         self._chan_freqs = casa_ms_table.getcol("CHAN_FREQ") # this will have dimensions [number of SPWs][num channels in spectral window]

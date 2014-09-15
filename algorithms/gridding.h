@@ -65,7 +65,9 @@ namespace imaging {
 		  const reference_wavelengths_base_type *__restrict__ reference_wavelengths,
 		  const unsigned int * __restrict__ field_array,
 		  unsigned int imaging_field,
-		  const unsigned int * __restrict__ spw_index_array
+		  const unsigned int * __restrict__ spw_index_array,
+		  const std::size_t * __restrict__ channel_grid_indicies,
+		  const bool * __restrict__ enabled_channels
  		){
 		/*
 		Pg. 138, 145-147, Synthesis Imaging II (Briggs, Schwab & Sramek)
@@ -84,7 +86,7 @@ namespace imaging {
 		//give some indication of progress:
 		float progress_step_size = 10.0;
 		float next_progress_step = progress_step_size;
-		#endif
+		#endif		
 		#pragma omp parallel for
                 for (std::size_t bt = 0; bt < row_count; ++bt){ //this corresponds to the rows of the MS 2.0 MAIN table definition
 			#ifdef GRIDDER_PRINT_PROGRESS
@@ -100,6 +102,7 @@ namespace imaging {
 			std::size_t spw_index = spw_index_array[bt];
 			unsigned int current_spw_offset = spw_index*channel_count;
                         for (std::size_t c = 0; c < channel_count; ++c){
+				if (!enabled_channels[current_spw_offset + c]) continue;
 				/*
 				 Get uvw coords
 				*/
@@ -134,7 +137,7 @@ namespace imaging {
 				uv grid. This corresponds to the baseline and the reversed baseline direction: b and -b. The latter represents the complex conjugate of the visibility
 				on b. This hermitian symetric component need not be gridded and relates to a 2x improvement in runtime
 				*/
-				active_convolution_policy.convolve(uvw, vis);
+				active_convolution_policy.convolve(uvw, vis, channel_grid_indicies[current_spw_offset + c]);
                         }
                 }
                 

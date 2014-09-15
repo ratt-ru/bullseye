@@ -56,4 +56,8 @@ struct gridding_parameters {
     size_t antenna_count;
     //Preallocated buffer to store the sampling function
     std::complex<grid_base_type> * sampling_function_buffer;
+    //Channel selection and averaging
+    const bool * enabled_channels;
+    const std::size_t * channel_grid_indicies;
+    size_t cube_channel_dim_size;
 };
