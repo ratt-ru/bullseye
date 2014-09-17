@@ -433,4 +433,72 @@ namespace imaging {
 	inner_product<visibility_base_type>(antenna_1_jones,tmp,visibility);
       }
   };
+  
+  /**
+   Policy to define gridding behaviour for gridding the sampling function
+   The sampling function is the same accross all correlation terms, but
+   varies with channel (since u,v,w depends on wavelength)
+   */
+  template <typename visibility_base_type,typename uvw_base_type,
+	    typename weights_base_type,typename convolution_base_type,typename grid_base_type,
+	    typename phase_transformation_policy_type>
+  class polarization_gridding_policy <visibility_base_type,uvw_base_type,weights_base_type,
+				      convolution_base_type,grid_base_type,phase_transformation_policy_type,gridding_sampling_function>{
+  public:
+      typedef polarization_gridding_trait<visibility_base_type,weights_base_type,gridding_sampling_function> trait_type;
+  protected:
+      const phase_transformation_policy_type & __restrict__ _phase_transform_term;
+      grid_base_type * __restrict__ _output_grids; //this is still complex but we want to reference the real and imag parts seperately in the atomics
+      const typename trait_type::pol_vis_flag_type * __restrict__ _flags;
+      std::size_t _no_polarizations_in_data;
+      std::size_t _polarization_index;
+      std::size_t _channel_count;
+  public:
+      /**
+       Arguements:
+       phase_transform_term: active phase transform policy to be applied to all polarizations
+       output_grid: pointer to nx x ny pre-allocated buffer
+       flags: flat-indexed boolean flagging array of dimensions timestamp_count x baseline_count x channel_count x polarization_term_count
+       no_polarizations_in_data: this is the number of polarizations in the input data
+       polarization_index: index of the polarization to grid
+       channel_count: Number of channels per spectral window
+      */
+      polarization_gridding_policy(const phase_transformation_policy_type & phase_transform_term,
+				   std::complex<grid_base_type> * output_grids,
+				   const bool* flags,
+				   std::size_t no_polarizations_in_data,
+				   std::size_t polarization_index,
+				   std::size_t channel_count
+				  ):
+				   _phase_transform_term(phase_transform_term), 
+				   _output_grids((grid_base_type *)output_grids), 
+				   _flags(flags),
+				   _no_polarizations_in_data(no_polarizations_in_data),
+				   _polarization_index(polarization_index),
+				   _channel_count(channel_count){}
+      inline void transform(std::size_t baseline_time_index, std::size_t spw_index, std::size_t channel_index, 
+			    const uvw_coord<uvw_base_type> & __restrict__ uvw,
+			    typename trait_type::pol_vis_type & __restrict__ visibility
+ 			  ) __restrict__ {
+	//fetch four complex visibility terms from memory at a time:
+	std::size_t visibility_flat_index = (baseline_time_index * _channel_count + channel_index) * _no_polarizations_in_data + _polarization_index;
+	visibility = 1;
+	/*
+	 MS v2.0: weights are applied for each visibility term (baseline x channel x correlation)
+	*/
+	typename trait_type::pol_vis_flag_type flag = _flags[visibility_flat_index];
+	/*
+	 do faceting phase shift (Cornwell & Perley, 1992) if enabled (through policy)
+	 This faceting phase shift is a scalar matrix and commutes with everything (Smirnov, 2011), so 
+	 we can apply it to the visibility immediately.
+	*/
+	visibility *= (int)(!flag); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
+      }
+      inline void grid_polarization_terms(std::size_t term_flat_index, const typename trait_type::pol_vis_type & __restrict__ visibility,
+					  convolution_base_type convolution_weight) __restrict__ {
+	term_flat_index = term_flat_index << 1;
+	#pragma omp atomic
+	_output_grids[term_flat_index] += convolution_weight * visibility;
+      }
+  };
 }

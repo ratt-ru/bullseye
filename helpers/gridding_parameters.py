@@ -46,8 +46,6 @@ gridding_parameters._fields_ = [
   ("antenna_2_ids",c_void_p),
   ("timestamp_ids",c_void_p),
   ("antenna_count",c_size_t),
-  #Preallocated buffer to store the sampling function
-  ("sampling_function_buffer",c_void_p),
   #Channel selection and averaging
   ("enabled_channels",c_void_p),
   ("channel_grid_indicies",c_void_p),

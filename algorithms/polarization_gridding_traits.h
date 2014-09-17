@@ -6,7 +6,7 @@ namespace imaging {
   class gridding_double_pol {};
   class gridding_4_pol {};
   class gridding_4_pol_enable_facet_based_jones_corrections {};
-  
+  class gridding_sampling_function {};
   template <typename visibility_base_type,typename weights_base_type,typename T>
   class polarization_gridding_trait {
     //Undefined base class
@@ -23,6 +23,14 @@ namespace imaging {
     typedef std::complex<visibility_base_type> pol_vis_type;
     typedef weights_base_type pol_vis_weight_type;
     typedef bool pol_vis_flag_type;
+  };
+  
+  template <typename visibility_base_type,typename weights_base_type>
+  class polarization_gridding_trait<visibility_base_type,weights_base_type,gridding_sampling_function>{
+    public:
+      typedef visibility_base_type pol_vis_type;
+      typedef weights_base_type pol_vis_weight_type;
+      typedef bool pol_vis_flag_type;
   };
   
   template <typename visibility_base_type,typename weights_base_type>

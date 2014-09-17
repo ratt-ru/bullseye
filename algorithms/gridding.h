@@ -80,13 +80,11 @@ namespace imaging {
                 uvw_base_type u_scale=nx*cellx.getValue("rad");
                 uvw_base_type v_scale=ny*celly.getValue("rad");
 		auto uv_scale = uvw_coord<uvw_base_type>(u_scale,-v_scale);
-		std::size_t channel_loop_unroll_rem_lbound = channel_count / 8;
-		std::size_t channel_loop_unroll_rem_ubound = channel_loop_unroll_rem_lbound + channel_count % 8;
 		#ifdef GRIDDER_PRINT_PROGRESS
 		//give some indication of progress:
 		float progress_step_size = 10.0;
 		float next_progress_step = progress_step_size;
-		#endif		
+		#endif
 		#pragma omp parallel for
                 for (std::size_t bt = 0; bt < row_count; ++bt){ //this corresponds to the rows of the MS 2.0 MAIN table definition
 			#ifdef GRIDDER_PRINT_PROGRESS

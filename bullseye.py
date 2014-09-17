@@ -109,11 +109,12 @@ if __name__ == "__main__":
 					       "for example --channel_select (0:1,3~5,7) (1:2) will select channels 1,3,4,5,7 from spw 0 and channel 2 from spw 1. Default all",
 		      type=channel_range, nargs='+', default=None)
   parser.add_argument('--average_spw_channels', help='Averages selected channels in each spectral window', type=bool, default=False)
-  parser.add_argument('--average_all', help='Averages all', type=bool, default=False)
+  parser.add_argument('--average_all', help='Averages all selected channels together into a single image', type=bool, default=False)
+  parser.add_argument('--output_psf',help='Outputs the Point Spread Function (per channel)',type=bool,default=False)
   
   '''
   TODO: FIX
-  parser.add_argument('--output_psf',help='Outputs the point-spread-function',type=bool,default=False)
+  
   parser.add_argument('--sample_weighting',help='Specify weighting technique in use.',choices=['natural','uniform'], default='natural')
   '''
   parser_args = vars(parser.parse_args())
@@ -273,7 +274,6 @@ if __name__ == "__main__":
       cube_chan_dim_size += 1 #at least one channel, so at least one spw
       current_spw = 0
       current_grid = 0
-      channel_grid_index[0] = 0
       for c in range(0,len(enabled_channels)):
 	channel_grid_index[c] = current_grid
 	if enabled_channels[c] and (c / data._no_channels) > current_spw:
@@ -282,7 +282,6 @@ if __name__ == "__main__":
 	  current_spw = c / data._no_channels
     elif len(channels_to_image) > 1 and not parser_args['average_all']: #grid individual channels
       current_grid = 0
-      channel_grid_index[0] = 0
       for c in range(0,len(enabled_channels)):
 	channel_grid_index[c] = current_grid
 	if enabled_channels[c]:
@@ -290,6 +289,18 @@ if __name__ == "__main__":
 	  cube_chan_dim_size += 1
     else:
       cube_chan_dim_size = 1
+    '''
+    Work out to which grid each sampling function (per channel) should be gridded.
+    '''
+    sampling_function_channel_grid_index = np.zeros([data._no_spw*data._no_channels],dtype=np.intp)
+    sampling_function_channel_count = len(channels_to_image)
+    if parser_args['output_psf'] or parser_args['sample_weighting'] != 'natural':
+      current_grid = 0
+      for c in range(0,len(enabled_channels)):
+	sampling_function_channel_grid_index[c] = current_grid
+	if enabled_channels[c]:
+	  current_grid += 1
+    
     '''
     allocate enough memory to compute image and or facets (only before gridding the first MS)
     '''
@@ -301,13 +312,11 @@ if __name__ == "__main__":
 	if gridded_vis == None:
 	  num_facet_grids = 1 if (num_facet_centres == 0) else num_facet_centres
 	  gridded_vis = np.zeros([num_facet_grids,cube_chan_dim_size,4,parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.grid_type)
-    '''
-    TODO: FIX
+    
     if sampling_funct == None:
 	  if parser_args['output_psf'] or parser_args['sample_weighting'] != 'natural':
-	    num_grids = 1 if (num_facet_centres == 0) else num_facet_centres
-	    sampling_funct = np.zeros([num_grids,1,parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.psf_type)
-    '''
+	    num_facet_grids = 1 if (num_facet_centres == 0) else num_facet_centres
+	    sampling_funct = np.zeros([num_facet_grids,sampling_function_channel_count,1,parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.psf_type)
     
     '''
     each chunk will start processing while data is being read in, we will wait until until this process rejoins
@@ -363,7 +372,7 @@ if __name__ == "__main__":
       params.output_buffer = gridded_vis.ctypes.data_as(ctypes.c_void_p) #we never do 2 computes at the same time (or the reduction is handled at the C++ implementation level)
       params.enabled_channels = enabled_channels.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
       params.channel_grid_indicies = channel_grid_index.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
-      params.cube_channel_dim_size = ctypes.c_size_t(cube_chan_dim_size)
+      params.cube_channel_dim_size = ctypes.c_size_t(cube_chan_dim_size) #this won't change between chunks
       '''
       no need to grid more than one of the correlations if the user isn't interrested in imaging one of the stokes terms (I,Q,U,V) or the stokes terms are the correlation products:
       '''
@@ -405,14 +414,26 @@ if __name__ == "__main__":
 	    libimaging.facet_4_cor_corrections(ctypes.byref(params))
 	  else: #skip the jones corrections
 	    libimaging.facet_4_cor(ctypes.byref(params))
-     
+      '''
+      Now grid the psfs (this will automatically wait till visibility gridding has been completed)
+      '''
+      if parser_args['output_psf'] or parser_args['sample_weighting'] != 'natural':
+	params.polarization_index = ctypes.c_size_t(0) #stays constant between strides
+	params.output_buffer = sampling_funct.ctypes.data_as(ctypes.c_void_p) #we never do 2 computes at the same time (or the reduction is handled at the C++ implementation level)
+	params.channel_grid_indicies = sampling_function_channel_grid_index.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
+	params.cube_channel_dim_size = ctypes.c_size_t(sampling_function_channel_count) #this won't change between chunks
+	if (num_facet_centres == 0):
+	  libimaging.grid_sampling_function(ctypes.byref(params))
+	else:
+	  params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p)
+	  params.num_facet_centres = ctypes.c_size_t(num_facet_centres) #stays constant between strides
+	  libimaging.facet_sampling_function(ctypes.byref(params))
+	  
       if chunk_index == no_chunks - 1:
 	libimaging.gridding_barrier()
       
   '''
   TODO: FIX THESE
-  if parser_args['output_psf'] or parser_args['sample_weighting'] != 'natural':
-    pass #TODO:implement a way to compute the PSF
   if parser_args['sample_weighting'] != 'natural':
     pass #TODO:implement uniform weighting
   '''
@@ -512,12 +533,11 @@ if __name__ == "__main__":
       with inversion_timer:
 	dirty = (np.real(fft_utils.ifft2(gridded_vis[f,0,0,:,:].reshape(parser_args['npix_l'],parser_args['npix_m']))) / conv._F_detaper).astype(np.float32)
       png_export.png_export(dirty,image_prefix,None)
-      '''
-      TODO: FIX
       if parser_args['output_psf']:
-	psf = np.real(fft_utils.ifft2(sampling_funct[f,:,:].reshape(parser_args['npix_l'],parser_args['npix_m'])))
-	png_export.png_export(psf,image_prefix+'.psf',None)
-      '''
+	for i,c in enumerate(channels_to_image):
+	  psf = (np.real(fft_utils.ifft2(sampling_funct[f,i,0,:,:].reshape(parser_args['npix_l'],parser_args['npix_m']))) / conv._F_detaper).astype(np.float32)
+	  png_export.png_export(psf,image_prefix+('.ch%d.psf' % i),None)
+      
     else: #export to FITS cube
       with inversion_timer:
 	dirty = np.empty([cube_chan_dim_size,parser_args['npix_l'],parser_args['npix_m']])
@@ -535,18 +555,24 @@ if __name__ == "__main__":
 				     cube_delta_wavelength,
 				     cube_chan_dim_size,
 				     dirty)
-      '''
-      TODO: FIX
       if parser_args['output_psf']:
-	psf = np.real(fft_utils.ifft2(sampling_funct[f,:,:].reshape(parser_args['npix_l'],parser_args['npix_m'])))
-	fits_export.save_to_fits_image(image_prefix+'.psf.fits',
-				       parser_args['npix_l'],parser_args['npix_m'],
-				       quantity(parser_args['cell_l'],'arcsec'),quantity(parser_args['cell_m'],'arcsec'),
-				       quantity(data._field_centres[parser_args['field_id'],0,0],'arcsec'),
-				       quantity(data._field_centres[parser_args['field_id'],0,1],'arcsec'),
-				       parser_args['pol'],
-				       psf)
-      '''
+	for i,c in enumerate(channels_to_image):
+	  psf = (np.real(fft_utils.ifft2(sampling_funct[f,i,0,:,:].reshape(parser_args['npix_l'],parser_args['npix_m']))) / conv._F_detaper).astype(np.float32)
+	  spw_no = c / data._no_channels
+	  chan_no = c % data._no_channels
+	  ra = data._field_centres[parser_args['field_id'],0,0] if num_facet_centres == 0 else facet_centres[f,0]
+	  dec = data._field_centres[parser_args['field_id'],0,1] if num_facet_centres == 0 else facet_centres[f,1]
+	  fits_export.save_to_fits_image(image_prefix+('.ch%d.psf.fits' % i),
+					 parser_args['npix_l'],parser_args['npix_m'],
+					 quantity(parser_args['cell_l'],'arcsec'),quantity(parser_args['cell_m'],'arcsec'),
+					 quantity(ra,'arcsec'),
+					 quantity(dec,'arcsec'),
+					 parser_args['pol'],
+					 data._chan_wavelengths[spw_no,chan_no],
+					 0,
+					 1,
+					 psf)
+      
   '''
   attempt to stitch the facets together:
   '''

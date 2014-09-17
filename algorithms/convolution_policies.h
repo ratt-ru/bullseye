@@ -5,7 +5,6 @@
 
 namespace imaging {
   class convolution_precomputed_fir {};
-  class convolution_with_sampling_function_gridding_using_precomputed_fir {};
   /**
    Reference convolution policy
    */
@@ -31,8 +30,6 @@ namespace imaging {
     }
   };
 
-  
-  
   /**
    * Default oversampled convolution (using precomputed filter) of size "full support" * "oversampling factor" 
    */
@@ -50,8 +47,6 @@ namespace imaging {
     std::size_t _conv_dim_size;
     uvw_base_type _conv_dim_centre;
     uvw_base_type _conv_scale;
-    std::size_t _unrolled_inner_loop_lbound;
-    std::size_t _unrolled_inner_loop_ubound;
     gridding_policy_type & __restrict__ _active_gridding_policy;
     std::size_t _cube_chan_dim_step;
   public:
