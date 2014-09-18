@@ -271,7 +271,7 @@ if __name__ == "__main__":
     '''
     if parser_args['average_spw_channels']:
       cube_chan_dim_size += 1 #at least one channel, so at least one spw
-      current_spw = 0
+      current_spw = channels_to_image[0] / data._no_channels
       current_grid = 0
       for c in range(0,len(enabled_channels)):
 	channel_grid_index[c] = current_grid
