@@ -3,6 +3,7 @@
 #include <casa/Quanta/Quantum.h>
 #include <thread>
 #include <future>
+#include <numeric>
 
 #include "gridding_parameters.h"
 #include "timer.h"
@@ -22,6 +23,21 @@ extern "C" {
     void gridding_barrier() {
         if (gridding_future.valid())
             gridding_future.get(); //Block until result becomes available
+    }
+    void weight_uniformly(gridding_parameters & params){
+      #define EPSILON 0.0000001f
+      for (std::size_t f = 0; f < params.num_facet_centres; ++f)
+	for (std::size_t g = 0; g < params.cube_channel_dim_size; ++g)
+	  for (std::size_t y = 0; y < params.ny; ++y)
+	    for (std::size_t x = 0; x < params.nx; ++x){
+		grid_base_type count = EPSILON;
+		for (std::size_t c = 0; c < params.sampling_function_channel_count; ++c)
+		    count += (int)(params.channel_grid_indicies[c] == g) *
+			     real(params.sampling_function_buffer[((f*params.sampling_function_channel_count + c)*params.ny+y)*params.nx + x]);
+		count = 1/count;
+		for (std::size_t p = 0; p < params.number_of_polarization_terms; ++p)
+		  params.output_buffer[(((f*params.cube_channel_dim_size+g)*params.number_of_polarization_terms+p)*params.ny+y)*params.nx+x] *= count;
+	    }
     }
     void grid_single_pol(gridding_parameters & params) {
         gridding_barrier();
@@ -450,7 +466,7 @@ extern "C" {
             baseline_transform_policy_type uvw_transform; //standard: no uvw rotation
             phase_transform_policy_type phase_transform; //standard: no phase rotation
             polarization_gridding_policy_type polarization_policy(phase_transform,
-                    params.output_buffer,
+                    params.sampling_function_buffer,
                     params.flags,
                     params.number_of_polarization_terms,
                     params.polarization_index,
@@ -473,7 +489,7 @@ extern "C" {
                      params.channel_count,
                      params.row_count,params.reference_wavelengths,params.field_array,
                      params.imaging_field,params.spw_index_array,
-		     params.channel_grid_indicies,
+		     params.sampling_function_channel_grid_indicies,
 		     params.enabled_channels);
 	    gridding_timer.stop();
         });
@@ -509,7 +525,7 @@ extern "C" {
                         casa::Quantity(new_phase_ra,"arcsec"),casa::Quantity(new_phase_dec,"arcsec")); //lm faceting
 
                 polarization_gridding_policy_type polarization_policy(phase_transform,
-                        params.output_buffer + no_facet_pixels*params.cube_channel_dim_size*facet_index,
+                        params.sampling_function_buffer + no_facet_pixels*params.sampling_function_channel_count*facet_index,
                         params.flags,
                         params.number_of_polarization_terms,
                         params.polarization_index,
@@ -530,7 +546,7 @@ extern "C" {
                                                  params.channel_count,
                                                  params.row_count,params.reference_wavelengths,params.field_array,
                                                  params.imaging_field,params.spw_index_array,
-						 params.channel_grid_indicies,
+						 params.sampling_function_channel_grid_indicies,
 						 params.enabled_channels);
                 printf(" <DONE>\n");
             }

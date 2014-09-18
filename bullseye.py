@@ -111,12 +111,8 @@ if __name__ == "__main__":
   parser.add_argument('--average_spw_channels', help='Averages selected channels in each spectral window', type=bool, default=False)
   parser.add_argument('--average_all', help='Averages all selected channels together into a single image', type=bool, default=False)
   parser.add_argument('--output_psf',help='Outputs the Point Spread Function (per channel)',type=bool,default=False)
-  
-  '''
-  TODO: FIX
-  
   parser.add_argument('--sample_weighting',help='Specify weighting technique in use.',choices=['natural','uniform'], default='natural')
-  '''
+  
   parser_args = vars(parser.parse_args())
   '''
   initially the output grids must be set to NONE. Memory will only be allocated before the first MS is read.
@@ -138,10 +134,13 @@ if __name__ == "__main__":
     '''
     correlations_to_grid = None
     feeds_in_use = None
-    for feed_index,req in enumerate(pol_dependencies[parser_args['pol']]):
-      if set(req).issubset(data._polarization_correlations.tolist()):
-	correlations_to_grid = req #we found a subset that must be gridded
-	feeds_in_use = feed_descriptions[parser_args['pol']][feed_index]
+    if parser_args['do_jones_corrections']:
+      correlations_to_grid = data._polarization_correlations.tolist() #check below if this list is supported
+    else:
+      for feed_index,req in enumerate(pol_dependencies[parser_args['pol']]):
+	if set(req).issubset(data._polarization_correlations.tolist()):
+	  correlations_to_grid = req #we found a subset that must be gridded
+	  feeds_in_use = feed_descriptions[parser_args['pol']][feed_index]
     if correlations_to_grid == None:
       raise argparse.ArgumentTypeError("Cannot obtain requested gridded polarization from the provided measurement set. Need one of %s" % pol_dependencies[parser_args['pol']])
     '''
@@ -300,7 +299,7 @@ if __name__ == "__main__":
 	sampling_function_channel_grid_index[c] = current_grid
 	if enabled_channels[c]:
 	  current_grid += 1
-    
+
     '''
     allocate enough memory to compute image and or facets (only before gridding the first MS)
     '''
@@ -419,9 +418,9 @@ if __name__ == "__main__":
       '''
       if parser_args['output_psf'] or parser_args['sample_weighting'] != 'natural':
 	params.polarization_index = ctypes.c_size_t(0) #stays constant between strides
-	params.output_buffer = sampling_funct.ctypes.data_as(ctypes.c_void_p) #we never do 2 computes at the same time (or the reduction is handled at the C++ implementation level)
-	params.channel_grid_indicies = sampling_function_channel_grid_index.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
-	params.cube_channel_dim_size = ctypes.c_size_t(sampling_function_channel_count) #this won't change between chunks
+	params.sampling_function_buffer = sampling_funct.ctypes.data_as(ctypes.c_void_p) #we never do 2 computes at the same time (or the reduction is handled at the C++ implementation level)
+	params.sampling_function_channel_grid_indicies = sampling_function_channel_grid_index.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
+	params.sampling_function_channel_count = ctypes.c_size_t(sampling_function_channel_count) #this won't change between chunks
 	if (num_facet_centres == 0):
 	  libimaging.grid_sampling_function(ctypes.byref(params))
 	else:
@@ -431,12 +430,10 @@ if __name__ == "__main__":
 	  
       if chunk_index == no_chunks - 1:
 	libimaging.gridding_barrier()
-      
-  '''
-  TODO: FIX THESE
-  if parser_args['sample_weighting'] != 'natural':
-    pass #TODO:implement uniform weighting
-  '''
+	if parser_args['sample_weighting'] == 'uniform':
+	  params.num_facet_centres = ctypes.c_size_t(max(1,num_facet_centres)) #stays constant between strides
+	  params.number_of_polarization_terms = ctypes.c_size_t(len(correlations_to_grid))
+	  libimaging.weight_uniformly(ctypes.byref(params))
   
   '''
   See Smirnov I (2011) for description on conversion between correlation terms and stokes params for linearly polarized feeds
