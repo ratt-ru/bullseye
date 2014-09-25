@@ -532,7 +532,8 @@ if __name__ == "__main__":
       png_export.png_export(dirty,image_prefix,None)
       if parser_args['output_psf']:
 	for i,c in enumerate(channels_to_image):
-	  psf = (np.real(fft_utils.ifft2(sampling_funct[f,i,0,:,:].reshape(parser_args['npix_l'],parser_args['npix_m']))) / conv._F_detaper).astype(np.float32)
+	  with inversion_timer:
+	    psf = (np.real(fft_utils.ifft2(sampling_funct[f,i,0,:,:].reshape(parser_args['npix_l'],parser_args['npix_m']))) / conv._F_detaper).astype(np.float32)
 	  png_export.png_export(psf,image_prefix+('.ch%d.psf' % i),None)
       
     else: #export to FITS cube
@@ -554,7 +555,8 @@ if __name__ == "__main__":
 				     dirty)
       if parser_args['output_psf']:
 	for i,c in enumerate(channels_to_image):
-	  psf = (np.real(fft_utils.ifft2(sampling_funct[f,i,0,:,:].reshape(parser_args['npix_l'],parser_args['npix_m']))) / conv._F_detaper).astype(np.float32)
+	  with inversion_timer:
+	    psf = (np.real(fft_utils.ifft2(sampling_funct[f,i,0,:,:].reshape(parser_args['npix_l'],parser_args['npix_m']))) / conv._F_detaper).astype(np.float32)
 	  spw_no = c / data._no_channels
 	  chan_no = c % data._no_channels
 	  ra = data._field_centres[parser_args['field_id'],0,0] if num_facet_centres == 0 else facet_centres[f,0]
