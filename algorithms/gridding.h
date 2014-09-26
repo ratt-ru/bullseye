@@ -5,7 +5,6 @@
 #include <complex>
 #include <string>
 #include <casa/Quanta/Quantum.h>
-#include <cmath>
 #include <cfenv>
 
 #include "uvw_coord.h"

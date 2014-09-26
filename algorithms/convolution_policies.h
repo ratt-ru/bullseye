@@ -1,7 +1,6 @@
 #pragma once
 #include <stdexcept>
 #include <complex>
-#include <cmath>
 #include "uvw_coord.h"
 
 namespace imaging {

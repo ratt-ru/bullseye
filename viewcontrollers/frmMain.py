@@ -19,7 +19,7 @@ from helpers import data_set_loader
 from viewcontrollers import frmFacetDisplay
 class frmMain:
 	IMAGE_TMP_FILE_NAME = "/tmp/bullseye_temp"
-	FACET_TMP_FILE_NAME = "/tmp/bullseye_facet_temp_facet"
+	FACET_TMP_FILE_NAME = "/tmp/bullseye_facet_temp"
 	
 	def __change_visibilities(self):
 		if self._low_res_image != None:
@@ -55,7 +55,8 @@ class frmMain:
 		self._polarization = model.get_value(itr,1)
 		itr = model.iter_next(itr)
 		self._field_id = int(model.get_value(itr,1))
-		if (not (os.system("python bullseye.py \"%s\" --output_prefix \"%s\" --output_format png --npix_l %d --npix_m %d --cell_l %d --cell_m %d --pol %s --conv_sup %d --conv_oversamp %d --field_id %d" % (self._ms_name,
+		if (not (os.system("python bullseye.py \"%s\" --output_prefix \"%s\" --output_format png --npix_l %d --npix_m %d --cell_l %d --cell_m %d"
+				   " --pol %s --conv_sup %d --conv_oversamp %d --field_id %d  --average_all 1" % (self._ms_name,
 				   self.IMAGE_TMP_FILE_NAME,self._img_size_l,self._img_size_m,self._img_cell_l,self._img_cell_m,
 				   self._polarization,conv_support,conv_oversample,self._field_id)) == 0)):
 		    raise Exception("Invalid parameters for imager")
@@ -147,13 +148,14 @@ class frmMain:
                         facet_dec = quantity(self._phase_centres[self._field_id,0,1],"rad").get_value("arcsec") + (-int(event.y/float(rect.height) * img_height) + img_height/2)*self._img_cell_m	
 			facet_centres = np.array([[facet_ra,facet_dec]],dtype=np.float32)
 			
-			if (not (os.system("python bullseye.py \"%s\" --output_prefix \"%s\" --output_format png --npix_l %d --npix_m %d --cell_l %d --cell_m %d --pol %s --conv_sup %d --conv_oversamp %d --facet_centres \(%f,%f\) --field_id %d" % (
+			if (not (os.system("python bullseye.py \"%s\" --output_prefix \"%s\" --output_format png --npix_l %d --npix_m %d --cell_l %d"
+					   " --cell_m %d --pol %s --conv_sup %d --conv_oversamp %d --facet_centres \(%f,%f\) --field_id %d --average_all 1" % (
 					    self._ms_name,self.FACET_TMP_FILE_NAME,facet_size_l,facet_size_m,facet_cell_l,
 					    facet_cell_m,self._polarization,conv_support,conv_oversample,
 					    int(facet_ra),int(facet_dec),self._field_id)) == 0)):
 			  raise Exception("Invalid parameters for imager")
 			
-			frmFacetDisplay.frmFacetDisplay(self.FACET_TMP_FILE_NAME+"0.png")
+			frmFacetDisplay.frmFacetDisplay(self.FACET_TMP_FILE_NAME+"_facet0.png")
 			
 
 	def on_mouse_move(self,widget,event):
