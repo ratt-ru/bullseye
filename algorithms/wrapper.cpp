@@ -1,12 +1,10 @@
 #include <string>
 #include <cstdio>
 #include <casa/Quanta/Quantum.h>
-#include <thread>
-#include <future>
 #include <numeric>
 
-#include "gridding_parameters.h"
-#include "timer.h"
+#include "omp.h"
+#include "wrapper.h"
 #include "uvw_coord.h"
 #include "baseline_transform_policies.h"
 #include "phase_transform_policies.h"
@@ -15,14 +13,15 @@
 #include "gridding.h"
 
 extern "C" {
-    utils::timer gridding_timer;
-    double get_gridding_walltime() {
-      return gridding_timer.duration();
+    void initLibrary(){
+      printf("-----------------------------------------------\n"
+	     "      Backend: Multithreaded CPU Library       \n\n");	     
+      printf(" >Number of cores available: %d\n",omp_get_num_procs());
+      printf(" >Number of threads being used: %d\n",omp_get_max_threads());
+      printf("-----------------------------------------------\n");
     }
-    std::future<void> gridding_future;
-    void gridding_barrier() {
-        if (gridding_future.valid())
-            gridding_future.get(); //Block until result becomes available
+    void releaseLibrary(){
+      gridding_barrier();
     }
     void weight_uniformly(gridding_parameters & params){
       #define EPSILON 0.0000001f
@@ -66,7 +65,7 @@ extern "C" {
                     params.number_of_polarization_terms,
                     params.polarization_index,
                     params.channel_count);
-            convolution_policy_type convolution_policy(params.nx,params.ny,1,params.conv_support,params.conv_oversample,
+            convolution_policy_type convolution_policy(params.nx,params.ny,params.number_of_polarization_terms,params.conv_support,params.conv_oversample,
                     params.conv, polarization_policy);
 
             imaging::grid<visibility_base_type,uvw_base_type,

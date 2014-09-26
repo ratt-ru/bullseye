@@ -20,7 +20,7 @@ from helpers import png_export
 from helpers import timer
 import ctypes
 libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
-	   
+libimaging.initLibrary()
 def coords(s):  
     try:
 	sT = s.strip()
@@ -619,6 +619,7 @@ if __name__ == "__main__":
 				       montage_combined_img
 				      )
 	     )
+  libimaging.releaseLibrary()
   print "FINISHED WORK SUCCESSFULLY"
   total_run_time.stop()
   print "STATISTICS:"
