@@ -54,5 +54,7 @@ gridding_parameters._fields_ = [
   #Sampling function
   ("sampling_function_buffer",c_void_p),
   ("sampling_function_channel_grid_indicies",c_void_p),
-  ("sampling_function_channel_count",c_size_t)
+  ("sampling_function_channel_count",c_size_t),
+  #Precomputed Detapering coefficients
+  ("detapering_buffer",c_void_p)
 ]

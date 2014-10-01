@@ -65,4 +65,6 @@ struct gridding_parameters {
     std::complex<grid_base_type> * sampling_function_buffer;
     const std::size_t * sampling_function_channel_grid_indicies;
     size_t sampling_function_channel_count;
+    //Precomputed Detapering coefficients
+    convolution_base_type * detapering_buffer;
 };

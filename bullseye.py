@@ -347,6 +347,7 @@ if __name__ == "__main__":
       params.sampling_function_channel_count = ctypes.c_size_t(sampling_function_channel_count) #this won't change between chunks
     params.num_facet_centres = ctypes.c_size_t(max(1,num_facet_centres)) #stays constant between strides
     params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p)
+    params.detapering_buffer = conv._F_detaper.ctypes.data_as(ctypes.c_void_p) #stays constant between strides
     libimaging.initLibrary(ctypes.byref(params))
     
       
