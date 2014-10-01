@@ -535,7 +535,6 @@ TEST_CASE( "Testing polarization handling policies" ){
     REQUIRE(uv_grid[nx*ny*3 + 25*nx+25].imag() == -2064);
   }  
 }
-
 TEST_CASE( "TESTING THE CONVOLUTION POLICIES" )
 {
   typedef float visibility_base_type;

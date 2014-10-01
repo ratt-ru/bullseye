@@ -14,11 +14,6 @@
 #include "wrapper.h"
 #include "gridding_parameters.h"
 
-#include "baseline_transform_policies.h"
-#include "phase_transform_policies.h"
-#include "polarization_gridding_policies.h"
-#include "convolution_policies.h"
-#include "gridding.h"
 
 
 const double TO_GIB = 1.0/(1024.0*1024.0*1024.0);
@@ -84,7 +79,6 @@ int main (int argc, char ** argv) {
 
     printf("------------------------------------\nGRIDDER BENCHMARK\n(USING %ld THREADS)\n------------------------------------\n",no_threads);
     omp_set_num_threads((int)no_threads);
-    initLibrary();
     
     printf("ALLOCATING MEMORY FOR %ld ROWS (%ld chan, %ld pol EACH) (%f GiB)\n",row_count,chan_no,pol_count,
            (sizeof(bool)+
@@ -139,17 +133,17 @@ int main (int argc, char ** argv) {
         size_t new_timestamp = ((baseline_index+1) / NO_BASELINES);
         k -= (NO_BASELINES-NO_ANTENNAE) * new_timestamp;
         l += (NO_ANTENNAE-1) * new_timestamp;
-        float Lx = antenna_coords[antenna_1]._u - antenna_coords[antenna_2]._u;
-        float Ly = antenna_coords[antenna_1]._v - antenna_coords[antenna_2]._v;
-        float Lz = antenna_coords[antenna_1]._w - antenna_coords[antenna_2]._w;
-        float rotation_in_radians = timestamp*time_step + ra;
-        float sin_ra = sin(rotation_in_radians);
-        float cos_ra = cos(rotation_in_radians);
-        float sin_dec = sin(declination);
-        float cos_dec = cos(declination);
-        float u = -sin_ra*Lx + cos_ra*Ly;
-        float v = -sin_dec*cos_ra*Lx - sin_dec*sin_ra*Ly + cos_dec*Lz;
-        float w = cos_dec*cos_ra*Lx + cos_dec*sin_ra*Ly + sin_dec*Lz;
+        uvw_base_type Lx = antenna_coords[antenna_1]._u - antenna_coords[antenna_2]._u;
+        uvw_base_type Ly = antenna_coords[antenna_1]._v - antenna_coords[antenna_2]._v;
+        uvw_base_type Lz = antenna_coords[antenna_1]._w - antenna_coords[antenna_2]._w;
+        uvw_base_type rotation_in_radians = timestamp*time_step + ra;
+        uvw_base_type sin_ra = sin(rotation_in_radians);
+        uvw_base_type cos_ra = cos(rotation_in_radians);
+        uvw_base_type sin_dec = sin(declination);
+        uvw_base_type cos_dec = cos(declination);
+        uvw_base_type u = -sin_ra*Lx + cos_ra*Ly;
+        uvw_base_type v = -sin_dec*cos_ra*Lx - sin_dec*sin_ra*Ly + cos_dec*Lz;
+        uvw_base_type w = cos_dec*cos_ra*Lx + cos_dec*sin_ra*Ly + sin_dec*Lz;
         ++row;
         return uvw_coord<uvw_base_type>(u,v,w);
     });
@@ -196,6 +190,7 @@ int main (int argc, char ** argv) {
     params.visibilities = visibilities.get();
     params.visibility_weights = visibility_weights.get();
     
+    initLibrary(params);
     grid_single_pol(params);  
     releaseLibrary();
     

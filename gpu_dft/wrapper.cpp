@@ -3,7 +3,7 @@
 #include <cuda_runtime.h>
 #include <stdexcept>
 extern "C" {
-    void initLibrary() {
+    void initLibrary(gridding_parameters & params) {
         int num_devices, device;
         cudaGetDeviceCount(&num_devices);
         if (num_devices > 0) {
@@ -41,6 +41,12 @@ extern "C" {
     }
     void weight_uniformly(gridding_parameters & params){
       throw std::runtime_error("Backend Unimplemented exception: weight_uniformly");
+    }
+    void finalize(gridding_parameters & params){
+      throw std::runtime_error("Backend Unimplemented exception: finalize");
+    }
+    void finalize_psf(gridding_parameters & params){
+      throw std::runtime_error("Backend Unimplemented exception: finalize");
     }
     void grid_single_pol(gridding_parameters & params){
       throw std::runtime_error("Backend Unimplemented exception: grid_single_pol");

@@ -1,16 +1,19 @@
 cmake_minimum_required(VERSION 2.8)
 
 project (benchmark)
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 find_package(CasaCore REQUIRED COMPONENTS measures scimath tables)
 find_package(Boost REQUIRED)
+
 include_directories(${Boost_INCLUDE_DIRS})
 
 set(CMAKE_BUILD_TYPE Release)
-set(CMAKE_CXX_FLAGS "-std=c++0x -O3 -pg -mmmx -msse -msse2 -msse3 -fopenmp")
+set(CMAKE_CXX_FLAGS "-std=c++0x -O3 -pg -pthread -fopenmp")
 include_directories(/usr/include/casacore/ /usr/local/include/casacore)
-
 add_executable(benchmark benchmark.cpp)
 target_link_libraries(benchmark casa_casa)
+
 target_link_libraries(benchmark imaging)
 # target_link_libraries(benchmark gpu_imaging)
+

@@ -18,6 +18,7 @@ gridding_parameters._fields_ = [
   ("row_count",c_size_t),
   ("channel_count",c_size_t),
   ("number_of_polarization_terms",c_size_t),
+  ("number_of_polarization_terms_being_gridded",c_size_t),
   ("spw_count",c_size_t),
   ("no_timestamps_read",c_size_t),
   #Mandatory image scaling fields necessary for scaling the IFFT correctly

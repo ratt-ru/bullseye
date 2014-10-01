@@ -9,6 +9,8 @@ typedef float reference_wavelengths_base_type;
 typedef float convolution_base_type;
 typedef float visibility_weights_base_type;
 typedef float grid_base_type;
+// this based on your choice of grid_base_type
+#define SHOULD_DO_32_BIT_FFT
 
 struct gridding_parameters {
     //Mandatory data necessary for gridding:
@@ -26,6 +28,7 @@ struct gridding_parameters {
     size_t row_count;
     size_t channel_count;
     size_t number_of_polarization_terms;
+    size_t number_of_polarization_terms_being_gridded;
     size_t spw_count;
     size_t no_timestamps_read;
     //Mandatory image scaling fields necessary for scaling the IFFT correctly

@@ -73,6 +73,7 @@ namespace imaging {
 	uvw_base_type translated_grid_u = uvw._u + _grid_u_centre - _conv_dim_centre;
 	uvw_base_type translated_grid_v = uvw._v + _grid_v_centre - _conv_dim_centre;
 	std::size_t chan_offset = no_grids_to_offset * _cube_chan_dim_step;
+	
         for (std::size_t conv_v = 0; conv_v < _conv_dim_size; ++conv_v) {
             std::size_t disc_grid_v = std::lrint(translated_grid_v + conv_v*_conv_scale);
             if (disc_grid_v >= _ny) continue;

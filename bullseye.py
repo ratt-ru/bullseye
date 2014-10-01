@@ -20,7 +20,6 @@ from helpers import png_export
 from helpers import timer
 import ctypes
 libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
-libimaging.initLibrary()
 def coords(s):  
     try:
 	sT = s.strip()
@@ -48,7 +47,6 @@ def channel_range(s):
 if __name__ == "__main__":
   total_run_time = timer.timer()
   total_run_time.start()
-  inversion_timer = timer.timer()
   filter_creation_timer = timer.timer()
   parser = argparse.ArgumentParser(description='Bullseye: An implementation of targetted facet-based synthesis imaging in radio astronomy.')
   pol_options = {'I' : 1, 'Q' : 2, 'U' : 3, 'V' : 4, 'RR' : 5, 'RL' : 6, 'LR' : 7, 'LL' : 8, 'XX' : 9, 'XY' : 10, 'YX' : 11, 'YY' : 12} # as per Stokes.h in casacore, the rest is left unimplemented
@@ -286,6 +284,7 @@ if __name__ == "__main__":
 	if enabled_channels[c]:
 	  current_grid += 1
 	  cube_chan_dim_size += 1
+	
     else:
       cube_chan_dim_size = 1
     '''
@@ -299,7 +298,7 @@ if __name__ == "__main__":
 	sampling_function_channel_grid_index[c] = current_grid
 	if enabled_channels[c]:
 	  current_grid += 1
-
+   
     '''
     allocate enough memory to compute image and or facets (only before gridding the first MS)
     '''
@@ -316,7 +315,41 @@ if __name__ == "__main__":
 	  if parser_args['output_psf'] or parser_args['sample_weighting'] != 'natural':
 	    num_facet_grids = 1 if (num_facet_centres == 0) else num_facet_centres
 	    sampling_funct = np.zeros([num_facet_grids,sampling_function_channel_count,1,parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.psf_type)
+    '''
+    initiate the backend imaging library
+    '''
+    params = gridding_parameters.gridding_parameters()
+    params.nx = ctypes.c_size_t(parser_args['npix_l']) #this ensures a deep copy
+    params.ny = ctypes.c_size_t(parser_args['npix_m']) #this ensures a deep copy
+    params.cell_size_x = base_types.uvw_ctypes_convert_type(parser_args['cell_l']) #this ensures a deep copy
+    params.cell_size_y = base_types.uvw_ctypes_convert_type(parser_args['cell_m']) #this ensures a deep copy
+    params.conv = conv._conv_FIR.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
+    params.conv_support = ctypes.c_size_t(parser_args['conv_sup']) #this ensures a deep copy
+    params.conv_oversample = ctypes.c_size_t(parser_args['conv_oversamp'])#this ensures a deep copy
+    params.phase_centre_ra = base_types.uvw_ctypes_convert_type(data._field_centres[parser_args['field_id'],0,0]) #this ensures a deep copy
+    params.phase_centre_dec = base_types.uvw_ctypes_convert_type(data._field_centres[parser_args['field_id'],0,1]) #this ensures a deep copy
+    params.should_invert_jones_terms = ctypes.c_bool(parser_args['do_jones_corrections']) #this ensures a deep copy
+    params.imaging_field = ctypes.c_uint(parser_args['field_id']) #this ensures a deep copy
+    params.channel_grid_indicies = channel_grid_index.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
+    params.cube_channel_dim_size = ctypes.c_size_t(cube_chan_dim_size) #this won't change between chunks
+    params.output_buffer = gridded_vis.ctypes.data_as(ctypes.c_void_p) #we never do 2 computes at the same time (or the reduction is handled at the C++ implementation level)
+    params.baseline_count = ctypes.c_size_t(data._no_baselines) #this ensures a deep copy
+    params.number_of_polarization_terms = ctypes.c_size_t(data._no_polarization_correlations) #this ensures a deep copy
+    params.number_of_polarization_terms_being_gridded = ctypes.c_size_t(len(correlations_to_grid))
+    params.spw_count = ctypes.c_size_t(data._no_spw) #this ensures a deep copy
+    params.channel_count = ctypes.c_size_t(data._no_channels) #this ensures a deep copy
+    params.antenna_count = ctypes.c_size_t(data._no_antennae) #this ensures a deep copy
+    params.enabled_channels = enabled_channels.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
+    if parser_args['output_psf'] or parser_args['sample_weighting'] != 'natural':
+      params.polarization_index = ctypes.c_size_t(0) #stays constant between strides
+      params.sampling_function_buffer = sampling_funct.ctypes.data_as(ctypes.c_void_p) #we never do 2 computes at the same time (or the reduction is handled at the C++ implementation level)
+      params.sampling_function_channel_grid_indicies = sampling_function_channel_grid_index.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
+      params.sampling_function_channel_count = ctypes.c_size_t(sampling_function_channel_count) #this won't change between chunks
+    params.num_facet_centres = ctypes.c_size_t(max(1,num_facet_centres)) #stays constant between strides
+    params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p)
+    libimaging.initLibrary(ctypes.byref(params))
     
+      
     '''
     each chunk will start processing while data is being read in, we will wait until until this process rejoins
     before copying the buffers and starting to grid the next chunk
@@ -334,7 +367,6 @@ if __name__ == "__main__":
       '''
       libimaging.gridding_barrier()   #WARNING: This async barrier is cricical for valid gridding results
      
-      params = gridding_parameters.gridding_parameters()
       arr_data_cpy = data._arr_data #gridding will operate on deep copied memory
       params.visibilities = arr_data_cpy.ctypes.data_as(ctypes.c_void_p)
       arr_uvw_cpy = data._arr_uvw #gridding will operate on deep copied memory
@@ -350,28 +382,8 @@ if __name__ == "__main__":
       params.field_array = row_field_id_cpy.ctypes.data_as(ctypes.c_void_p)
       arr_description_col_cpy = data._description_col #gridding will operate on deep copied memory
       params.spw_index_array = arr_description_col_cpy.ctypes.data_as(ctypes.c_void_p)
-      params.imaging_field = ctypes.c_uint(parser_args['field_id']) #this ensures a deep copy
-      params.baseline_count = ctypes.c_size_t(data._no_baselines) #this ensures a deep copy
       params.row_count = ctypes.c_size_t(chunk_linecount) #this ensures a deep copy
-      params.channel_count = ctypes.c_size_t(data._no_channels) #this ensures a deep copy
-      params.number_of_polarization_terms = ctypes.c_size_t(data._no_polarization_correlations) #this ensures a deep copy
-      params.spw_count = ctypes.c_size_t(data._no_spw) #this ensures a deep copy
-      params.no_timestamps_read = ctypes.c_size_t(data._no_timestamps_read) #this ensures a deep copy
-      params.nx = ctypes.c_size_t(parser_args['npix_l']) #this ensures a deep copy
-      params.ny = ctypes.c_size_t(parser_args['npix_m']) #this ensures a deep copy
-      params.cell_size_x = base_types.uvw_ctypes_convert_type(parser_args['cell_l']) #this ensures a deep copy
-      params.cell_size_y = base_types.uvw_ctypes_convert_type(parser_args['cell_m']) #this ensures a deep copy
-      params.conv = conv._conv_FIR.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
-      params.conv_support = ctypes.c_size_t(parser_args['conv_sup']) #this ensures a deep copy
-      params.conv_oversample = ctypes.c_size_t(parser_args['conv_oversamp'])#this ensures a deep copy
-      params.phase_centre_ra = base_types.uvw_ctypes_convert_type(data._field_centres[parser_args['field_id'],0,0]) #this ensures a deep copy
-      params.phase_centre_dec = base_types.uvw_ctypes_convert_type(data._field_centres[parser_args['field_id'],0,1]) #this ensures a deep copy
-      params.should_invert_jones_terms = ctypes.c_bool(parser_args['do_jones_corrections']) #this ensures a deep copy
-      params.antenna_count = ctypes.c_size_t(data._no_antennae) #this ensures a deep copy
-      params.output_buffer = gridded_vis.ctypes.data_as(ctypes.c_void_p) #we never do 2 computes at the same time (or the reduction is handled at the C++ implementation level)
-      params.enabled_channels = enabled_channels.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
-      params.channel_grid_indicies = channel_grid_index.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
-      params.cube_channel_dim_size = ctypes.c_size_t(cube_chan_dim_size) #this won't change between chunks
+      params.no_timestamps_read = ctypes.c_size_t(data._no_timestamps_read) #this ensures a deep copy      
       '''
       no need to grid more than one of the correlations if the user isn't interrested in imaging one of the stokes terms (I,Q,U,V) or the stokes terms are the correlation products:
       '''
@@ -381,8 +393,6 @@ if __name__ == "__main__":
 	if (num_facet_centres == 0):
 	  libimaging.grid_single_pol(ctypes.byref(params))
 	else: #facet single correlation term
-	  params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p) #stays constant between strides
-	  params.num_facet_centres = ctypes.c_size_t(num_facet_centres) #stays constant between strides
 	  libimaging.facet_single_pol(ctypes.byref(params))
       elif len(correlations_to_grid) == 2 and not parser_args['do_jones_corrections']: #the user want to derive one of the stokes terms (I,Q,U,V)
 	pol_index = data._polarization_correlations.tolist().index(correlations_to_grid[0])
@@ -392,15 +402,11 @@ if __name__ == "__main__":
 	if (num_facet_centres == 0):
 	  libimaging.grid_duel_pol(ctypes.byref(params))
 	else: #facet single correlation term
-	  params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p) #stays constant between strides
-	  params.num_facet_centres = ctypes.c_size_t(num_facet_centres) #stays constant between strides
 	  libimaging.facet_duel_pol(ctypes.byref(params))
       else: #the user want to apply corrective terms
 	if (num_facet_centres == 0): #don't do faceting
 	  libimaging.grid_4_cor(ctypes.byref(params))
 	else:
-	  params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p)
-	  params.num_facet_centres = ctypes.c_size_t(num_facet_centres) #stays constant between strides
 	  if parser_args['do_jones_corrections']: #do faceting with jones corrections
 	    jones_terms_cpy = data._jones_terms #gridding will operate with deep copied data
 	    params.jones_terms = jones_terms_cpy.ctypes.data_as(ctypes.c_void_p) 
@@ -417,24 +423,16 @@ if __name__ == "__main__":
       Now grid the psfs (this will automatically wait till visibility gridding has been completed)
       '''
       if parser_args['output_psf'] or parser_args['sample_weighting'] != 'natural':
-	params.polarization_index = ctypes.c_size_t(0) #stays constant between strides
-	params.sampling_function_buffer = sampling_funct.ctypes.data_as(ctypes.c_void_p) #we never do 2 computes at the same time (or the reduction is handled at the C++ implementation level)
-	params.sampling_function_channel_grid_indicies = sampling_function_channel_grid_index.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
-	params.sampling_function_channel_count = ctypes.c_size_t(sampling_function_channel_count) #this won't change between chunks
 	if (num_facet_centres == 0):
 	  libimaging.grid_sampling_function(ctypes.byref(params))
 	else:
-	  params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p)
-	  params.num_facet_centres = ctypes.c_size_t(num_facet_centres) #stays constant between strides
 	  libimaging.facet_sampling_function(ctypes.byref(params))
 	  
       if chunk_index == no_chunks - 1:
 	libimaging.gridding_barrier()
 	if parser_args['sample_weighting'] == 'uniform':
-	  params.num_facet_centres = ctypes.c_size_t(max(1,num_facet_centres)) #stays constant between strides
-	  params.number_of_polarization_terms = ctypes.c_size_t(len(correlations_to_grid))
 	  libimaging.weight_uniformly(ctypes.byref(params))
-  
+	
   '''
   See Smirnov I (2011) for description on conversion between correlation terms and stokes params for linearly polarized feeds
   See Synthesis Imaging II (1999) Pg. 9 for a description on conversion between correlation terms and stokes params for circularly polarized feeds
@@ -522,27 +520,46 @@ if __name__ == "__main__":
     else:
       pass #any cases not stated here should be flagged by sanity checks on the program arguement list
   '''
+  now compact all the grids per facet into continuous blocks [channels,nx,ny] 
+  ie. remove the extra temporary correlation term grids per facet. There will 
+  still be some space left between the facets
+  '''
+  if parser_args['pol'] in ["I","Q","U","V"]:
+    for f in range(0,max(1,num_facet_centres)):
+      for c in range(0,cube_chan_dim_size):
+	shift_count = (len(correlations_to_grid) - 1) * c # there are pol-1 blank spaces between channel grids
+	nf = shift_count % len(correlations_to_grid)
+	nc = shift_count / len(correlations_to_grid)
+	gridded_vis[f,nc,nf,:,:] = gridded_vis[f,c,0,:,:]
+  '''
   now invert, detaper and write out all the facets to disk:  
   '''
+  libimaging.finalize(ctypes.byref(params))
+  if parser_args['output_psf']:
+    libimaging.finalize_psf(ctypes.byref(params))
   for f in range(0, max(1,num_facet_centres)):
     image_prefix = parser_args['output_prefix'] if num_facet_centres == 0 else parser_args['output_prefix']+"_facet"+str(f)
     if parser_args['output_format'] == 'png':
-      with inversion_timer:
-	dirty = (np.real(fft_utils.ifft2(gridded_vis[f,0,0,:,:].reshape(parser_args['npix_l'],parser_args['npix_m']))) / conv._F_detaper).astype(np.float32)
+      offset = len(correlations_to_grid)*parser_args['npix_l']*parser_args['npix_m']*f*np.dtype(np.float32).itemsize
+      dirty = np.ctypeslib.as_array(ctypes.cast(gridded_vis.ctypes.data + offset, ctypes.POINTER(ctypes.c_float)),
+				    shape=(parser_args['npix_l'],parser_args['npix_m']))
       png_export.png_export(dirty,image_prefix,None)
       if parser_args['output_psf']:
 	for i,c in enumerate(channels_to_image):
-	  with inversion_timer:
-	    psf = (np.real(fft_utils.ifft2(sampling_funct[f,i,0,:,:].reshape(parser_args['npix_l'],parser_args['npix_m']))) / conv._F_detaper).astype(np.float32)
-	  png_export.png_export(psf,image_prefix+('.ch%d.psf' % i),None)
+	  offset = parser_args['npix_l']*parser_args['npix_m']*f*np.dtype(np.float32).itemsize
+	  psf = np.ctypeslib.as_array(ctypes.cast(sampling_funct.ctypes.data + offset, ctypes.POINTER(ctypes.c_float)),
+				      shape=(parser_args['npix_l'],parser_args['npix_m']))
+	  spw_no = c / data._no_channels
+	  chan_no = c % data._no_channels
+	  png_export.png_export(psf,image_prefix+('.spw%d.ch%d.psf' % (spw_no,chan_no)),None)
       
     else: #export to FITS cube
-      with inversion_timer:
-	dirty = np.empty([cube_chan_dim_size,parser_args['npix_l'],parser_args['npix_m']])
-	for c in range(0,cube_chan_dim_size):
-	  dirty[c,:,:] = (np.real(fft_utils.ifft2(gridded_vis[f,c,0,:,:].reshape(parser_args['npix_l'],parser_args['npix_m']))) / conv._F_detaper).astype(np.float32)
       ra = data._field_centres[parser_args['field_id'],0,0] if num_facet_centres == 0 else facet_centres[f,0]
       dec = data._field_centres[parser_args['field_id'],0,1] if num_facet_centres == 0 else facet_centres[f,1]
+      offset = cube_chan_dim_size*len(correlations_to_grid)*parser_args['npix_l']*parser_args['npix_m']*f*np.dtype(np.float32).itemsize
+      dirty = np.ctypeslib.as_array(ctypes.cast(gridded_vis.ctypes.data + offset, ctypes.POINTER(ctypes.c_float)),
+				    shape=(cube_chan_dim_size,parser_args['npix_l'],parser_args['npix_m']))
+      
       fits_export.save_to_fits_image(image_prefix+'.fits',
 				     parser_args['npix_l'],parser_args['npix_m'],
 				     quantity(parser_args['cell_l'],'arcsec'),quantity(parser_args['cell_m'],'arcsec'),
@@ -555,13 +572,14 @@ if __name__ == "__main__":
 				     dirty)
       if parser_args['output_psf']:
 	for i,c in enumerate(channels_to_image):
-	  with inversion_timer:
-	    psf = (np.real(fft_utils.ifft2(sampling_funct[f,i,0,:,:].reshape(parser_args['npix_l'],parser_args['npix_m']))) / conv._F_detaper).astype(np.float32)
+	  offset = i*parser_args['npix_l']*parser_args['npix_m']*f*np.dtype(np.float32).itemsize
+	  psf = np.ctypeslib.as_array(ctypes.cast(sampling_funct.ctypes.data + offset, ctypes.POINTER(ctypes.c_float)),
+				      shape=(1,parser_args['npix_l'],parser_args['npix_m']))
 	  spw_no = c / data._no_channels
 	  chan_no = c % data._no_channels
 	  ra = data._field_centres[parser_args['field_id'],0,0] if num_facet_centres == 0 else facet_centres[f,0]
 	  dec = data._field_centres[parser_args['field_id'],0,1] if num_facet_centres == 0 else facet_centres[f,1]
-	  fits_export.save_to_fits_image(image_prefix+('.ch%d.psf.fits' % i),
+	  fits_export.save_to_fits_image(image_prefix+('.spw%d.ch%d.psf.fits' % (spw_no,chan_no)),
 					 parser_args['npix_l'],parser_args['npix_m'],
 					 quantity(parser_args['cell_l'],'arcsec'),quantity(parser_args['cell_m'],'arcsec'),
 					 quantity(ra,'arcsec'),
@@ -627,6 +645,7 @@ if __name__ == "__main__":
   print "\tIn Parallel:"
   print "\t\tData loading and conversion time: %f secs" % data_set_loader.data_set_loader.time_to_load_chunks.elapsed()
   libimaging.get_gridding_walltime.restype = ctypes.c_double
+  libimaging.get_inversion_walltime.restype = ctypes.c_double
   print "\t\tGridding time: %f secs" % libimaging.get_gridding_walltime()
-  print "\tFourier inversion time: %f secs" % inversion_timer.elapsed()
+  print "\tFourier inversion time: %f secs" % libimaging.get_inversion_walltime()
   print "\tTotal runtime: %f secs" % total_run_time.elapsed()

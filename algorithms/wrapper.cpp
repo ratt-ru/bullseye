@@ -2,6 +2,8 @@
 #include <cstdio>
 #include <casa/Quanta/Quantum.h>
 #include <numeric>
+#include <fftw3.h>
+#include <typeinfo>
 
 #include "omp.h"
 #include "wrapper.h"
@@ -11,36 +13,145 @@
 #include "polarization_gridding_policies.h"
 #include "convolution_policies.h"
 #include "gridding.h"
+#include "fft_shift_utils.h"
 
+#ifdef SHOULD_DO_32_BIT_FFT
+  typedef fftwf_plan fftw_plan_type;
+#else
+  typedef fftw_plan fftw_plan_type;
+#endif
 extern "C" {
-    void initLibrary(){
+    fftw_plan_type fft_plan;
+    fftw_plan_type fft_psf_plan;
+    void initLibrary(gridding_parameters & params){
       printf("-----------------------------------------------\n"
 	     "      Backend: Multithreaded CPU Library       \n\n");	     
       printf(" >Number of cores available: %d\n",omp_get_num_procs());
       printf(" >Number of threads being used: %d\n",omp_get_max_threads());
       printf("-----------------------------------------------\n");
+      int dims[] = {(int)params.nx,(int)params.ny};
+      #ifdef SHOULD_DO_32_BIT_FFT
+	fft_plan = fftwf_plan_many_dft(2,(int*)&dims,
+				       params.cube_channel_dim_size * params.num_facet_centres,
+				       (fftwf_complex *)params.output_buffer,(int*)&dims,
+				       1,(int)(params.nx*params.ny),
+				       (fftwf_complex *)params.output_buffer,(int*)&dims,
+				       1,(int)(params.nx*params.ny),
+				       FFTW_BACKWARD,FFTW_ESTIMATE);
+	fft_psf_plan = fftwf_plan_many_dft(2,(int*)&dims,
+					   params.sampling_function_channel_count * params.num_facet_centres,
+					   (fftwf_complex *)params.sampling_function_buffer,(int*)&dims,
+					   1,(int)(params.nx*params.ny),
+					   (fftwf_complex *)params.sampling_function_buffer,(int*)&dims,
+					   1,(int)(params.nx*params.ny),
+					   FFTW_BACKWARD,FFTW_ESTIMATE);
+      #else
+	fft_plan = fftw_plan_many_dft(2,(int*)&dims,
+				      params.cube_channel_dim_size * params.num_facet_centres,
+				      (fftw_complex *)params.output_buffer,(int*)&dims,
+				      1,(int)(params.nx*params.ny),
+				      (fftw_complex *)params.output_buffer,(int*)&dims,
+				      1,(int)(params.nx*params.ny),
+				      FFTW_BACKWARD,FFTW_ESTIMATE);
+	fft_psf_plan = fftw_plan_many_dft(2,(int*)&dims,
+					  params.sampling_function_channel_count * params.num_facet_centres,
+					  (fftw_complex *)params.sampling_function_buffer,(int*)&dims,
+					  1,(int)(params.nx*params.ny),
+					  (fftw_complex *)params.sampling_function_buffer,(int*)&dims,
+					  1,(int)(params.nx*params.ny),
+					  FFTW_BACKWARD,FFTW_ESTIMATE);
+      #endif
     }
     void releaseLibrary(){
       gridding_barrier();
+      #ifdef SHOULD_DO_32_BIT_FFT
+	fftwf_destroy_plan(fft_plan);
+	fftwf_destroy_plan(fft_psf_plan);
+      #else
+	fftw_destroy_plan(fft_plan);
+	fftw_destroy_plan(fft_psf_plan);
+      #endif
     }
     void weight_uniformly(gridding_parameters & params){
       #define EPSILON 0.0000001f
+      gridding_barrier();
       for (std::size_t f = 0; f < params.num_facet_centres; ++f)
 	for (std::size_t g = 0; g < params.cube_channel_dim_size; ++g)
 	  for (std::size_t y = 0; y < params.ny; ++y)
 	    for (std::size_t x = 0; x < params.nx; ++x){
 		grid_base_type count = EPSILON;
+		//accumulate all the sampling functions that contribute to the current grid
 		for (std::size_t c = 0; c < params.sampling_function_channel_count; ++c)
 		    count += (int)(params.channel_grid_indicies[c] == g) *
 			     real(params.sampling_function_buffer[((f*params.sampling_function_channel_count + c)*params.ny+y)*params.nx + x]);
 		count = 1/count;
-		for (std::size_t p = 0; p < params.number_of_polarization_terms; ++p)
-		  params.output_buffer[(((f*params.cube_channel_dim_size+g)*params.number_of_polarization_terms+p)*params.ny+y)*params.nx+x] *= count;
+		//and apply to the continuous block of nx*ny*cube_channel grids (any temporary correlation term buffers should have been collapsed by this point)
+ 		params.output_buffer[((f*params.cube_channel_dim_size*params.number_of_polarization_terms_being_gridded + g)*params.ny+y)*params.nx+x] *= count;
 	    }
+    }
+    void finalize(gridding_parameters & params){
+	gridding_barrier();
+	inversion_timer.start();
+	#ifdef SHOULD_DO_32_BIT_FFT
+	  utils::ifftshift(params.output_buffer,params.nx,params.ny,
+			   params.num_facet_centres*params.cube_channel_dim_size*params.number_of_polarization_terms_being_gridded);
+	  fftwf_execute(fft_plan);
+ 	  utils::fftshift(params.output_buffer,params.nx,params.ny,
+			  params.num_facet_centres*params.cube_channel_dim_size*params.number_of_polarization_terms_being_gridded);
+	#else
+	  utils::ifftshift(params.output_buffer,params.nx,params.ny,
+			   params.num_facet_centres*params.cube_channel_dim_size*params.number_of_polarization_terms_being_gridded);
+	  fftw_execute(fft_plan);
+ 	  utils::fftshift(params.output_buffer,params.nx,params.ny,
+			  params.num_facet_centres*params.cube_channel_dim_size*params.number_of_polarization_terms_being_gridded);
+	#endif
+	/*
+	 * We'll be storing 32 bit real fits files so ignore all the imaginary components and cast whatever the grid was to float32
+	 */
+	{
+	  grid_base_type * __restrict__ grid_ptr_gridtype = (grid_base_type *)params.output_buffer;
+	  float * __restrict__ grid_ptr_single = (float *)params.output_buffer;
+	  std::size_t casting_ubound = params.nx*params.ny*params.cube_channel_dim_size*
+				       params.num_facet_centres*
+				       params.number_of_polarization_terms_being_gridded;
+	  for (std::size_t i = 0; i < casting_ubound; ++i)
+	    grid_ptr_single[i] = (float)grid_ptr_gridtype[i*2]; //extract all the reals
+	}
+	inversion_timer.stop();
+    }
+    void finalize_psf(gridding_parameters & params){
+	gridding_barrier();
+	inversion_timer.start();
+	#ifdef SHOULD_DO_32_BIT_FFT
+	  utils::ifftshift(params.sampling_function_buffer,params.nx,params.ny,
+			   params.num_facet_centres*params.sampling_function_channel_count);
+	  fftwf_execute(fft_psf_plan);
+ 	  utils::fftshift(params.sampling_function_buffer,params.nx,params.ny,
+			  params.num_facet_centres*params.sampling_function_channel_count);
+	#else
+	  utils::ifftshift(params.sampling_function_buffer,params.nx,params.ny,
+			   params.num_facet_centres*params.sampling_function_channel_count);
+	  fftw_execute(fft_psf_plan);
+ 	  utils::fftshift(params.sampling_function_buffer,params.nx,params.ny,
+			  params.num_facet_centres*params.sampling_function_channel_count);
+	#endif
+	/*
+	 * We'll be storing 32 bit real fits files so ignore all the imaginary components and cast whatever the grid was to float32
+	 */
+	{
+	  grid_base_type * __restrict__ grid_ptr_gridtype = (grid_base_type *)params.sampling_function_buffer;
+	  float * __restrict__ grid_ptr_single = (float *)params.sampling_function_buffer;
+	  std::size_t casting_ubound = params.nx*params.ny*
+				       params.sampling_function_channel_count*
+				       params.num_facet_centres;
+	  for (std::size_t i = 0; i < casting_ubound; ++i)
+	    grid_ptr_single[i] = (float)grid_ptr_gridtype[i*2]; //extract all the reals
+	}
+	inversion_timer.stop();
     }
     void grid_single_pol(gridding_parameters & params) {
         gridding_barrier();
-        gridding_future = std::async(std::launch::async, [params] () {
+        gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
             using namespace imaging;
             printf("GRIDDING...\n");
@@ -65,7 +176,7 @@ extern "C" {
                     params.number_of_polarization_terms,
                     params.polarization_index,
                     params.channel_count);
-            convolution_policy_type convolution_policy(params.nx,params.ny,params.number_of_polarization_terms,params.conv_support,params.conv_oversample,
+            convolution_policy_type convolution_policy(params.nx,params.ny,1,params.conv_support,params.conv_oversample,
                     params.conv, polarization_policy);
 
             imaging::grid<visibility_base_type,uvw_base_type,
@@ -90,17 +201,14 @@ extern "C" {
     }
     void facet_single_pol(gridding_parameters & params) {
         gridding_barrier();
-        gridding_future = std::async(std::launch::async, [params] () {
+        gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
             using namespace imaging;
             size_t no_facet_pixels = params.nx*params.ny;
             for (size_t facet_index = 0; facet_index < params.num_facet_centres; ++facet_index) {
                 uvw_base_type new_phase_ra = params.facet_centres[2*facet_index];
                 uvw_base_type new_phase_dec = params.facet_centres[2*facet_index + 1];
-
-                printf("FACETING (%f,%f,%f,%f) %lu / %lu...\n",params.phase_centre_ra,params.phase_centre_dec,new_phase_ra,new_phase_dec,facet_index+1, params.num_facet_centres);
-                fflush(stdout);
-
+                printf("FACETING SINGLE (%f,%f,%f,%f) %lu / %lu...\n",params.phase_centre_ra,params.phase_centre_dec,new_phase_ra,new_phase_dec,facet_index+1, params.num_facet_centres);
 
                 typedef imaging::baseline_transform_policy<uvw_base_type,
                         transform_facet_lefthanded_ra_dec> baseline_transform_policy_type;
@@ -150,7 +258,7 @@ extern "C" {
     }
     void grid_duel_pol(gridding_parameters & params) {
         gridding_barrier();
-        gridding_future = std::async(std::launch::async, [params] () {
+        gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
             using namespace imaging;
             printf("GRIDDING DUEL POL...");
@@ -203,7 +311,7 @@ extern "C" {
 
     void facet_duel_pol(gridding_parameters & params) {
         gridding_barrier();
-        gridding_future = std::async(std::launch::async, [params] () {
+        gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
             using namespace imaging;
             size_t no_facet_pixels = params.nx*params.ny;
@@ -264,7 +372,7 @@ extern "C" {
     }
     void grid_4_cor(gridding_parameters & params) {
         gridding_barrier();
-        gridding_future = std::async(std::launch::async, [params] () {
+        gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
             using namespace imaging;
             assert(params.number_of_polarization_terms == 4); //Only supports 4 correlation visibilties in this mode
@@ -313,7 +421,7 @@ extern "C" {
     }
     void facet_4_cor(gridding_parameters & params) {
         gridding_barrier();
-        gridding_future = std::async(std::launch::async, [params] () {
+        gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
             using namespace imaging;
             assert(params.number_of_polarization_terms == 4); //Only supports 4 correlation visibilties in this mode
@@ -373,7 +481,7 @@ extern "C" {
     }
     void facet_4_cor_corrections(gridding_parameters & params) {
         gridding_barrier();
-        gridding_future = std::async(std::launch::async, [params] () {
+        gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
             using namespace imaging;
             assert(params.number_of_polarization_terms == 4); //Only supports 4 correlation visibilties in this mode
@@ -442,13 +550,12 @@ extern "C" {
 						 params.channel_grid_indicies,
 						 params.enabled_channels);
             }
-            gridding_timer.stop();
         });
     }
     
     void grid_sampling_function(gridding_parameters & params) {
         gridding_barrier();
-        gridding_future = std::async(std::launch::async, [params] () {
+        gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
             using namespace imaging;
             printf("GRIDDING SAMPLING FUNCTION...\n");
@@ -468,7 +575,7 @@ extern "C" {
                     params.sampling_function_buffer,
                     params.flags,
                     params.number_of_polarization_terms,
-                    params.polarization_index,
+                    0,
                     params.channel_count);
             convolution_policy_type convolution_policy(params.nx,params.ny,1,params.conv_support,params.conv_oversample,
                     params.conv, polarization_policy);
@@ -490,13 +597,12 @@ extern "C" {
                      params.imaging_field,params.spw_index_array,
 		     params.sampling_function_channel_grid_indicies,
 		     params.enabled_channels);
-	    gridding_timer.stop();
         });
     }
     
     void facet_sampling_function(gridding_parameters & params) {
         gridding_barrier();
-        gridding_future = std::async(std::launch::async, [params] () {
+        gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
             using namespace imaging;
             size_t no_facet_pixels = params.nx*params.ny;
@@ -527,7 +633,7 @@ extern "C" {
                         params.sampling_function_buffer + no_facet_pixels*params.sampling_function_channel_count*facet_index,
                         params.flags,
                         params.number_of_polarization_terms,
-                        params.polarization_index,
+                        0,
                         params.channel_count);
                 convolution_policy_type convolution_policy(params.nx,params.ny,1,
                         params.conv_support,params.conv_oversample,
@@ -549,7 +655,6 @@ extern "C" {
 						 params.enabled_channels);
                 printf(" <DONE>\n");
             }
-            gridding_timer.stop();
         });
     }
 }
