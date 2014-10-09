@@ -19,7 +19,8 @@ from helpers import gridding_parameters
 from helpers import png_export
 from helpers import timer
 import ctypes
-libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
+#libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
+libimaging = ctypes.pydll.LoadLibrary("build/gpu_algorithm/libgpu_imaging.so")
 def coords(s):  
     try:
 	sT = s.strip()
@@ -319,6 +320,7 @@ if __name__ == "__main__":
     initiate the backend imaging library
     '''
     params = gridding_parameters.gridding_parameters()
+    params.chunk_max_row_count = ctypes.c_size_t(chunk_size)
     params.nx = ctypes.c_size_t(parser_args['npix_l']) #this ensures a deep copy
     params.ny = ctypes.c_size_t(parser_args['npix_m']) #this ensures a deep copy
     params.cell_size_x = base_types.uvw_ctypes_convert_type(parser_args['cell_l']) #this ensures a deep copy
@@ -340,6 +342,7 @@ if __name__ == "__main__":
     params.channel_count = ctypes.c_size_t(data._no_channels) #this ensures a deep copy
     params.antenna_count = ctypes.c_size_t(data._no_antennae) #this ensures a deep copy
     params.enabled_channels = enabled_channels.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
+    params.reference_wavelengths = data._chan_wavelengths.ctypes.data_as(ctypes.c_void_p) #this is part of the header of the MS and must stay constant between chunks
     if parser_args['output_psf'] or parser_args['sample_weighting'] != 'natural':
       params.polarization_index = ctypes.c_size_t(0) #stays constant between strides
       params.sampling_function_buffer = sampling_funct.ctypes.data_as(ctypes.c_void_p) #we never do 2 computes at the same time (or the reduction is handled at the C++ implementation level)
@@ -348,9 +351,18 @@ if __name__ == "__main__":
     params.num_facet_centres = ctypes.c_size_t(max(1,num_facet_centres)) #stays constant between strides
     params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p)
     params.detapering_buffer = conv._F_detaper.ctypes.data_as(ctypes.c_void_p) #stays constant between strides
-    libimaging.initLibrary(ctypes.byref(params))
     
-      
+    if len(correlations_to_grid) == 1 and not parser_args['do_jones_corrections']:
+	pol_index = data._polarization_correlations.tolist().index(correlations_to_grid[0])
+	params.polarization_index = ctypes.c_size_t(pol_index) #stays constant between strides
+    elif len(correlations_to_grid) == 2 and not parser_args['do_jones_corrections']: #the user want to derive one of the stokes terms (I,Q,U,V)
+	pol_index = data._polarization_correlations.tolist().index(correlations_to_grid[0])
+	pol_index_2 = data._polarization_correlations.tolist().index(correlations_to_grid[1])
+	params.polarization_index = ctypes.c_size_t(pol_index) #stays constant between strides
+	params.second_polarization_index = ctypes.c_size_t(pol_index_2) #stays constant between strides
+    else:#the user want to apply corrective terms
+	pass
+    libimaging.initLibrary(ctypes.byref(params))  
     '''
     each chunk will start processing while data is being read in, we will wait until until this process rejoins
     before copying the buffers and starting to grid the next chunk
@@ -372,7 +384,6 @@ if __name__ == "__main__":
       params.visibilities = arr_data_cpy.ctypes.data_as(ctypes.c_void_p)
       arr_uvw_cpy = data._arr_uvw #gridding will operate on deep copied memory
       params.uvw_coords = arr_uvw_cpy.ctypes.data_as(ctypes.c_void_p)
-      params.reference_wavelengths = data._chan_wavelengths.ctypes.data_as(ctypes.c_void_p) #this is part of the header of the MS and must stay constant between chunks
       arr_weights_cpy = data._arr_weights #gridding will operate on deep copied memory
       params.visibility_weights = arr_weights_cpy.ctypes.data_as(ctypes.c_void_p)
       arr_flags_cpy = data._arr_flaged #gridding will operate on deep copied memory
@@ -383,23 +394,18 @@ if __name__ == "__main__":
       params.field_array = row_field_id_cpy.ctypes.data_as(ctypes.c_void_p)
       arr_description_col_cpy = data._description_col #gridding will operate on deep copied memory
       params.spw_index_array = arr_description_col_cpy.ctypes.data_as(ctypes.c_void_p)
-      params.row_count = ctypes.c_size_t(chunk_linecount) #this ensures a deep copy
-      params.no_timestamps_read = ctypes.c_size_t(data._no_timestamps_read) #this ensures a deep copy      
+      params.row_count = ctypes.c_size_t(chunk_linecount)
+      params.no_timestamps_read = ctypes.c_size_t(data._no_timestamps_read)
+      params.is_final_data_chunk = ctypes.c_bool(chunk_index == no_chunks - 1)
       '''
       no need to grid more than one of the correlations if the user isn't interrested in imaging one of the stokes terms (I,Q,U,V) or the stokes terms are the correlation products:
       '''
       if len(correlations_to_grid) == 1 and not parser_args['do_jones_corrections']:
-	pol_index = data._polarization_correlations.tolist().index(correlations_to_grid[0])
-	params.polarization_index = ctypes.c_size_t(pol_index) #stays constant between strides
 	if (num_facet_centres == 0):
 	  libimaging.grid_single_pol(ctypes.byref(params))
 	else: #facet single correlation term
 	  libimaging.facet_single_pol(ctypes.byref(params))
       elif len(correlations_to_grid) == 2 and not parser_args['do_jones_corrections']: #the user want to derive one of the stokes terms (I,Q,U,V)
-	pol_index = data._polarization_correlations.tolist().index(correlations_to_grid[0])
-	pol_index_2 = data._polarization_correlations.tolist().index(correlations_to_grid[1])
-	params.polarization_index = ctypes.c_size_t(pol_index) #stays constant between strides
-	params.second_polarization_index = ctypes.c_size_t(pol_index_2) #stays constant between strides
 	if (num_facet_centres == 0):
 	  libimaging.grid_duel_pol(ctypes.byref(params))
 	else: #facet single correlation term
@@ -638,7 +644,6 @@ if __name__ == "__main__":
 				       montage_combined_img
 				      )
 	     )
-  libimaging.releaseLibrary()
   print "FINISHED WORK SUCCESSFULLY"
   total_run_time.stop()
   print "STATISTICS:"
@@ -650,3 +655,4 @@ if __name__ == "__main__":
   print "\t\tGridding time: %f secs" % libimaging.get_gridding_walltime()
   print "\tFourier inversion time: %f secs" % libimaging.get_inversion_walltime()
   print "\tTotal runtime: %f secs" % total_run_time.elapsed()
+  libimaging.releaseLibrary()

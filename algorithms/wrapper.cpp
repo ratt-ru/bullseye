@@ -4,9 +4,12 @@
 #include <numeric>
 #include <fftw3.h>
 #include <typeinfo>
+#include <thread>
+#include <future>
 
 #include "omp.h"
 #include "wrapper.h"
+#include "timer.h"
 #include "uvw_coord.h"
 #include "baseline_transform_policies.h"
 #include "phase_transform_policies.h"
@@ -23,6 +26,19 @@
 extern "C" {
     fftw_plan_type fft_plan;
     fftw_plan_type fft_psf_plan;
+    utils::timer gridding_timer;
+    utils::timer inversion_timer;
+    std::future<void> gridding_future;
+    double get_gridding_walltime() {
+      return gridding_timer.duration();
+    }
+    double get_inversion_walltime() {
+      return inversion_timer.duration();
+    }
+    void gridding_barrier() {
+        if (gridding_future.valid())
+            gridding_future.get(); //Block until result becomes available
+    }
     void initLibrary(gridding_parameters & params){
       printf("-----------------------------------------------\n"
 	     "      Backend: Multithreaded CPU Library       \n\n");	     

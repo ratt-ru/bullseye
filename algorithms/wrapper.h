@@ -1,23 +1,9 @@
 #pragma once
-#include <thread>
-#include <future>
-
-#include "timer.h"
 #include "gridding_parameters.h"
 extern "C" {
-    utils::timer gridding_timer;
-    utils::timer inversion_timer;
-    double get_gridding_walltime() {
-      return gridding_timer.duration();
-    }
-    double get_inversion_walltime() {
-      return inversion_timer.duration();
-    }
-    std::future<void> gridding_future;
-    void gridding_barrier() {
-        if (gridding_future.valid())
-            gridding_future.get(); //Block until result becomes available
-    }
+    double get_gridding_walltime();
+    double get_inversion_walltime();
+    void gridding_barrier();
     void initLibrary(gridding_parameters & params);
     void releaseLibrary();
     void weight_uniformly(gridding_parameters & params);

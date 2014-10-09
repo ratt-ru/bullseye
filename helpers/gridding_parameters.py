@@ -16,6 +16,7 @@ gridding_parameters._fields_ = [
   #Mandatory count fields necessary for gridding:
   ("baseline_count",c_size_t),
   ("row_count",c_size_t),
+  ("chunk_max_row_count",c_size_t),
   ("channel_count",c_size_t),
   ("number_of_polarization_terms",c_size_t),
   ("number_of_polarization_terms_being_gridded",c_size_t),
@@ -56,5 +57,7 @@ gridding_parameters._fields_ = [
   ("sampling_function_channel_grid_indicies",c_void_p),
   ("sampling_function_channel_count",c_size_t),
   #Precomputed Detapering coefficients
-  ("detapering_buffer",c_void_p)
+  ("detapering_buffer",c_void_p),
+  #Finalization steps
+  ("is_final_data_chunk",c_bool)
 ]

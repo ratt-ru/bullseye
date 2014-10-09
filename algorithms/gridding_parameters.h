@@ -14,18 +14,19 @@ typedef float grid_base_type;
 
 struct gridding_parameters {
     //Mandatory data necessary for gridding:
-    const std::complex<visibility_base_type> * visibilities;
-    const imaging::uvw_coord<uvw_base_type> * uvw_coords;
-    const reference_wavelengths_base_type * reference_wavelengths;
-    const visibility_weights_base_type * visibility_weights;
-    const bool * flags;
-    const bool * flagged_rows;
-    const unsigned int * field_array;
-    const unsigned int * spw_index_array;
+    std::complex<visibility_base_type> * visibilities;
+    imaging::uvw_coord<uvw_base_type> * uvw_coords;
+    reference_wavelengths_base_type * reference_wavelengths;
+    visibility_weights_base_type * visibility_weights;
+    bool * flags;
+    bool * flagged_rows;
+    unsigned int * field_array;
+    unsigned int * spw_index_array;
     unsigned int imaging_field; //mandatory: used to seperate different pointings in the MS 2.0 specification
     //Mandatory count fields necessary for gridding:
     size_t baseline_count;
     size_t row_count;
+    size_t chunk_max_row_count; //this will be quite useful to preallocate all the space we can ever need on a gpu implementation
     size_t channel_count;
     size_t number_of_polarization_terms;
     size_t number_of_polarization_terms_being_gridded;
@@ -48,23 +49,25 @@ struct gridding_parameters {
     //Faceting information
     uvw_base_type phase_centre_ra;
     uvw_base_type phase_centre_dec;
-    const uvw_base_type * facet_centres;
+    uvw_base_type * facet_centres;
     size_t num_facet_centres;
     //Fields required to specify jones facet_4_cor_corrections
     std::complex<visibility_base_type> * jones_terms;
     bool should_invert_jones_terms;
-    const unsigned int * antenna_1_ids;
-    const unsigned int * antenna_2_ids;
-    const std::size_t * timestamp_ids;
+    unsigned int * antenna_1_ids;
+    unsigned int * antenna_2_ids;
+    std::size_t * timestamp_ids;
     size_t antenna_count;
     //Channel selection and averaging
-    const bool * enabled_channels;
-    const std::size_t * channel_grid_indicies;
+    bool * enabled_channels;
+    std::size_t * channel_grid_indicies;
     size_t cube_channel_dim_size;
     //Sampling function
     std::complex<grid_base_type> * sampling_function_buffer;
-    const std::size_t * sampling_function_channel_grid_indicies;
+    std::size_t * sampling_function_channel_grid_indicies;
     size_t sampling_function_channel_count;
     //Precomputed Detapering coefficients
     convolution_base_type * detapering_buffer;
+    //Finalization steps
+    bool is_final_data_chunk;
 };
