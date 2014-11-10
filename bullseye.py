@@ -19,8 +19,8 @@ from helpers import gridding_parameters
 from helpers import png_export
 from helpers import timer
 import ctypes
-#libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
-libimaging = ctypes.pydll.LoadLibrary("build/gpu_algorithm/libgpu_imaging.so")
+libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
+#libimaging = ctypes.pydll.LoadLibrary("build/gpu_algorithm/libgpu_imaging.so")
 def coords(s):  
     try:
 	sT = s.strip()
@@ -96,7 +96,7 @@ if __name__ == "__main__":
   parser.add_argument('--conv_sup', help='Specify gridding convolution function support area (number of grid cells)', type=int, default=1)
   parser.add_argument('--conv_oversamp', help='Specify gridding convolution function oversampling multiplier', type=int, default=1)
   parser.add_argument('--output_format', help='Specify image output format', choices=["fits","png"], default="fits")
-  parser.add_argument('--mem_available_for_input_data', help='Specify available memory (bytes) for storing the input measurement set data arrays', type=int, default=1024*1024*1024)
+  parser.add_argument('--no_chunks', help='Specify number of chunks to split measurement set into (useful to handle large measurement sets / overlap io and compute)', type=int, default=10)
   parser.add_argument('--field_id', help='Specify the id of the field (pointing) to image', type=int, default=0)
   parser.add_argument('--data_column', help='Specify the measurement set data column being imaged', type=str, default='DATA')
   parser.add_argument('--do_jones_corrections',help='Enables applying corrective jones terms per facet. Requires number of'
@@ -123,10 +123,11 @@ if __name__ == "__main__":
     print "NOW IMAGING %s" % ms
     data = data_set_loader.data_set_loader(ms,read_jones_terms=parser_args['do_jones_corrections'])
     data.read_head()
-    chunk_size = data.compute_number_of_rows_to_read_from_mem_requirements(parser_args['mem_available_for_input_data'])
-    if chunk_size == 0:
-      raise Exception("Insufficient memory allocated for loading data. Cannot even load a single row and a timestamp of jones matricies at a time")
-    no_chunks = data.number_of_read_iterations_required_from_mem_requirements(parser_args['mem_available_for_input_data'])
+    no_chunks = parser_args['no_chunks']
+    if no_chunks < 1:
+      raise Exception("Cannot read less than one chunk from measurement set!")
+    chunk_size = int(np.ceil(data._no_rows / float(no_chunks)))
+    
     '''
     some sanity checks:
     check that the measurement set contains the correlation terms necessary to create the requested pollarization / Stokes term:
@@ -397,6 +398,12 @@ if __name__ == "__main__":
       params.row_count = ctypes.c_size_t(chunk_linecount)
       params.no_timestamps_read = ctypes.c_size_t(data._no_timestamps_read)
       params.is_final_data_chunk = ctypes.c_bool(chunk_index == no_chunks - 1)
+      arr_antenna_1_cpy = data._arr_antenna_1 #gridding will operate with deep copied data
+      params.antenna_1_ids = arr_antenna_1_cpy.ctypes.data_as(ctypes.c_void_p)
+      arr_antenna_2_cpy = data._arr_antenna_2 #gridding will operate with deep copied data
+      params.antenna_2_ids = arr_antenna_2_cpy.ctypes.data_as(ctypes.c_void_p)
+      arr_time_indicies_cpy = data._time_indicies #gridding will operate with deep copied data
+      params.timestamp_ids = arr_time_indicies_cpy.ctypes.data_as(ctypes.c_void_p)
       '''
       no need to grid more than one of the correlations if the user isn't interrested in imaging one of the stokes terms (I,Q,U,V) or the stokes terms are the correlation products:
       '''
@@ -417,12 +424,6 @@ if __name__ == "__main__":
 	  if parser_args['do_jones_corrections']: #do faceting with jones corrections
 	    jones_terms_cpy = data._jones_terms #gridding will operate with deep copied data
 	    params.jones_terms = jones_terms_cpy.ctypes.data_as(ctypes.c_void_p) 
-	    arr_antenna_1_cpy = data._arr_antenna_1 #gridding will operate with deep copied data
-	    params.antenna_1_ids = arr_antenna_1_cpy.ctypes.data_as(ctypes.c_void_p)
-	    arr_antenna_2_cpy = data._arr_antenna_2 #gridding will operate with deep copied data
-	    params.antenna_2_ids = arr_antenna_2_cpy.ctypes.data_as(ctypes.c_void_p)
-	    arr_time_indicies_cpy = data._time_indicies #gridding will operate with deep copied data
-	    params.timestamp_ids = arr_time_indicies_cpy.ctypes.data_as(ctypes.c_void_p)
 	    libimaging.facet_4_cor_corrections(ctypes.byref(params))
 	  else: #skip the jones corrections
 	    libimaging.facet_4_cor(ctypes.byref(params))

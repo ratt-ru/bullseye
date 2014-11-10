@@ -9,7 +9,7 @@
 #include <cmath>
 #include <iostream>
 #include <omp.h>
-
+#include <stdexcept>
 #include "uvw_coord.h"
 #include "wrapper.h"
 #include "gridding_parameters.h"
