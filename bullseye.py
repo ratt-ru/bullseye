@@ -94,7 +94,7 @@ if __name__ == "__main__":
   parser.add_argument('--pol', help='Specify image polarization', choices=pol_options.keys(), default="XX")
   parser.add_argument('--conv', help='Specify gridding convolution function type', choices=['gausian','keiser bessel'], default='keiser bessel')
   parser.add_argument('--conv_sup', help='Specify gridding convolution function support area (number of grid cells)', type=int, default=1)
-  parser.add_argument('--conv_oversamp', help='Specify gridding convolution function oversampling multiplier', type=int, default=1)
+  parser.add_argument('--conv_oversamp', help='Specify gridding convolution function oversampling multiplier', type=int, default=7)
   parser.add_argument('--output_format', help='Specify image output format', choices=["fits","png"], default="fits")
   parser.add_argument('--mem_available_for_input_data', help='Specify available memory (bytes) for storing the input measurement set data arrays', type=int, default=1024*1024*1024)
   parser.add_argument('--field_id', help='Specify the id of the field (pointing) to image', type=int, default=0)
