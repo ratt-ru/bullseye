@@ -4,6 +4,7 @@
 #include <cstdio>
 #include "wrapper.h"
 #include "dft.h"
+#include "gridder.h"
 #include "timer.h"
 #include "cu_common.h"
 #include "uvw_coord.h"

@@ -19,3 +19,7 @@ inline void __cufftSafeCall( uint32_t err, const char *file, const int line ){
         }
         return;
 }
+
+template <typename T> struct basic_complex { T _real,_imag; };
+const float ARCSEC_TO_RAD = M_PI/(180.0*3600.0);
+

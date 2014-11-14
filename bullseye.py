@@ -19,8 +19,8 @@ from helpers import gridding_parameters
 from helpers import png_export
 from helpers import timer
 import ctypes
-libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
-#libimaging = ctypes.pydll.LoadLibrary("build/gpu_algorithm/libgpu_imaging.so")
+#libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
+libimaging = ctypes.pydll.LoadLibrary("build/gpu_algorithm/libgpu_imaging.so")
 def coords(s):  
     try:
 	sT = s.strip()

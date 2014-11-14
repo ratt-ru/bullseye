@@ -1,8 +1,8 @@
 #pragma once
+#include "cu_common.h"
 #include "gridding_parameters.h"
+
 namespace imaging {
-  template <typename T> struct basic_complex { T _real,_imag; };
-  const float ARCSEC_TO_RAD = M_PI/(180.0*3600.0);
   /**
    * This is a basic implementation of a gpu-base "Direct" FT
    * It expects to be launched with (1 thread per pixel):

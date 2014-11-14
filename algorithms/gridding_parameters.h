@@ -70,4 +70,6 @@ struct gridding_parameters {
     convolution_base_type * detapering_buffer;
     //Finalization steps
     bool is_final_data_chunk;
+    //baseline indexes needed for Romeins distribution strategy
+    size_t * baseline_starting_indexes; //this has to be n(n-1)/2 + n + 1 long because we need to compute the length of the last baseline
 };
