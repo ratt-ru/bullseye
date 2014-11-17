@@ -66,6 +66,8 @@ class convolution_filter(object):
       conv_FIR_dim[x] = convolution_func[function_to_use]((x - convolution_centre)/float(convolution_size),grid_size_l)
     
     self._conv_FIR = np.outer(conv_FIR_dim,conv_FIR_dim) # the tensor product is probably the fastest way to get this matrix out with python
+    self._conv_FIR /= np.sum(self._conv_FIR) #the convolution function should integrate to unity, so that the whole image doesn't change when we change the oversampling
+    
     print " <DONE>"
     
     print("CREATING DETAPERER... "),

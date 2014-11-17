@@ -57,6 +57,8 @@ namespace imaging {
 						atomicAdd((grid_base_type*)params.output_buffer + grid_flat_index,my_grid_accum._real);
 						atomicAdd((grid_base_type*)params.output_buffer + grid_flat_index + 1,my_grid_accum._imag);
 					}
+					my_grid_accum._real = 0;
+					my_grid_accum._imag = 0;
 				}
 				//todo:for now lets read the convolution weight... then we should try calculate it on the fly later on
 				size_t conv_flat_index = my_conv_v * (params.conv_oversample * params.conv_support) + my_conv_u;

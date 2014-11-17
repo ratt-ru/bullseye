@@ -78,10 +78,10 @@ extern "C" {
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.flagged_rows, sizeof(bool) * params.chunk_max_row_count));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.visibility_weights, sizeof(visibility_weights_base_type) * params.chunk_max_row_count * params.channel_count * params.number_of_polarization_terms_being_gridded));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.flags, sizeof(bool) * params.chunk_max_row_count * params.channel_count * params.number_of_polarization_terms_being_gridded));
-	cudaSafeCall(cudaMalloc((void**)&gpu_params.output_buffer, sizeof(grid_base_type) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size));
+	cudaSafeCall(cudaMalloc((void**)&gpu_params.output_buffer, sizeof(std::complex<grid_base_type>) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size));
 	cudaSafeCall(cudaMemset(gpu_params.output_buffer,0,sizeof(grid_base_type) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size));
-	
-	
+	cudaSafeCall(cudaMalloc((void**)&gpu_params.conv, sizeof(convolution_base_type) * params.conv_support * params.conv_oversample));	
+	cudaSafeCall(cudaMemcpy(gpu_params.conv, params.conv, sizeof(convolution_base_type) * params.conv_support * params.conv_oversample,cudaMemcpyHostToDevice));
 	
 	cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
     }
@@ -96,6 +96,7 @@ extern "C" {
       cudaSafeCall(cudaFree(gpu_params.spw_index_array));
       cudaSafeCall(cudaFree(gpu_params.flagged_rows));
       cudaSafeCall(cudaFree(gpu_params.flags));
+      cudaSafeCall(cudaFree(gpu_params.conv));
       cudaSafeCall(cudaStreamDestroy(compute_stream));
       cudaDeviceReset(); //leave the device in a safe state
     }
@@ -163,7 +164,7 @@ extern "C" {
 				ceil(params.ny / (double)NO_THREADS_PER_BLOCK_DIM),
 				1);
 	dim3 no_threads_per_block(NO_THREADS_PER_BLOCK_DIM,NO_THREADS_PER_BLOCK_DIM,1);
-	imaging::dft_kernel<<<no_blocks_per_grid,no_threads_per_block,0,compute_stream>>>(gpu_params,no_blocks_per_grid,no_threads_per_block);
+	imaging::grid_single<<<no_blocks_per_grid,no_threads_per_block,0,compute_stream>>>(gpu_params,no_blocks_per_grid,no_threads_per_block);
       }
       //swap buffers device -> host when gridded last chunk
       if (params.is_final_data_chunk){

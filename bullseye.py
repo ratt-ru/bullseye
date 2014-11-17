@@ -19,8 +19,8 @@ from helpers import gridding_parameters
 from helpers import png_export
 from helpers import timer
 import ctypes
-#libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
-libimaging = ctypes.pydll.LoadLibrary("build/gpu_algorithm/libgpu_imaging.so")
+libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
+#libimaging = ctypes.pydll.LoadLibrary("build/gpu_algorithm/libgpu_imaging.so")
 def coords(s):  
     try:
 	sT = s.strip()
@@ -161,6 +161,7 @@ if __name__ == "__main__":
       conv = convolution_filter.convolution_filter(parser_args['conv_sup'],
 						   parser_args['conv_oversamp'],parser_args['npix_l'],
 						   parser_args['npix_m'],parser_args['conv'])
+  
     print "IMAGING ONLY FIELD %s" % data._field_centre_names[parser_args['field_id']]
     '''
     check how many facets we have to create (if none we'll do normal gridding without any transformations)
@@ -567,7 +568,7 @@ if __name__ == "__main__":
       offset = cube_chan_dim_size*len(correlations_to_grid)*parser_args['npix_l']*parser_args['npix_m']*f*np.dtype(np.float32).itemsize
       dirty = np.ctypeslib.as_array(ctypes.cast(gridded_vis.ctypes.data + offset, ctypes.POINTER(ctypes.c_float)),
 				    shape=(cube_chan_dim_size,parser_args['npix_l'],parser_args['npix_m']))
-      
+      dirty /= parser_args['npix_l']*parser_args['npix_m'] #TODO FIX THIS
       fits_export.save_to_fits_image(image_prefix+'.fits',
 				     parser_args['npix_l'],parser_args['npix_m'],
 				     quantity(parser_args['cell_l'],'arcsec'),quantity(parser_args['cell_m'],'arcsec'),

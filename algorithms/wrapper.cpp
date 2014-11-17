@@ -138,7 +138,7 @@ extern "C" {
 	      std::size_t casting_ubound = casting_lbound + params.nx*params.ny*params.cube_channel_dim_size;
 	      for (std::size_t i = casting_lbound; i < casting_ubound; ++i){
 		  std::size_t detapering_flat_index = i % image_size;
-		  grid_ptr_single[i] = (float)(grid_ptr_gridtype[i*2] / params.detapering_buffer[detapering_flat_index]); //extract all the reals
+		  grid_ptr_single[i] = (float)(grid_ptr_gridtype[i*2]);// / params.detapering_buffer[detapering_flat_index]); //extract all the reals
 	      }
 	  }
 	}	
