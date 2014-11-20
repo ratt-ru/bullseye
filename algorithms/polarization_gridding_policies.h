@@ -102,7 +102,6 @@ namespace imaging {
 			    const uvw_coord<uvw_base_type> & __restrict__ uvw,
 			    typename trait_type::pol_vis_type & __restrict__ visibility
  			  ) __restrict__ {
-	//fetch four complex visibility terms from memory at a time:
 	std::size_t visibility_flat_index = (baseline_time_index * _channel_count + channel_index) * _no_polarizations_in_data + _polarization_index;
 	visibility = _visibilities[visibility_flat_index];
 	/*

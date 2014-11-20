@@ -132,27 +132,6 @@ class data_set_loader(object):
 	    if (self._cal_no_antennae != self._no_antennae or self._cal_no_spw != self._no_spw or self._cal_no_channels != self._no_channels or
 		self._cal_no_rows != self._cal_no_timestamps*self._cal_no_antennae*self._cal_no_dirs*self._cal_no_spw):
 		  raise Exception("Calibration data dimensions does not correspond to measurement set. Ensure calibration data has dimensions [no_timestamps x no_antennae x no_directions x no_spw x no_channel]")
-    '''
-      Computes the number of rows to read, given memory constraints (in bytes)
-      Assumes read_head has been called prior to this call
-    '''
-    def compute_number_of_rows_to_read_from_mem_requirements(self,max_bytes_available):
-	return int(max_bytes_available / ((3*8) + #uvw data
-				      (self._no_channels*self._no_polarization_correlations*2*8) + #complex visibilities
-				      (self._no_channels*self._no_polarization_correlations*8) + #weight
-				      (self._no_channels*self._no_polarization_correlations*np.dtype(np.bool_).itemsize) + #visibility flags
-				      (np.dtype(np.bool_).itemsize) + #row flags
-				      (4*np.dtype(np.intc).itemsize) + #antenna 1 & 2, FIELD_ID and DATA_DESCRIPTION_ID
-				      (np.dtype(np.float64).itemsize) + #timestamp window centre (MAIN/TIME)
-				      (1*np.dtype(np.intp).itemsize) + #timestamp id (computed when data is read)
-				      (self._no_antennae*self._cal_no_dirs*self._no_spw*self._no_channels*4*8*2/float(self._no_baselines)) #average jones contibution per row if all baselines are present per timestamp
-				     ) / 2.0) #we're using double the amount of memory in order to buffer IO while doing compute
-    '''
-      Computes the number of iterations required to read entire file, given memory constraints (in bytes)
-      Assumes read_head has been called prior to this call
-    '''
-    def number_of_read_iterations_required_from_mem_requirements(self,max_bytes_available):
-	return int(math.ceil(self._no_rows / float(self.compute_number_of_rows_to_read_from_mem_requirements(max_bytes_available))))
     
     '''
       Read data from the MS
@@ -296,44 +275,45 @@ class data_set_loader(object):
 	positions per baseline.
 	'''
 	def baseline_index(a1,a2):
-		slow_changing_antenna_index = min(self._arr_antenna_1[r],self._arr_antenna_2[r]) + 1
+		slow_changing_antenna_index = min(self._arr_antenna_1[r],self._arr_antenna_2[r])
 		#the unique index per baseline is given by a quadratic series on the slow-varying index plus the fast varying index...
-		baseline_flat_index = (slow_changing_antenna_index*(-slow_changing_antenna_index + (2*self._no_antennae + 3)) - 2 * (self._no_antennae + 1)) // 2 + abs(self._arr_antenna_2[r] - self._arr_antenna_1[r])
+		baseline_flat_index = (slow_changing_antenna_index*(-slow_changing_antenna_index + (2*self._no_antennae + 1))) // 2 + abs(self._arr_antenna_2[r] - self._arr_antenna_1[r])
 		return baseline_flat_index
 
 	self._baseline_timestamp_count = np.zeros([self._no_baselines],dtype=np.intp)
-	current_baseline_timestamp_index = np.zeros([self._no_baselines],dtype=np.intp) 
+	self._starting_indexes = np.zeros([self._no_baselines+1],dtype=np.intp) #this must be n(n-1)/2+n+1 since we want to be able to compute the number of timestamps for the last baseline
+	current_baseline_timestamp_index = np.zeros([self._no_baselines],dtype=np.intp)
 	with data_set_loader.time_to_load_chunks:
 		for r in range(0,no_rows): #bin the data according to index
 			bi = baseline_index(self._arr_antenna_1[r],self._arr_antenna_2[r])
 			self._baseline_timestamp_count[bi] += 1
-		self._starting_indexes = np.cumsum(self._baseline_timestamp_count) - self._baseline_timestamp_count[0] #we want the prescan operator here
+		self._starting_indexes[1:len(self._baseline_timestamp_count)+1] = np.cumsum(self._baseline_timestamp_count) #this will give us the prescan operator
 	
 	tmp_uvw = np.zeros([no_rows,3],dtype=base_types.uvw_type)
-	tmp_data = np.empty([no_rows,self._no_channels,self._no_polarization_correlations],dtype=base_types.visibility_type)
-	tmp_weights = np.empty([no_rows,self._no_channels,self._no_polarization_correlations],dtype=base_types.weight_type)
-	tmp_flags = np.empty([no_rows,self._no_channels,self._no_polarization_correlations],dtype=np.bool_)
-	tmp_flag_rows = np.empty([no_rows],dtype=np.bool_)
-	tmp_data_desc = np.empty([no_rows],dtype=np.int_)
-	tmp_ant_1 = np.empty([no_rows],dtype=np.int_)
-	tmp_ant_2 = np.empty([no_rows],dtype=np.int_)
-	tmp_field = np.empty([no_rows],dtype=np.int_)
-	tmp_time = np.empty([no_rows],dtype=np.intp)
+	tmp_data = np.zeros([no_rows,self._no_channels,self._no_polarization_correlations],dtype=base_types.visibility_type)
+	tmp_weights = np.ones([no_rows,self._no_channels,self._no_polarization_correlations],dtype=base_types.weight_type)
+	tmp_flags = np.zeros([no_rows,self._no_channels,self._no_polarization_correlations],dtype=np.bool_)
+	tmp_flag_rows = np.zeros([no_rows],dtype=np.bool_)
+	tmp_data_desc = np.empty([no_rows],dtype=np.intc)
+	tmp_ant_1 = np.empty([no_rows],dtype=np.intc)
+	tmp_ant_2 = np.empty([no_rows],dtype=np.intc)
+	tmp_field = np.empty([no_rows],dtype=np.intc)
+	tmp_time = np.empty([no_rows],dtype=np.intc)
 	with data_set_loader.time_to_load_chunks:
 	  for r in range(0,no_rows):
-			bi = baseline_index(self._arr_antenna_1[r],self._arr_antenna_2[r])
-			rearanged_index = current_baseline_timestamp_index[bi] + self._starting_indexes[bi]
-			current_baseline_timestamp_index[bi] += 1
-			tmp_uvw[rearanged_index] = self._arr_uvw[r]
-			tmp_data[rearanged_index] = self._arr_data[r]
-			tmp_weights[rearanged_index] = self._arr_weights[r]
-			tmp_flags[rearanged_index] = self._arr_flaged[r]
-			tmp_flag_rows[rearanged_index] = self._arr_flagged_rows[r]
-			tmp_data_desc[rearanged_index] = self._description_col[r]
-			tmp_ant_1[rearanged_index] = self._arr_antenna_1[r]
-			tmp_ant_2[rearanged_index] = self._arr_antenna_2[r]
-			tmp_field[rearanged_index] = self._row_field_id[r]
-			tmp_time[rearanged_index] = self._time_indicies[r]
+		bi = baseline_index(self._arr_antenna_1[r],self._arr_antenna_2[r])
+		rearanged_index = current_baseline_timestamp_index[bi] + self._starting_indexes[bi]
+		current_baseline_timestamp_index[bi] += 1
+		tmp_uvw[rearanged_index,:] = self._arr_uvw[r,:]
+		tmp_data[rearanged_index,:,:] = self._arr_data[r,:,:]
+		tmp_weights[rearanged_index,:] = self._arr_weights[r,:]
+		tmp_flags[rearanged_index,:] = self._arr_flaged[r,:]
+		tmp_flag_rows[rearanged_index] = self._arr_flagged_rows[r]
+		tmp_data_desc[rearanged_index] = self._description_col[r]
+		tmp_ant_1[rearanged_index] = self._arr_antenna_1[r]
+		tmp_ant_2[rearanged_index] = self._arr_antenna_2[r]
+		tmp_field[rearanged_index] = self._row_field_id[r]
+		tmp_time[rearanged_index] = self._time_indicies[r]
 	self._arr_uvw = tmp_uvw
 	self._arr_data = tmp_data
 	self._arr_weights = tmp_weights
@@ -344,7 +324,7 @@ class data_set_loader(object):
 	self._arr_antenna_2 = tmp_ant_2
 	self._row_field_id = tmp_field
 	self._time_indicies = tmp_time
-  
+	
 	'''
 	Read set of jones matricies from disk
 	'''
