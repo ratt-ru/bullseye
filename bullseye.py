@@ -295,12 +295,11 @@ if __name__ == "__main__":
     '''
     sampling_function_channel_grid_index = np.zeros([data._no_spw*data._no_channels],dtype=np.intp)
     sampling_function_channel_count = len(channels_to_image)
-    if parser_args['output_psf'] or parser_args['sample_weighting'] != 'natural':
-      current_grid = 0
-      for c in range(0,len(enabled_channels)):
-	sampling_function_channel_grid_index[c] = current_grid
-	if enabled_channels[c]:
-	  current_grid += 1
+    current_grid = 0
+    for c in range(0,len(enabled_channels)):
+      sampling_function_channel_grid_index[c] = current_grid
+      if enabled_channels[c]:
+	current_grid += 1
    
     '''
     allocate enough memory to compute image and or facets (only before gridding the first MS)
@@ -315,9 +314,8 @@ if __name__ == "__main__":
 	  gridded_vis = np.zeros([num_facet_grids,cube_chan_dim_size,4,parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.grid_type)
     
     if sampling_funct == None:
-	  if parser_args['output_psf'] or parser_args['sample_weighting'] != 'natural':
-	    num_facet_grids = 1 if (num_facet_centres == 0) else num_facet_centres
-	    sampling_funct = np.zeros([num_facet_grids,sampling_function_channel_count,1,parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.psf_type)
+      num_facet_grids = 1 if (num_facet_centres == 0) else num_facet_centres
+      sampling_funct = np.zeros([num_facet_grids,sampling_function_channel_count,1,parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.psf_type)
     '''
     initiate the backend imaging library
     '''
@@ -345,11 +343,12 @@ if __name__ == "__main__":
     params.antenna_count = ctypes.c_size_t(data._no_antennae) #this ensures a deep copy
     params.enabled_channels = enabled_channels.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
     params.reference_wavelengths = data._chan_wavelengths.ctypes.data_as(ctypes.c_void_p) #this is part of the header of the MS and must stay constant between chunks
-    if parser_args['output_psf'] or parser_args['sample_weighting'] != 'natural':
-      params.polarization_index = ctypes.c_size_t(0) #stays constant between strides
-      params.sampling_function_buffer = sampling_funct.ctypes.data_as(ctypes.c_void_p) #we never do 2 computes at the same time (or the reduction is handled at the C++ implementation level)
-      params.sampling_function_channel_grid_indicies = sampling_function_channel_grid_index.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
-      params.sampling_function_channel_count = ctypes.c_size_t(sampling_function_channel_count) #this won't change between chunks
+    
+    params.polarization_index = ctypes.c_size_t(0) #stays constant between strides
+    params.sampling_function_buffer = sampling_funct.ctypes.data_as(ctypes.c_void_p) #we never do 2 computes at the same time (or the reduction is handled at the C++ implementation level)
+    params.sampling_function_channel_grid_indicies = sampling_function_channel_grid_index.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
+    params.sampling_function_channel_count = ctypes.c_size_t(sampling_function_channel_count) #this won't change between chunks
+    
     params.num_facet_centres = ctypes.c_size_t(max(1,num_facet_centres)) #stays constant between strides
     params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p)
     params.detapering_buffer = conv._F_detaper.ctypes.data_as(ctypes.c_void_p) #stays constant between strides
@@ -431,11 +430,10 @@ if __name__ == "__main__":
       '''
       Now grid the psfs (this will automatically wait till visibility gridding has been completed)
       '''
-      if parser_args['output_psf'] or parser_args['sample_weighting'] != 'natural':
-	if (num_facet_centres == 0):
-	  libimaging.grid_sampling_function(ctypes.byref(params))
-	else:
-	  libimaging.facet_sampling_function(ctypes.byref(params))
+      if (num_facet_centres == 0):
+	libimaging.grid_sampling_function(ctypes.byref(params))
+      else:
+	libimaging.facet_sampling_function(ctypes.byref(params))
 	  
       if chunk_index == no_chunks - 1:
 	libimaging.gridding_barrier()
@@ -541,9 +539,23 @@ if __name__ == "__main__":
 	nc = shift_count / len(correlations_to_grid)
 	gridded_vis[f,nc,nf,:,:] = gridded_vis[f,c,0,:,:]
   '''
-  now invert, detaper and write out all the facets to disk:  
+  now normalize, invert, detaper and write out all the facets to disk:  
   '''
+  normalization_term_per_channel = np.add.reduce(np.add.reduce(sampling_funct,axis=4),axis=3).reshape(max(1,num_facet_centres),sampling_function_channel_count)
+  normalization_terms = np.zeros([max(1,num_facet_centres),cube_chan_dim_size])
+  for f in range(0, max(1,num_facet_centres)):
+    samp_chan_index = 0
+    for ci,grid_chan_index in enumerate(channel_grid_index):
+      if enabled_channels[ci]:
+	normalization_terms[f,grid_chan_index] += normalization_term_per_channel[f,samp_chan_index] #reduce over grids
+	samp_chan_index += 1
+  print normalization_terms
+  for f in range(0, max(1,num_facet_centres)):
+    for c in range(0,cube_chan_dim_size):
+      gridded_vis[f,c,0,:,:] /= normalization_terms[f,c]
   libimaging.finalize(ctypes.byref(params))
+      
+      
   if parser_args['output_psf']:
     libimaging.finalize_psf(ctypes.byref(params))
   for f in range(0, max(1,num_facet_centres)):
@@ -568,7 +580,7 @@ if __name__ == "__main__":
       offset = cube_chan_dim_size*len(correlations_to_grid)*parser_args['npix_l']*parser_args['npix_m']*f*np.dtype(np.float32).itemsize
       dirty = np.ctypeslib.as_array(ctypes.cast(gridded_vis.ctypes.data + offset, ctypes.POINTER(ctypes.c_float)),
 				    shape=(cube_chan_dim_size,parser_args['npix_l'],parser_args['npix_m']))
-      dirty /= parser_args['npix_l']*parser_args['npix_m'] #TODO FIX THIS
+      
       fits_export.save_to_fits_image(image_prefix+'.fits',
 				     parser_args['npix_l'],parser_args['npix_m'],
 				     quantity(parser_args['cell_l'],'arcsec'),quantity(parser_args['cell_m'],'arcsec'),

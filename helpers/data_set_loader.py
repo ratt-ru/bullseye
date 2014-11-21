@@ -324,7 +324,6 @@ class data_set_loader(object):
 	self._arr_antenna_2 = tmp_ant_2
 	self._row_field_id = tmp_field
 	self._time_indicies = tmp_time
-	
 	'''
 	Read set of jones matricies from disk
 	'''
