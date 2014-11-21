@@ -604,6 +604,7 @@ extern "C" {
             polarization_gridding_policy_type polarization_policy(phase_transform,
                     params.sampling_function_buffer,
                     params.flags,
+		    params.visibility_weights,
                     params.number_of_polarization_terms,
                     0,
                     params.channel_count);
@@ -662,6 +663,7 @@ extern "C" {
                 polarization_gridding_policy_type polarization_policy(phase_transform,
                         params.sampling_function_buffer + no_facet_pixels*params.sampling_function_channel_count*facet_index,
                         params.flags,
+			params.visibility_weights,
                         params.number_of_polarization_terms,
                         0,
                         params.channel_count);

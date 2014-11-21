@@ -549,7 +549,7 @@ if __name__ == "__main__":
       if enabled_channels[ci]:
 	normalization_terms[f,grid_chan_index] += normalization_term_per_channel[f,samp_chan_index] #reduce over grids
 	samp_chan_index += 1
-  print normalization_terms
+
   for f in range(0, max(1,num_facet_centres)):
     for c in range(0,cube_chan_dim_size):
       gridded_vis[f,c,0,:,:] /= normalization_terms[f,c]
