@@ -39,8 +39,8 @@ namespace imaging {
     std::size_t _nx;
     std::size_t _ny;
     std::size_t _grid_size_in_pixels;
-    std::size_t _grid_u_centre;
-    std::size_t _grid_v_centre;
+    uvw_base_type _grid_u_centre;
+    uvw_base_type _grid_v_centre;
     std::size_t _convolution_support;
     std::size_t _oversampling_factor;
     const convolution_base_type * __restrict__ _conv;
@@ -59,7 +59,7 @@ namespace imaging {
     */
     convolution_policy(std::size_t nx, std::size_t ny, std::size_t no_polarizations, std::size_t convolution_support, std::size_t oversampling_factor, 
 		       const convolution_base_type * conv, gridding_policy_type & active_gridding_policy):
-			_nx(nx), _ny(ny), _grid_size_in_pixels(nx*ny), _grid_u_centre(nx / 2), _grid_v_centre(ny / 2),
+			_nx(nx), _ny(ny), _grid_size_in_pixels(nx*ny), _grid_u_centre(nx / 2.0), _grid_v_centre(ny / 2.0),
 			_convolution_support(convolution_support), _oversampling_factor(oversampling_factor), 
 			_conv(conv), _conv_dim_size(convolution_support * oversampling_factor),
 			_conv_dim_centre(convolution_support / 2.0),
