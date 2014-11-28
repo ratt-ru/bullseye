@@ -14,8 +14,8 @@ void fftshift(std::complex<grid_base_type> * __restrict__ grid,
               std::size_t no_slices) {
     for (std::size_t slice = 0; slice < no_slices; ++slice) {
         std::size_t slice_offset = slice * nx * ny;
-        std::size_t quad_size_x = ceil(nx / 2.0);
-        std::size_t quad_size_y = ceil(ny / 2.0);
+        std::size_t quad_size_x = ceil((nx) / 2.0);
+        std::size_t quad_size_y = ceil((ny) / 2.0);
         std::size_t ubound = quad_size_x * quad_size_y;
         for (std::size_t i = 0; i < ubound; ++i) {
             std::size_t y_1 = i / quad_size_x;
@@ -54,8 +54,8 @@ void ifftshift(std::complex<grid_base_type> * __restrict__ grid,
                std::size_t no_slices) {
     for (std::size_t slice = 0; slice < no_slices; ++slice) {
         std::size_t slice_offset = slice * nx * ny;
-        std::size_t quad_size_x = nx / 2;
-        std::size_t quad_size_y = ny / 2;
+        std::size_t quad_size_x = (nx) / 2;
+        std::size_t quad_size_y = (ny) / 2;
         std::size_t ubound = quad_size_x * quad_size_y;
         for (std::size_t i = 0; i < ubound; ++i) {
             std::size_t y_1 = i / quad_size_x;
