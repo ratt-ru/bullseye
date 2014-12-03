@@ -111,7 +111,7 @@ if __name__ == "__main__":
   parser.add_argument('--average_all', help='Averages all selected channels together into a single image', type=bool, default=False)
   parser.add_argument('--output_psf',help='Outputs the Point Spread Function (per channel)',type=bool,default=False)
   parser.add_argument('--sample_weighting',help='Specify weighting technique in use.',choices=['natural','uniform'], default='natural')
-  
+  parser.add_argument('--open_default_viewer',help='Uses \'xdg-open\' to fire up the user\'s image viewer of choice.',default=False)
   parser_args = vars(parser.parse_args())
   '''
   initially the output grids must be set to NONE. Memory will only be allocated before the first MS is read.
@@ -565,6 +565,8 @@ if __name__ == "__main__":
       dirty = np.ctypeslib.as_array(ctypes.cast(gridded_vis.ctypes.data + offset, ctypes.POINTER(ctypes.c_float)),
 				    shape=(parser_args['npix_l'],parser_args['npix_m']))
       png_export.png_export(dirty,image_prefix,None)
+      if parser_args['open_default_viewer']:
+	os.system("xdg-open %s.png" % image_prefix)
       if parser_args['output_psf']:
 	for i,c in enumerate(channels_to_image):
 	  offset = parser_args['npix_l']*parser_args['npix_m']*f*np.dtype(np.float32).itemsize
@@ -591,6 +593,8 @@ if __name__ == "__main__":
 				     cube_delta_wavelength,
 				     cube_chan_dim_size,
 				     dirty)
+      if parser_args['open_default_viewer']:
+	os.system("xdg-open %s.fits" % image_prefix)
       if parser_args['output_psf']:
 	for i,c in enumerate(channels_to_image):
 	  offset = i*parser_args['npix_l']*parser_args['npix_m']*f*np.dtype(np.float32).itemsize
