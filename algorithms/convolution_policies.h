@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include <complex>
 #include "uvw_coord.h"
+#include "fft_shift_utils.h"
 
 namespace imaging {
   class convolution_precomputed_fir {};
@@ -45,7 +46,7 @@ namespace imaging {
     std::size_t _oversampling_factor;
     const convolution_base_type * __restrict__ _conv;
     std::size_t _conv_dim_size;
-    uvw_base_type _conv_dim_centre;
+    uvw_base_type _conv_centre_offset;
     gridding_policy_type & __restrict__ _active_gridding_policy;
     std::size_t _cube_chan_dim_step;
   public:
@@ -61,54 +62,43 @@ namespace imaging {
 			_nx(nx), _ny(ny), _grid_size_in_pixels(nx*ny), _grid_u_centre(nx / 2.0), _grid_v_centre(ny / 2.0),
 			_convolution_support(convolution_support), _oversampling_factor(oversampling_factor), 
 			_conv(conv), _conv_dim_size(convolution_support * oversampling_factor),
-			_conv_dim_centre((convolution_support-1)/2.0),
+			_conv_centre_offset((convolution_support)/2),
 			_active_gridding_policy(active_gridding_policy),
 			_cube_chan_dim_step(nx*ny*no_polarizations)
 			{}
     inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
 			 const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__ vis,
 			 std::size_t no_grids_to_offset) const __restrict__ {
-	
-	uvw_base_type translated_grid_u = uvw._u + _grid_u_centre;
-	uvw_base_type translated_grid_v = uvw._v + _grid_v_centre;
-	uvw_base_type frac_u = (translated_grid_u - (int)(translated_grid_u)) * _oversampling_factor;
-	uvw_base_type frac_v = (translated_grid_v - (int)(translated_grid_v)) * _oversampling_factor;
-	
+	auto convolve = [this](int x){
+	  #define SIGMA 0.5974
+	  return exp(-0.5 * (x/SIGMA)*(x/SIGMA));
+	};
 	std::size_t chan_offset = no_grids_to_offset * _cube_chan_dim_step;
+
+	uvw_base_type translated_grid_u = uvw._u + _grid_u_centre - _conv_centre_offset;
+	uvw_base_type translated_grid_v = uvw._v + _grid_v_centre - _conv_centre_offset;
+	std::size_t disc_grid_u = std::lrint(translated_grid_u);
+	std::size_t disc_grid_v = std::lrint(translated_grid_v);
 	
-	for (std::size_t sup_v = 0; sup_v < _convolution_support/2; ++sup_v){
-	  std::size_t convolved_grid_v = std::lrint(translated_grid_v - (_convolution_support/2 - sup_v -1));
-	  if (convolved_grid_v >= _ny) continue;
-	  std::size_t conv_v = (std::size_t)((uvw_base_type)sup_v*_oversampling_factor - frac_v);
-	  if (conv_v >= _conv_dim_size) continue;
-	  for (std::size_t sup_u = 0; sup_u < _convolution_support/2; ++sup_u){
-	    std::size_t convolved_grid_u = std::lrint(translated_grid_u - (_convolution_support/2 - sup_u - 1));
-	    if (convolved_grid_u >= _nx) continue;
-	    std::size_t conv_u = (std::size_t)((uvw_base_type)sup_u*_oversampling_factor - frac_u);
-	    if (conv_u >= _conv_dim_size) continue;
-	    std::size_t convolution_flat_index = (conv_v * _conv_dim_size + conv_u);
-	    std::size_t grid_flat_index = convolved_grid_v*_ny + convolved_grid_u;
-	    convolution_base_type conv_weight = _conv[convolution_flat_index];
-	    _active_gridding_policy.grid_polarization_terms(chan_offset + grid_flat_index, vis, conv_weight);
-	  }
-	}
+	uvw_base_type frac_u = (disc_grid_u - translated_grid_u);
+        uvw_base_type frac_v = (disc_grid_v - translated_grid_v);
 	
-	for (std::size_t sup_v = 0; sup_v <= _convolution_support/2; ++sup_v) {
-	  std::size_t convolved_grid_v = std::lrint(translated_grid_v + (_convolution_support/2 - sup_v - 1));
-	  if (convolved_grid_v >= _ny) continue;
-	  std::size_t conv_v = (std::size_t)((uvw_base_type)(_convolution_support - sup_v)*_oversampling_factor + frac_v);
-	  if (conv_v >= _conv_dim_size) continue;	    
-	  for (std::size_t sup_u = 0; sup_u <= _convolution_support/2; ++sup_u) {
-	    std::size_t convolved_grid_u = std::lrint(translated_grid_u + (_convolution_support/2 - sup_u - 1));
-	    if (convolved_grid_u >= _nx) continue;
-	    std::size_t conv_u = (std::size_t)((uvw_base_type)(_convolution_support - sup_u)*_oversampling_factor + frac_u);
-	    if (conv_u >= _conv_dim_size) continue;
-	    std::size_t convolution_flat_index = (conv_v * _conv_dim_size + conv_u);
-	    std::size_t grid_flat_index = convolved_grid_v*_ny + convolved_grid_u;
-	    
-	    convolution_base_type conv_weight = _conv[convolution_flat_index];
-	    _active_gridding_policy.grid_polarization_terms(chan_offset + grid_flat_index, vis, conv_weight);
-	  }
+	if (disc_grid_v + _convolution_support  >= _ny) return;
+	if (disc_grid_u + _convolution_support  >= _nx) return;
+	{
+	
+            for (std::size_t sup_v = 0; sup_v <= _convolution_support; ++sup_v) {
+                std::size_t convolved_grid_v = disc_grid_v + sup_v;
+                uvw_base_type conv_v = abs(((uvw_base_type)sup_v - _conv_centre_offset)*_oversampling_factor + frac_v);
+                for (std::size_t sup_u = 0; sup_u <= _convolution_support; ++sup_u) {
+                    std::size_t convolved_grid_u = disc_grid_u + sup_u;
+		    uvw_base_type conv_u = abs(((uvw_base_type)sup_u - _conv_centre_offset)*_oversampling_factor + frac_u);
+                    std::size_t grid_flat_index = convolved_grid_v*_ny + convolved_grid_u;
+
+                    convolution_base_type conv_weight = convolve(conv_v) * convolve(conv_u);
+                    _active_gridding_policy.grid_polarization_terms(chan_offset + grid_flat_index, vis, conv_weight);
+                }
+            }
 	}
     }
   };
