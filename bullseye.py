@@ -540,18 +540,18 @@ if __name__ == "__main__":
   '''
   now normalize, invert, detaper and write out all the facets to disk:  
   '''
-  #normalization_term_per_channel = np.add.reduce(np.add.reduce(sampling_funct,axis=4),axis=3).reshape(max(1,num_facet_centres),sampling_function_channel_count)
-  #normalization_terms = np.zeros([max(1,num_facet_centres),cube_chan_dim_size])
-  #for f in range(0, max(1,num_facet_centres)):
-    #samp_chan_index = 0
-    #for ci,grid_chan_index in enumerate(channel_grid_index):
-      #if enabled_channels[ci]:
-	#normalization_terms[f,grid_chan_index] += normalization_term_per_channel[f,samp_chan_index] #reduce over grids
-	#samp_chan_index += 1
+  normalization_term_per_channel = np.add.reduce(np.add.reduce(sampling_funct,axis=4),axis=3).reshape(max(1,num_facet_centres),sampling_function_channel_count)
+  normalization_terms = np.zeros([max(1,num_facet_centres),cube_chan_dim_size])
+  for f in range(0, max(1,num_facet_centres)):
+    samp_chan_index = 0
+    for ci,grid_chan_index in enumerate(channel_grid_index):
+      if enabled_channels[ci]:
+	normalization_terms[f,grid_chan_index] += np.real(normalization_term_per_channel[f,samp_chan_index]) #reduce over grids
+	samp_chan_index += 1
 
-  #for f in range(0, max(1,num_facet_centres)):
-    #for c in range(0,cube_chan_dim_size):
-      #gridded_vis[f,c,0,:,:] /= normalization_terms[f,c]
+  for f in range(0, max(1,num_facet_centres)):
+    for c in range(0,cube_chan_dim_size):
+      gridded_vis[f,c,0,:,:] /= normalization_terms[f,c]
   libimaging.finalize(ctypes.byref(params))
       
       

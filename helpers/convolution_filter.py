@@ -9,7 +9,7 @@ import fft_utils
 import base_types
 import matplotlib.pyplot as plt
 
-DEBUG_KERNEL_ON = True
+DEBUG_KERNEL_ON = False
 
 class convolution_filter(object):
   '''

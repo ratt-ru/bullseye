@@ -188,11 +188,11 @@ namespace imaging {
 	
         for (std::size_t  sup_v = 1; sup_v <= _convolution_support; ++sup_v) { //remember we have a +/- frac at both ends of the filter
 	  std::size_t  convolved_grid_v = disc_grid_v + sup_v;
-	  std::size_t conv_v = ((uvw_base_type)sup_v + frac_v) * _oversampling_factor;
+	  std::size_t conv_v = (((uvw_base_type)sup_v + frac_v) * _oversampling_factor);
 	  convolution_base_type conv_v_weight = _conv[conv_v];
 	  for (std::size_t sup_u = 1; sup_u <= _convolution_support; ++sup_u) { //remember we have a +/- frac at both ends of the filter
 	    std::size_t convolved_grid_u = disc_grid_u + sup_u;
-	    std::size_t conv_u = ((uvw_base_type)sup_u + frac_u) * _oversampling_factor;
+	    std::size_t conv_u = (((uvw_base_type)sup_u + frac_u) * _oversampling_factor);
 	    convolution_base_type conv_u_weight = _conv[conv_u];
 	    std::size_t grid_flat_index = convolved_grid_v*_ny + convolved_grid_u;
 
