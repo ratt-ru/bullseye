@@ -92,7 +92,7 @@ if __name__ == "__main__":
   parser.add_argument('--cell_l', help='Size of a pixel in l (arcsecond)', type=float, default=1)
   parser.add_argument('--cell_m', help='Size of a pixel in m (arcsecond)', type=float, default=1)
   parser.add_argument('--pol', help='Specify image polarization', choices=pol_options.keys(), default="XX")
-  parser.add_argument('--conv', help='Specify gridding convolution function type', choices=['gausian','keiser bessel'], default='keiser bessel')
+  parser.add_argument('--conv', help='Specify gridding convolution function type', choices=['sinc'], default='sinc')
   parser.add_argument('--conv_sup', help='Specify gridding convolution function support area (number of convolution function cells)', type=int, default=7)
   parser.add_argument('--conv_oversamp', help='Specify gridding convolution function oversampling multiplier', type=int, default=63)
   parser.add_argument('--output_format', help='Specify image output format', choices=["fits","png"], default="fits")
@@ -351,7 +351,6 @@ if __name__ == "__main__":
     
     params.num_facet_centres = ctypes.c_size_t(max(1,num_facet_centres)) #stays constant between strides
     params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p)
-    params.detapering_buffer = conv._F_detaper.ctypes.data_as(ctypes.c_void_p) #stays constant between strides
     
     if len(correlations_to_grid) == 1 and not parser_args['do_jones_corrections']:
 	pol_index = data._polarization_correlations.tolist().index(correlations_to_grid[0])
@@ -541,18 +540,18 @@ if __name__ == "__main__":
   '''
   now normalize, invert, detaper and write out all the facets to disk:  
   '''
-  normalization_term_per_channel = np.add.reduce(np.add.reduce(sampling_funct,axis=4),axis=3).reshape(max(1,num_facet_centres),sampling_function_channel_count)
-  normalization_terms = np.zeros([max(1,num_facet_centres),cube_chan_dim_size])
-  for f in range(0, max(1,num_facet_centres)):
-    samp_chan_index = 0
-    for ci,grid_chan_index in enumerate(channel_grid_index):
-      if enabled_channels[ci]:
-	normalization_terms[f,grid_chan_index] += normalization_term_per_channel[f,samp_chan_index] #reduce over grids
-	samp_chan_index += 1
+  #normalization_term_per_channel = np.add.reduce(np.add.reduce(sampling_funct,axis=4),axis=3).reshape(max(1,num_facet_centres),sampling_function_channel_count)
+  #normalization_terms = np.zeros([max(1,num_facet_centres),cube_chan_dim_size])
+  #for f in range(0, max(1,num_facet_centres)):
+    #samp_chan_index = 0
+    #for ci,grid_chan_index in enumerate(channel_grid_index):
+      #if enabled_channels[ci]:
+	#normalization_terms[f,grid_chan_index] += normalization_term_per_channel[f,samp_chan_index] #reduce over grids
+	#samp_chan_index += 1
 
-  for f in range(0, max(1,num_facet_centres)):
-    for c in range(0,cube_chan_dim_size):
-      gridded_vis[f,c,0,:,:] /= normalization_terms[f,c]
+  #for f in range(0, max(1,num_facet_centres)):
+    #for c in range(0,cube_chan_dim_size):
+      #gridded_vis[f,c,0,:,:] /= normalization_terms[f,c]
   libimaging.finalize(ctypes.byref(params))
       
       

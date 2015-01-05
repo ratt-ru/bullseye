@@ -136,7 +136,7 @@ namespace imaging {
 				*/
 				active_convolution_policy.convolve(uvw, vis, channel_grid_indicies[current_spw_offset + c]);
                         }
-                }      
+                }
         }
 }
 

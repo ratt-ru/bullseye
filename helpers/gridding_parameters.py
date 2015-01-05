@@ -56,8 +56,8 @@ gridding_parameters._fields_ = [
   ("sampling_function_buffer",c_void_p),
   ("sampling_function_channel_grid_indicies",c_void_p),
   ("sampling_function_channel_count",c_size_t),
-  #Precomputed Detapering coefficients
-  ("detapering_buffer",c_void_p),
   #Finalization steps
-  ("is_final_data_chunk",c_bool)
+  ("is_final_data_chunk",c_bool),
+  #baseline indexes needed for Romeins distribution strategy
+  ("baseline_starting_indexes",c_void_p) #this has to be n(n-1)/2 + n + 1 long because we need to compute the length of the last baseline
 ]
