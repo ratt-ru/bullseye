@@ -85,7 +85,7 @@ if __name__ == "__main__":
   }
   parser.add_argument('input_ms', help='Name of the measurement set(s) to read. Multiple MSs must be comma-delimited without any separating spaces, eg. "\'one.ms\',\'two.ms\'"', type=str)
   parser.add_argument('--output_prefix', help='Prefix for the output FITS images. Facets will be indexed as [prefix_1.fits ... prefix_n.fits]', type=str, default='out.bullseye')
-  parser.add_argument('--facet_centres', help='List of coordinate tupples indicating facet centres (RA,DEC). ' 
+  parser.add_argument('--facet_centres', help='List of coordinate tupples indicating facet centres (RA,DEC).' 
 		      'If none are specified and n_facet_l and/or n_facet_m are not set, the default pointing centre will be used', type=coords, nargs='+', default=None)
   parser.add_argument('--npix_l', help='Number of facet pixels in l', type=int, default=256)
   parser.add_argument('--npix_m', help='Number of facet pixels in m', type=int, default=256)
@@ -93,7 +93,7 @@ if __name__ == "__main__":
   parser.add_argument('--cell_m', help='Size of a pixel in m (arcsecond)', type=float, default=1)
   parser.add_argument('--pol', help='Specify image polarization', choices=pol_options.keys(), default="XX")
   parser.add_argument('--conv', help='Specify gridding convolution function type', choices=['sinc'], default='sinc')
-  parser.add_argument('--conv_sup', help='Specify gridding convolution function support area (number of convolution function cells)', type=int, default=7)
+  parser.add_argument('--conv_sup', help='Specify gridding convolution function half support area (number of convolution function cells)', type=int, default=5)
   parser.add_argument('--conv_oversamp', help='Specify gridding convolution function oversampling multiplier', type=int, default=63)
   parser.add_argument('--output_format', help='Specify image output format', choices=["fits","png"], default="fits")
   parser.add_argument('--no_chunks', help='Specify number of chunks to split measurement set into (useful to handle large measurement sets / overlap io and compute)', type=int, default=10)
