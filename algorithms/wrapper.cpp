@@ -27,10 +27,11 @@ extern "C" {
     fftw_plan_type fft_plan;
     fftw_plan_type fft_psf_plan;
     utils::timer gridding_timer;
+    utils::timer sampling_function_gridding_timer;
     utils::timer inversion_timer;
     std::future<void> gridding_future;
     double get_gridding_walltime() {
-      return gridding_timer.duration();
+      return gridding_timer.duration() + sampling_function_gridding_timer.duration();
     }
     double get_inversion_walltime() {
       return inversion_timer.duration();
@@ -180,7 +181,6 @@ extern "C" {
 	inversion_timer.stop();
     }
     void grid_single_pol(gridding_parameters & params) {
-        gridding_barrier();
         gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
             using namespace imaging;
@@ -230,7 +230,6 @@ extern "C" {
         });
     }
     void facet_single_pol(gridding_parameters & params) {
-        gridding_barrier();
         gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
             using namespace imaging;
@@ -287,7 +286,6 @@ extern "C" {
         });
     }
     void grid_duel_pol(gridding_parameters & params) {
-        gridding_barrier();
         gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
             using namespace imaging;
@@ -340,7 +338,6 @@ extern "C" {
     }
 
     void facet_duel_pol(gridding_parameters & params) {
-        gridding_barrier();
         gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
             using namespace imaging;
@@ -401,7 +398,6 @@ extern "C" {
         });
     }
     void grid_4_cor(gridding_parameters & params) {
-        gridding_barrier();
         gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
             using namespace imaging;
@@ -450,7 +446,6 @@ extern "C" {
         });
     }
     void facet_4_cor(gridding_parameters & params) {
-        gridding_barrier();
         gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
             using namespace imaging;
@@ -510,7 +505,6 @@ extern "C" {
         });
     }
     void facet_4_cor_corrections(gridding_parameters & params) {
-        gridding_barrier();
         gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
             using namespace imaging;
@@ -580,13 +574,13 @@ extern "C" {
 						 params.channel_grid_indicies,
 						 params.enabled_channels);
             }
+            gridding_timer.stop();
         });
     }
     
     void grid_sampling_function(gridding_parameters & params) {
-        gridding_barrier();
         gridding_future = std::async(std::launch::async, [&params] () {
-	    gridding_timer.start();
+	    sampling_function_gridding_timer.start();
             using namespace imaging;
             printf("GRIDDING SAMPLING FUNCTION...\n");
             typedef baseline_transform_policy<uvw_base_type, transform_disable_facet_rotation> baseline_transform_policy_type;
@@ -628,13 +622,13 @@ extern "C" {
                      params.imaging_field,params.spw_index_array,
 		     params.sampling_function_channel_grid_indicies,
 		     params.enabled_channels);
+	    sampling_function_gridding_timer.stop();
         });
     }
     
     void facet_sampling_function(gridding_parameters & params) {
-        gridding_barrier();
         gridding_future = std::async(std::launch::async, [&params] () {
-	    gridding_timer.start();
+	    sampling_function_gridding_timer.start();
             using namespace imaging;
             size_t no_facet_pixels = params.nx*params.ny;
             for (size_t facet_index = 0; facet_index < params.num_facet_centres; ++facet_index) {
@@ -687,6 +681,7 @@ extern "C" {
 						 params.enabled_channels);
                 printf(" <DONE>\n");
             }
+            sampling_function_gridding_timer.stop();
         });
     }
 }
