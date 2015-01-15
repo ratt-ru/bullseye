@@ -1,22 +1,14 @@
-#include <cuda.h>
-#include <cuda_runtime.h>
-#include <stdexcept>
-#include <cstdio>
-#include "wrapper.h"
+#include "gpu_wrapper.h"
 #include "dft.h"
 #include "gridder.h"
-#include "timer.h"
-#include "cu_common.h"
-#include "uvw_coord.h"
-#include "fft_shift_utils.h"
 #define NO_THREADS_PER_BLOCK_DIM 16
 
-extern imaging::uvw_coord< double > uvw;
+// extern imaging::uvw_coord< double > uvw;
+
 extern "C" {
-    utils::timer * gridding_walltime;
     utils::timer * inversion_walltime;
+    utils::timer * gridding_walltime;
     cudaStream_t compute_stream;
-    
     gridding_parameters gpu_params;
     
     double get_gridding_walltime(){
@@ -80,9 +72,10 @@ extern "C" {
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.flags, sizeof(bool) * params.chunk_max_row_count * params.channel_count * params.number_of_polarization_terms_being_gridded));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.output_buffer, sizeof(std::complex<grid_base_type>) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size));
 	cudaSafeCall(cudaMemset(gpu_params.output_buffer,0,sizeof(grid_base_type) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size));
-	cudaSafeCall(cudaMalloc((void**)&gpu_params.conv, sizeof(convolution_base_type) * params.conv_support * params.conv_oversample));	
-	cudaSafeCall(cudaMemcpy(gpu_params.conv, params.conv, sizeof(convolution_base_type) * params.conv_support * params.conv_oversample,cudaMemcpyHostToDevice));
-	
+	size_t size_of_convolution_function = params.conv_support * 2 + 1 + 2; //see algorithms/convolution_policies.h for the reason behind the padding
+	cudaSafeCall(cudaMalloc((void**)&gpu_params.conv, sizeof(convolution_base_type) * size_of_convolution_function));	
+	cudaSafeCall(cudaMemcpy(gpu_params.conv, params.conv, sizeof(convolution_base_type) * size_of_convolution_function,cudaMemcpyHostToDevice));
+	cudaSafeCall(cudaMalloc((void**)&gpu_params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1)));
 	cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
     }
     void releaseLibrary() {
@@ -97,37 +90,16 @@ extern "C" {
       cudaSafeCall(cudaFree(gpu_params.flagged_rows));
       cudaSafeCall(cudaFree(gpu_params.flags));
       cudaSafeCall(cudaFree(gpu_params.conv));
+      cudaSafeCall(cudaFree(gpu_params.baseline_starting_indexes));
       cudaSafeCall(cudaStreamDestroy(compute_stream));
+      delete gridding_walltime;
+      delete inversion_walltime;
       cudaDeviceReset(); //leave the device in a safe state
     }
     void weight_uniformly(gridding_parameters & params){
       throw std::runtime_error("Backend Unimplemented exception: weight_uniformly");
     }
-    void finalize(gridding_parameters & params){
-      gridding_barrier();
-      inversion_walltime->start();
-      std::size_t offset = params.nx*params.ny*params.cube_channel_dim_size*params.number_of_polarization_terms_being_gridded;
-      /*
-       * We'll be storing 32 bit real fits files so ignore all the imaginary components and cast whatever the grid was to float32
-       */
-      {
-	  grid_base_type * __restrict__ grid_ptr_gridtype = (grid_base_type *)params.output_buffer;
-	  float * __restrict__ grid_ptr_single = (float *)params.output_buffer;
-	  for (std::size_t f = 0; f < params.num_facet_centres; ++f) {
-	      std::size_t casting_lbound = offset*f;
-	      std::size_t casting_ubound = casting_lbound + params.nx*params.ny*params.cube_channel_dim_size;
-	      for (std::size_t i = casting_lbound; i < casting_ubound; ++i){
-		  grid_ptr_single[i] = (float)(grid_ptr_gridtype[i]); //extract all the reals
-	      }
-	  }
-      }
-      inversion_walltime->stop();
-    }
-    void finalize_psf(gridding_parameters & params){
-      throw std::runtime_error("Backend Unimplemented exception: finalize_psf");
-    }
     void grid_single_pol(gridding_parameters & params){
-      gridding_barrier();
       gridding_walltime->start();
       printf("Gridding single polarization on the GPU...\n");    
       //copy everything that changed to the gpu
@@ -157,13 +129,12 @@ extern "C" {
 				     cudaMemcpyHostToDevice,compute_stream));
 	cudaSafeCall(cudaMemcpyAsync(gpu_params.flags,params.flags,sizeof(bool) * params.row_count * params.channel_count,
 				     cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.baseline_starting_indexes, params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1),cudaMemcpyHostToDevice,compute_stream));
       }
       //invoke computation
       {
-	dim3 no_blocks_per_grid(ceil(params.nx / (double)NO_THREADS_PER_BLOCK_DIM),
-				ceil(params.ny / (double)NO_THREADS_PER_BLOCK_DIM),
-				1);
-	dim3 no_threads_per_block(NO_THREADS_PER_BLOCK_DIM,NO_THREADS_PER_BLOCK_DIM,1);
+	dim3 no_blocks_per_grid(params.baseline_count,1,1);
+	dim3 no_threads_per_block(ceil(params.conv_support*2 + 1),ceil(params.conv_support*2 + 1),1);
 	imaging::grid_single<<<no_blocks_per_grid,no_threads_per_block,0,compute_stream>>>(gpu_params,no_blocks_per_grid,no_threads_per_block);
       }
       //swap buffers device -> host when gridded last chunk
@@ -192,7 +163,7 @@ extern "C" {
       throw std::runtime_error("Backend Unimplemented exception: facet_4_cor_corrections");
     }
     void grid_sampling_function(gridding_parameters & params){
-      throw std::runtime_error("Backend Unimplemented exception: grid_sampling_function");
+//       throw std::runtime_error("Backend Unimplemented exception: grid_sampling_function");
     }
     void facet_sampling_function(gridding_parameters & params){
       throw std::runtime_error("Backend Unimplemented exception: facet_sampling_function");

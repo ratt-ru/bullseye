@@ -1,5 +1,6 @@
 #pragma once
 #include <cmath>
+#include "gridding_parameters.h"
 namespace utils {
 /**
  * FFT shift centres the DC component of an FFT to the centre position of an array

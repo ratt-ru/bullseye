@@ -20,7 +20,7 @@ namespace imaging {
     uvw_base_type dec = (y - params.ny/2.0f) * params.cell_size_y * ARCSEC_TO_RAD;
     uvw_base_type l = cosf(dec)*sinf(ra);
     uvw_base_type m = -sinf(dec);
-//     uvw_base_type n = sqrtf(1 - l*l - m*m);
+
     for (std::size_t bt = 0; bt < params.row_count; ++bt){
 	imaging::uvw_coord<uvw_base_type> uvw = params.uvw_coords[bt];
 	unsigned int spw_offset = params.spw_index_array[bt] * params.channel_count;
