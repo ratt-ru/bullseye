@@ -19,8 +19,8 @@ from helpers import gridding_parameters
 from helpers import png_export
 from helpers import timer
 import ctypes
-#libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
-libimaging = ctypes.pydll.LoadLibrary("build/gpu_algorithm/libgpu_imaging.so")
+libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
+#libimaging = ctypes.pydll.LoadLibrary("build/gpu_algorithm/libgpu_imaging.so")
 def coords(s):  
     try:
 	sT = s.strip()
@@ -403,8 +403,8 @@ if __name__ == "__main__":
       params.antenna_2_ids = arr_antenna_2_cpy.ctypes.data_as(ctypes.c_void_p)
       arr_time_indicies_cpy = data._time_indicies #gridding will operate with deep copied data
       params.timestamp_ids = arr_time_indicies_cpy.ctypes.data_as(ctypes.c_void_p)
-      arr_starting_indicies_cpy = data._starting_indexes
-      params.baseline_starting_indexes = arr_starting_indicies_cpy.ctypes.data_as(ctypes.c_void_p)
+      #arr_starting_indicies_cpy = data._starting_indexes
+      #params.baseline_starting_indexes = arr_starting_indicies_cpy.ctypes.data_as(ctypes.c_void_p)
       '''
       no need to grid more than one of the correlations if the user isn't interrested in imaging one of the stokes terms (I,Q,U,V) or the stokes terms are the correlation products:
       '''
@@ -542,18 +542,18 @@ if __name__ == "__main__":
   '''
   now normalize, invert, detaper and write out all the facets to disk:  
   '''
-  #normalization_term_per_channel = np.add.reduce(np.add.reduce(sampling_funct,axis=4),axis=3).reshape(max(1,num_facet_centres),sampling_function_channel_count)
-  #normalization_terms = np.zeros([max(1,num_facet_centres),cube_chan_dim_size])
-  #for f in range(0, max(1,num_facet_centres)):
-    #samp_chan_index = 0
-    #for ci,grid_chan_index in enumerate(channel_grid_index):
-      #if enabled_channels[ci]:
-	#normalization_terms[f,grid_chan_index] += np.real(normalization_term_per_channel[f,samp_chan_index]) #reduce over grids
-	#samp_chan_index += 1
+  normalization_term_per_channel = np.add.reduce(np.add.reduce(sampling_funct,axis=4),axis=3).reshape(max(1,num_facet_centres),sampling_function_channel_count)
+  normalization_terms = np.zeros([max(1,num_facet_centres),cube_chan_dim_size])
+  for f in range(0, max(1,num_facet_centres)):
+    samp_chan_index = 0
+    for ci,grid_chan_index in enumerate(channel_grid_index):
+      if enabled_channels[ci]:
+	normalization_terms[f,grid_chan_index] += np.real(normalization_term_per_channel[f,samp_chan_index]) #reduce over grids
+	samp_chan_index += 1
 
-  #for f in range(0, max(1,num_facet_centres)):
-    #for c in range(0,cube_chan_dim_size):
-      #gridded_vis[f,c,0,:,:] /= normalization_terms[f,c]
+  for f in range(0, max(1,num_facet_centres)):
+    for c in range(0,cube_chan_dim_size):
+      gridded_vis[f,c,0,:,:] /= normalization_terms[f,c]
   libimaging.finalize(ctypes.byref(params))
       
       
