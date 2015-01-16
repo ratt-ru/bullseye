@@ -71,8 +71,8 @@ extern "C" {
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.visibility_weights, sizeof(visibility_weights_base_type) * params.chunk_max_row_count * params.channel_count * params.number_of_polarization_terms_being_gridded));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.flags, sizeof(bool) * params.chunk_max_row_count * params.channel_count * params.number_of_polarization_terms_being_gridded));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.output_buffer, sizeof(std::complex<grid_base_type>) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size));
-	cudaSafeCall(cudaMemset(gpu_params.output_buffer,0,sizeof(grid_base_type) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size));
-	size_t size_of_convolution_function = params.conv_support * 2 + 1 + 2; //see algorithms/convolution_policies.h for the reason behind the padding
+	cudaSafeCall(cudaMemset(gpu_params.output_buffer,0,sizeof(std::complex<grid_base_type>) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size));
+	size_t size_of_convolution_function = (params.conv_support * 2 + 1 + 2) * params.conv_oversample; //see algorithms/convolution_policies.h for the reason behind the padding
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.conv, sizeof(convolution_base_type) * size_of_convolution_function));	
 	cudaSafeCall(cudaMemcpy(gpu_params.conv, params.conv, sizeof(convolution_base_type) * size_of_convolution_function,cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1)));
@@ -106,6 +106,7 @@ extern "C" {
       {
 	gpu_params.row_count = params.row_count;
 	gpu_params.no_timestamps_read = params.no_timestamps_read;
+	gpu_params.is_final_data_chunk = params.is_final_data_chunk;
 	cudaSafeCall(cudaMemcpyAsync(gpu_params.uvw_coords,params.uvw_coords,sizeof(imaging::uvw_coord<uvw_base_type>) * params.row_count,cudaMemcpyHostToDevice,compute_stream));
 	//pack and cpy only the necessary visibilities (it doesn't matter if we mod the array here it is not being used again afterwards
 	size_t ubound = params.row_count*params.channel_count;
@@ -134,13 +135,13 @@ extern "C" {
       //invoke computation
       {
 	dim3 no_blocks_per_grid(params.baseline_count,1,1);
-	dim3 no_threads_per_block(ceil(params.conv_support*2 + 1),ceil(params.conv_support*2 + 1),1);
+	dim3 no_threads_per_block(params.conv_support*2 + 1,params.conv_support*2 + 1,1);
 	imaging::grid_single<<<no_blocks_per_grid,no_threads_per_block,0,compute_stream>>>(gpu_params,no_blocks_per_grid,no_threads_per_block);
       }
       //swap buffers device -> host when gridded last chunk
       if (params.is_final_data_chunk){
 	gridding_barrier();
-	cudaSafeCall(cudaMemcpy(params.output_buffer,gpu_params.output_buffer,sizeof(grid_base_type) * params.nx * params.ny,cudaMemcpyDeviceToHost));
+	cudaSafeCall(cudaMemcpy(params.output_buffer,gpu_params.output_buffer,sizeof(std::complex<grid_base_type>) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size,cudaMemcpyDeviceToHost));
       }      
       gridding_walltime->stop();
     }

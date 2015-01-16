@@ -142,7 +142,7 @@ extern "C" {
 		  grid_ptr_single[i] = (float)(grid_ptr_gridtype[i*2]); //extract all the reals
 	      }
 	  }
-	}	
+	}
 	inversion_timer.stop();
     }
     void finalize_psf(gridding_parameters & params){
@@ -193,7 +193,7 @@ extern "C" {
                     visibility_weights_base_type, convolution_base_type, grid_base_type,
                     phase_transform_policy_type, gridding_single_pol> polarization_gridding_policy_type;
             typedef convolution_policy<convolution_base_type,uvw_base_type,grid_base_type,
-                    polarization_gridding_policy_type, convolution_on_the_fly_computed_fir> convolution_policy_type;
+                    polarization_gridding_policy_type, convolution_nn> convolution_policy_type;
 
             baseline_transform_policy_type uvw_transform; //standard: no uvw rotation
             phase_transform_policy_type phase_transform; //standard: no phase rotation
