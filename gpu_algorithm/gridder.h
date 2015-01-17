@@ -27,21 +27,38 @@ namespace imaging {
 		
 		size_t conv_full_support = params.conv_support * 2 + 1;
 		uvw_base_type conv_offset = (conv_full_support + 2) / 2.0; //remember we need to reserve some of the support for +/- frac on both sides
-		
-		for (size_t c = 0; c < params.channel_count; ++c){ //best we can do is unroll and spill some registers... todo
+		for (size_t spw = 0; spw < params.spw_count; ++spw){
+		    for (size_t c = 0; c < params.channel_count; ++c){ //best we can do is unroll and spill some registers... todo
 			basic_complex<grid_base_type> my_grid_accum = {0,0};
 			size_t my_previous_u = 0;
 			size_t my_previous_v = 0;
-			for (size_t t = 0; t < baseline_num_timestamps; ++t){
+			//read all the stuff that is only dependent on the current spw and channel
+			size_t flat_indexed_spw_channel = spw * params.channel_count + c;
+			bool channel_enabled = params.enabled_channels[flat_indexed_spw_channel];
+			size_t channel_grid_index = params.channel_grid_indicies[flat_indexed_spw_channel];
+			reference_wavelengths_base_type ref_wavelength = params.reference_wavelengths[flat_indexed_spw_channel];
+			for (size_t t = 0; t < baseline_num_timestamps; ++t){				
+				//read all the data we need for gridding
 				size_t row = starting_row_index + t;
-				//read uvw
+				size_t spw_index = params.spw_index_array[row];
+				size_t vis_index = row * params.channel_count + c;
+				bool currently_considering_spw = (spw == spw_index);
 				imaging::uvw_coord<uvw_base_type> uvw = params.uvw_coords[row];
+				bool row_flagged = params.flagged_rows[row];
+				bool visibility_flagged = params.flags[vis_index];
+				bool row_is_in_field_being_imaged = (params.field_array[row] == params.imaging_field);
+				basic_complex<visibility_base_type> vis = ((basic_complex<visibility_base_type>*)params.visibilities)[vis_index];
+				visibility_weights_base_type vis_weight = params.visibility_weights[vis_index];
+				//compute the weighted visibility and promote the flags to integers so that we don't have unnecessary branch diversion here
+				visibility_base_type combined_vis_weight = vis_weight * (visibility_base_type)(int)(!(row_flagged || visibility_flagged) && 
+														    currently_considering_spw && 
+														    channel_enabled && 
+														    row_is_in_field_being_imaged);
+				//scale the uv coordinates to the correct FOV by the fourier simularity theorem (pg 146-148 Synthesis Imaging in Radio Astronomy II)
 				uvw._u *= u_scale;
 				uvw._v *= v_scale;
 				//measure the baseline in terms of wavelength
-				size_t spw_index = params.spw_index_array[row];
-				reference_wavelengths_base_type ref_wavelength = params.reference_wavelengths[spw_index * params.spw_count + c];
-                                uvw._u /= ref_wavelength;
+				uvw._u /= ref_wavelength;
 				uvw._v /= ref_wavelength;
 				//account for interpolation error (we select the closest sample from the oversampled convolution filter)
 				uvw_base_type cont_current_u = uvw._u + grid_centre_offset_x - conv_offset;
@@ -54,11 +71,6 @@ namespace imaging {
 				size_t closest_conv_v = ((uvw_base_type)my_conv_v + frac_v)*params.conv_oversample;
 				my_current_u += my_conv_u;
 				my_current_v += my_conv_v;
-				basic_complex<visibility_base_type> vis = ((basic_complex<visibility_base_type>*)params.visibilities)[row*params.channel_count + c];
-				//todo:read row flag
-				//todo:read channel flags
-				//todo:read field id (should match field being imaged)
-				//todo:read channel cube indexes
 				//if this is the first timestamp for this baseline initialize previous_u and previous_v
 				if (t == 0) {
 					my_previous_u = my_current_u;
@@ -69,7 +81,9 @@ namespace imaging {
 					//don't you dare go off the grid:
 					if (my_previous_v + conv_full_support  < params.ny && my_previous_u + conv_full_support  < params.nx &&
 					    my_previous_v < params.ny && my_previous_u < params.nx){
-						grid_base_type* grid_flat_ptr = (grid_base_type*)params.output_buffer + (my_previous_v * params.nx + my_previous_u) * 2;
+						grid_base_type* grid_flat_ptr = (grid_base_type*)params.output_buffer + 
+										channel_grid_index * params.nx * params.ny + 
+										(my_previous_v * params.nx + my_previous_u) * 2;
 						atomicAdd(grid_flat_ptr,my_grid_accum._real);
 						atomicAdd(grid_flat_ptr + 1,my_grid_accum._imag);
 					}
@@ -79,19 +93,21 @@ namespace imaging {
 					my_previous_v = my_current_v;
 				}
 				//Lets read the convolution weights from the the precomputed filter
-				convolution_base_type conv_weight = params.conv[closest_conv_u] * params.conv[closest_conv_v];
-				
+				convolution_base_type conv_weight = params.conv[closest_conv_u] * params.conv[closest_conv_v];	
 				//then multiply-add into the accumulator 				
-				my_grid_accum._real += vis._real * conv_weight;
-				my_grid_accum._imag += vis._imag * conv_weight; 
+				my_grid_accum._real += vis._real * conv_weight * combined_vis_weight;
+				my_grid_accum._imag += vis._imag * conv_weight * combined_vis_weight; 
 			}
 			//Okay this channel is done... now lets dump whatever has been accumulated since the last dump
 			if (my_previous_u + conv_full_support  < params.ny && my_previous_u + conv_full_support  < params.nx &&
 			    my_previous_v < params.ny && my_previous_u < params.nx){
-				grid_base_type* grid_flat_ptr = (grid_base_type*)params.output_buffer + (my_previous_v * params.nx + my_previous_u) * 2;
+				grid_base_type* grid_flat_ptr = (grid_base_type*)params.output_buffer + 
+								channel_grid_index * params.nx * params.ny + 
+								(my_previous_v * params.nx + my_previous_u) * 2;
 				atomicAdd(grid_flat_ptr,my_grid_accum._real);
 				atomicAdd(grid_flat_ptr + 1,my_grid_accum._imag);
 			}
+		    }
 		}
 	}
 }
