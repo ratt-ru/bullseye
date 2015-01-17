@@ -19,8 +19,7 @@ from helpers import gridding_parameters
 from helpers import png_export
 from helpers import timer
 import ctypes
-libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
-#libimaging = ctypes.pydll.LoadLibrary("build/gpu_algorithm/libgpu_imaging.so")
+
 def coords(s):  
     try:
 	sT = s.strip()
@@ -112,7 +111,16 @@ if __name__ == "__main__":
   parser.add_argument('--output_psf',help='Outputs the Point Spread Function (per channel)',type=bool,default=False)
   parser.add_argument('--sample_weighting',help='Specify weighting technique in use.',choices=['natural','uniform'], default='natural')
   parser.add_argument('--open_default_viewer',help='Uses \'xdg-open\' to fire up the user\'s image viewer of choice.',default=False)
+  parser.add_argument('--use_back_end',help='Switch between \'CPU\' or \'GPU\' imaging library.', choices=['CPU','GPU'], default='CPU')
   parser_args = vars(parser.parse_args())
+  '''
+  Pick a backend to use
+  '''
+  if parser_args['use_back_end'] == 'CPU':
+    libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
+  elif parser_args['use_back_end'] == 'GPU':
+    libimaging = ctypes.pydll.LoadLibrary("build/gpu_algorithm/libgpu_imaging.so")
+  
   '''
   initially the output grids must be set to NONE. Memory will only be allocated before the first MS is read.
   '''
@@ -373,7 +381,9 @@ if __name__ == "__main__":
       chunk_ubound = min((chunk_index+1) * chunk_size,data._no_rows)
       chunk_linecount = chunk_ubound - chunk_lbound
       print "READING CHUNK %d OF %d" % (chunk_index+1,no_chunks)
-      data.read_data(start_row=chunk_lbound,no_rows=chunk_linecount,data_column = parser_args['data_column'])
+      data.read_data(start_row=chunk_lbound,no_rows=chunk_linecount,data_column = parser_args['data_column'], 
+		       do_romein_baseline_ordering=(parser_args['use_back_end'] == 'GPU'))
+	
       '''
       after the compute of the previous cycle finishes make deep copies and 
       fill out the common parameters for gridding this cycle:
@@ -403,8 +413,9 @@ if __name__ == "__main__":
       params.antenna_2_ids = arr_antenna_2_cpy.ctypes.data_as(ctypes.c_void_p)
       arr_time_indicies_cpy = data._time_indicies #gridding will operate with deep copied data
       params.timestamp_ids = arr_time_indicies_cpy.ctypes.data_as(ctypes.c_void_p)
-      #arr_starting_indicies_cpy = data._starting_indexes
-      #params.baseline_starting_indexes = arr_starting_indicies_cpy.ctypes.data_as(ctypes.c_void_p)
+      if parser_args['use_back_end'] == 'GPU':
+	arr_starting_indicies_cpy = data._starting_indexes
+	params.baseline_starting_indexes = arr_starting_indicies_cpy.ctypes.data_as(ctypes.c_void_p)
       '''
       no need to grid more than one of the correlations if the user isn't interrested in imaging one of the stokes terms (I,Q,U,V) or the stokes terms are the correlation products:
       '''
@@ -542,18 +553,18 @@ if __name__ == "__main__":
   '''
   now normalize, invert, detaper and write out all the facets to disk:  
   '''
-  normalization_term_per_channel = np.add.reduce(np.add.reduce(sampling_funct,axis=4),axis=3).reshape(max(1,num_facet_centres),sampling_function_channel_count)
-  normalization_terms = np.zeros([max(1,num_facet_centres),cube_chan_dim_size])
-  for f in range(0, max(1,num_facet_centres)):
-    samp_chan_index = 0
-    for ci,grid_chan_index in enumerate(channel_grid_index):
-      if enabled_channels[ci]:
-	normalization_terms[f,grid_chan_index] += np.real(normalization_term_per_channel[f,samp_chan_index]) #reduce over grids
-	samp_chan_index += 1
+  #normalization_term_per_channel = np.add.reduce(np.add.reduce(sampling_funct,axis=4),axis=3).reshape(max(1,num_facet_centres),sampling_function_channel_count)
+  #normalization_terms = np.zeros([max(1,num_facet_centres),cube_chan_dim_size])
+  #for f in range(0, max(1,num_facet_centres)):
+    #samp_chan_index = 0
+    #for ci,grid_chan_index in enumerate(channel_grid_index):
+      #if enabled_channels[ci]:
+	#normalization_terms[f,grid_chan_index] += np.real(normalization_term_per_channel[f,samp_chan_index]) #reduce over grids
+	#samp_chan_index += 1
 
-  for f in range(0, max(1,num_facet_centres)):
-    for c in range(0,cube_chan_dim_size):
-      gridded_vis[f,c,0,:,:] /= normalization_terms[f,c]
+  #for f in range(0, max(1,num_facet_centres)):
+    #for c in range(0,cube_chan_dim_size):
+      #gridded_vis[f,c,0,:,:] /= normalization_terms[f,c]
   libimaging.finalize(ctypes.byref(params))
       
       
