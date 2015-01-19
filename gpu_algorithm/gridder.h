@@ -27,7 +27,6 @@ namespace imaging {
 		
 		size_t conv_full_support = params.conv_support * 2 + 1;
 		size_t padded_conv_full_support = conv_full_support + 2; //remember we need to reserve some of the support for +/- frac on both sides
-		size_t filter_size = padded_conv_full_support * params.conv_oversample;
 		uvw_base_type conv_offset = (padded_conv_full_support) / 2.0; 
 		for (size_t spw = 0; spw < params.spw_count; ++spw){
 		    for (size_t c = 0; c < params.channel_count; ++c){ //best we can do is unroll and spill some registers... todo
@@ -38,7 +37,7 @@ namespace imaging {
 			size_t flat_indexed_spw_channel = spw * params.channel_count + c;
 			bool channel_enabled = params.enabled_channels[flat_indexed_spw_channel];
 			size_t channel_grid_index = params.channel_grid_indicies[flat_indexed_spw_channel];
-			reference_wavelengths_base_type ref_wavelength = params.reference_wavelengths[flat_indexed_spw_channel];
+			reference_wavelengths_base_type ref_wavelength = 1 / params.reference_wavelengths[flat_indexed_spw_channel];
 			for (size_t t = 0; t < baseline_num_timestamps; ++t){				
 				//read all the data we need for gridding
 				size_t row = starting_row_index + t;
@@ -56,15 +55,12 @@ namespace imaging {
 														    currently_considering_spw && 
 														    channel_enabled && 
 														    row_is_in_field_being_imaged);
-				//scale the uv coordinates to the correct FOV by the fourier simularity theorem (pg 146-148 Synthesis Imaging in Radio Astronomy II)
-				uvw._u *= u_scale;
-				uvw._v *= v_scale;
-				//measure the baseline in terms of wavelength
-				uvw._u /= ref_wavelength;
-				uvw._v /= ref_wavelength;
+				//scale the uv coordinates (measured in wavelengths) to the correct FOV by the fourier simularity theorem (pg 146-148 Synthesis Imaging in Radio Astronomy II)
+				uvw._u *= u_scale * ref_wavelength; 
+				uvw._v *= v_scale * ref_wavelength;
 				//account for interpolation error (we select the closest sample from the oversampled convolution filter)
-				uvw_base_type cont_current_u = uvw._u + grid_centre_offset_x - conv_offset;
-				uvw_base_type cont_current_v = uvw._v + grid_centre_offset_y - conv_offset;
+				uvw_base_type cont_current_u = uvw._u + grid_centre_offset_x - conv_offset + my_conv_u;
+				uvw_base_type cont_current_v = uvw._v + grid_centre_offset_y - conv_offset + my_conv_v;
 				size_t my_current_u = round(cont_current_u);
 				size_t my_current_v = round(cont_current_v);
 				size_t frac_u = (-cont_current_u + (uvw_base_type)my_current_u) * params.conv_oversample;
@@ -73,8 +69,6 @@ namespace imaging {
 				size_t closest_conv_u = frac_u * padded_conv_full_support + my_conv_u;
 				size_t closest_conv_v = frac_v * padded_conv_full_support + my_conv_v;
 				
-				my_current_u += my_conv_u;
-				my_current_v += my_conv_v;
 				//if this is the first timestamp for this baseline initialize previous_u and previous_v
 				if (t == 0) {
 					my_previous_u = my_current_u;
@@ -87,7 +81,7 @@ namespace imaging {
 					    my_previous_v < params.ny && my_previous_u < params.nx){
 						grid_base_type* grid_flat_ptr = (grid_base_type*)params.output_buffer + 
 										channel_grid_index * params.nx * params.ny + 
-										(my_previous_v * params.nx + my_previous_u) * 2;
+										((my_previous_v * params.nx + my_previous_u) << 1);
 						atomicAdd(grid_flat_ptr,my_grid_accum._real);
 						atomicAdd(grid_flat_ptr + 1,my_grid_accum._imag);
 					}
@@ -107,7 +101,7 @@ namespace imaging {
 			    my_previous_v < params.ny && my_previous_u < params.nx){
 				grid_base_type* grid_flat_ptr = (grid_base_type*)params.output_buffer + 
 								channel_grid_index * params.nx * params.ny + 
-								(my_previous_v * params.nx + my_previous_u) * 2;
+								((my_previous_v * params.nx + my_previous_u) << 1);
 				atomicAdd(grid_flat_ptr,my_grid_accum._real);
 				atomicAdd(grid_flat_ptr + 1,my_grid_accum._imag);
 			}
