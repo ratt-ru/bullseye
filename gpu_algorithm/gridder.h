@@ -26,7 +26,9 @@ namespace imaging {
                 uvw_base_type v_scale=-(params.ny*params.cell_size_y * ARCSEC_TO_RAD);
 		
 		size_t conv_full_support = params.conv_support * 2 + 1;
-		uvw_base_type conv_offset = (conv_full_support + 2) / 2.0; //remember we need to reserve some of the support for +/- frac on both sides
+		size_t padded_conv_full_support = conv_full_support + 2; //remember we need to reserve some of the support for +/- frac on both sides
+		size_t filter_size = padded_conv_full_support * params.conv_oversample;
+		uvw_base_type conv_offset = (padded_conv_full_support) / 2.0; 
 		for (size_t spw = 0; spw < params.spw_count; ++spw){
 		    for (size_t c = 0; c < params.channel_count; ++c){ //best we can do is unroll and spill some registers... todo
 			basic_complex<grid_base_type> my_grid_accum = {0,0};
@@ -65,10 +67,12 @@ namespace imaging {
 				uvw_base_type cont_current_v = uvw._v + grid_centre_offset_y - conv_offset;
 				size_t my_current_u = round(cont_current_u);
 				size_t my_current_v = round(cont_current_v);
-				uvw_base_type frac_u = -cont_current_u + (uvw_base_type)my_current_u;
-				uvw_base_type frac_v = -cont_current_v + (uvw_base_type)my_current_v;
-				size_t closest_conv_u = ((uvw_base_type)my_conv_u + frac_u)*params.conv_oversample;
-				size_t closest_conv_v = ((uvw_base_type)my_conv_v + frac_v)*params.conv_oversample;
+				size_t frac_u = (-cont_current_u + (uvw_base_type)my_current_u) * params.conv_oversample;
+				size_t frac_v = (-cont_current_v + (uvw_base_type)my_current_v) * params.conv_oversample;
+				//map the convolution memory access to a coalesced access (bundle #full_support number of fractions together, so that the memory addresses are contigious)
+				size_t closest_conv_u = frac_u * padded_conv_full_support + my_conv_u;
+				size_t closest_conv_v = frac_v * padded_conv_full_support + my_conv_v;
+				
 				my_current_u += my_conv_u;
 				my_current_v += my_conv_v;
 				//if this is the first timestamp for this baseline initialize previous_u and previous_v

@@ -44,13 +44,13 @@ extern "C" {
             size_t mem_tot = 0;
             size_t mem_free = 0;
             cudaMemGetInfo  (&mem_free, & mem_tot);
-            printf("-----------------------------------Backend: GPU DFT Library---------------------------------------\n");
+            printf("---------------------------------------Backend: GPU GRIDDING LIBRARY---------------------------------------\n");
             printf("%s, device %d on PCI Bus #%d, clocked at %f GHz\n",properties.name,properties.pciDeviceID,
                    properties.pciBusID,properties.clockRate / 1000000.0);
             printf("Compute capability %d.%d with %f GiB global memory (%f GiB free)\n",properties.major,
                    properties.minor,mem_tot/1024.0/1024.0/1024.0,mem_free/1024.0/1024.0/1024.0);
             printf("%d SMs are available\n",properties.multiProcessorCount);
-            printf("--------------------------------------------------------------------------------------------------\n");
+            printf("-----------------------------------------------------------------------------------------------------------\n");
         } else 
             throw std::runtime_error("Cannot find suitable GPU device. Giving up");
 	cudaSafeCall(cudaStreamCreateWithFlags(&compute_stream,cudaStreamNonBlocking));
@@ -74,8 +74,17 @@ extern "C" {
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.output_buffer, sizeof(std::complex<grid_base_type>) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size));
 	cudaSafeCall(cudaMemset(gpu_params.output_buffer,0,sizeof(std::complex<grid_base_type>) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size));
 	size_t size_of_convolution_function = (params.conv_support * 2 + 1 + 2) * params.conv_oversample; //see algorithms/convolution_policies.h for the reason behind the padding
+	convolution_base_type * coalesced_filter = new convolution_base_type[size_of_convolution_function]();
+	for (size_t x = 0; x < size_of_convolution_function; ++x){
+	  size_t cs = x / params.conv_oversample;
+	  size_t co  = x % params.conv_oversample;
+	  size_t new_index = co * (params.conv_support*2 + 3) + cs;
+	  size_t old_index = params.conv_oversample * cs + co;
+	  coalesced_filter[new_index] = params.conv[old_index];	  
+	}
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.conv, sizeof(convolution_base_type) * size_of_convolution_function));	
-	cudaSafeCall(cudaMemcpy(gpu_params.conv, params.conv, sizeof(convolution_base_type) * size_of_convolution_function,cudaMemcpyHostToDevice));
+	cudaSafeCall(cudaMemcpy(gpu_params.conv, coalesced_filter, sizeof(convolution_base_type) * size_of_convolution_function,cudaMemcpyHostToDevice));
+	delete[] coalesced_filter;
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1)));
 	cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
     }
