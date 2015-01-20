@@ -14,20 +14,33 @@ namespace imaging {
 		size_t my_baseline = blockIdx.x;
 		size_t my_conv_u = threadIdx.x + 1;
 		size_t my_conv_v = threadIdx.y + 1;
-		
+
 		size_t starting_row_index = params.baseline_starting_indexes[my_baseline];
 		//the starting index prescan must be n(n-1)/2 + n + 1 elements long since we need the length of the last baseline
 		size_t baseline_num_timestamps = params.baseline_starting_indexes[my_baseline+1] - starting_row_index;
 		
 		//Scale the IFFT by the simularity theorem to the correct FOV
-		uvw_base_type grid_centre_offset_x = params.nx/2.0;
-		uvw_base_type grid_centre_offset_y = params.ny/2.0;
 		uvw_base_type u_scale=params.nx*params.cell_size_x * ARCSEC_TO_RAD;
                 uvw_base_type v_scale=-(params.ny*params.cell_size_y * ARCSEC_TO_RAD);
 		
 		size_t conv_full_support = params.conv_support * 2 + 1;
 		size_t padded_conv_full_support = conv_full_support + 2; //remember we need to reserve some of the support for +/- frac on both sides
 		uvw_base_type conv_offset = (padded_conv_full_support) / 2.0; 
+		
+		uvw_base_type grid_centre_offset_x = params.nx/2.0 + - conv_offset + my_conv_u;
+		uvw_base_type grid_centre_offset_y = params.ny/2.0 + - conv_offset + my_conv_v;
+		
+		//load the convolution filter into shared memory
+		extern __shared__ convolution_base_type shared_conv[];
+		if (threadIdx.x == 0){
+		  for (size_t x = 0; x < params.conv_oversample * padded_conv_full_support; ++x){
+		    //here we assume that the filter is already packed such that all similar fractional components are bundled together
+		    shared_conv[x] = params.conv[x];
+		  }
+		}
+		__syncthreads(); //wait for the first thread to put the entire filter into shared memory
+		
+		//we must keep seperate accumulators per spw and channel, so we need to bring these loops outward (contrary to Romein's paper)
 		for (size_t spw = 0; spw < params.spw_count; ++spw){
 		    for (size_t c = 0; c < params.channel_count; ++c){ //best we can do is unroll and spill some registers... todo
 			basic_complex<grid_base_type> my_grid_accum = {0,0};
@@ -59,8 +72,8 @@ namespace imaging {
 				uvw._u *= u_scale * ref_wavelength; 
 				uvw._v *= v_scale * ref_wavelength;
 				//account for interpolation error (we select the closest sample from the oversampled convolution filter)
-				uvw_base_type cont_current_u = uvw._u + grid_centre_offset_x - conv_offset + my_conv_u;
-				uvw_base_type cont_current_v = uvw._v + grid_centre_offset_y - conv_offset + my_conv_v;
+				uvw_base_type cont_current_u = uvw._u + grid_centre_offset_x;
+				uvw_base_type cont_current_v = uvw._v + grid_centre_offset_y;
 				size_t my_current_u = round(cont_current_u);
 				size_t my_current_v = round(cont_current_v);
 				size_t frac_u = (-cont_current_u + (uvw_base_type)my_current_u) * params.conv_oversample;
@@ -91,7 +104,7 @@ namespace imaging {
 					my_previous_v = my_current_v;
 				}
 				//Lets read the convolution weights from the the precomputed filter
-				convolution_base_type conv_weight = params.conv[closest_conv_u] * params.conv[closest_conv_v];	
+				convolution_base_type conv_weight = shared_conv[closest_conv_u] * shared_conv[closest_conv_v];	
 				//then multiply-add into the accumulator 				
 				my_grid_accum._real += vis._real * conv_weight * combined_vis_weight;
 				my_grid_accum._imag += vis._imag * conv_weight * combined_vis_weight; 

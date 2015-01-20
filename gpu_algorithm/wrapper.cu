@@ -166,7 +166,8 @@ extern "C" {
       {
 	dim3 no_blocks_per_grid(params.baseline_count,1,1);
 	dim3 no_threads_per_block(params.conv_support*2 + 1,params.conv_support*2 + 1,1);
-	imaging::grid_single<<<no_blocks_per_grid,no_threads_per_block,0,compute_stream>>>(gpu_params,no_blocks_per_grid,no_threads_per_block);
+	size_t size_of_convolution_function = (params.conv_support * 2 + 1 + 2) * params.conv_oversample * sizeof(convolution_base_type); //see algorithms/convolution_policies.h for the reason behind the padding
+	imaging::grid_single<<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params,no_blocks_per_grid,no_threads_per_block);
       }
       //swap buffers device -> host when gridded last chunk
       if (params.is_final_data_chunk){
