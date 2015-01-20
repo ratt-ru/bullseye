@@ -10,6 +10,8 @@ global detaper_type
 detaper_type = np.float32
 global visibility_type
 visibility_type = np.complex64
+global visibility_component_type
+visibility_component_type = np.float32
 global uvw_type
 uvw_type = np.float32
 global uvw_ctypes_convert_type

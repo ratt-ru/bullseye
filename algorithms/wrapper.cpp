@@ -553,8 +553,7 @@ extern "C" {
                         facet_index,
                         params.num_facet_centres,
                         params.no_timestamps_read,
-                        params.spw_count
-                                                                     );
+                        params.spw_count);
                 convolution_policy_type convolution_policy(params.nx,params.ny,4,
                         params.conv_support,params.conv_oversample,
                         params.conv, polarization_policy);

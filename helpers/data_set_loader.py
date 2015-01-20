@@ -305,7 +305,7 @@ class data_set_loader(object):
 		bi = baseline_index(self._arr_antenna_1[r],self._arr_antenna_2[r])
 		rearanged_index = current_baseline_timestamp_index[bi] + self._starting_indexes[bi]
 		current_baseline_timestamp_index[bi] += 1
-		tmp_uvw[rearanged_index,:] = self._arr_uvw[r,:]
+		tmp_uvw[rearanged_index] = self._arr_uvw[r,:]
 		tmp_data[rearanged_index,:,:] = self._arr_data[r,:,:]
 		tmp_weights[rearanged_index,:] = self._arr_weights[r,:]
 		tmp_flags[rearanged_index,:] = self._arr_flaged[r,:]

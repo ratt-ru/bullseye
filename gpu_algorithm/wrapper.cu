@@ -118,30 +118,49 @@ extern "C" {
 	gpu_params.row_count = params.row_count;
 	gpu_params.no_timestamps_read = params.no_timestamps_read;
 	gpu_params.is_final_data_chunk = params.is_final_data_chunk;
-	cudaSafeCall(cudaMemcpyAsync(gpu_params.uvw_coords,params.uvw_coords,sizeof(imaging::uvw_coord<uvw_base_type>) * params.row_count,cudaMemcpyHostToDevice,compute_stream));
 	//pack and cpy only the necessary visibilities (it doesn't matter if we mod the array here it is not being used again afterwards
 	size_t ubound = params.row_count*params.channel_count;
+	cudaSafeCall(cudaHostRegister(params.visibilities,sizeof(std::complex<visibility_base_type>) * params.row_count * params.channel_count,0));
+	cudaSafeCall(cudaHostRegister(params.spw_index_array,sizeof(unsigned int) * params.row_count,0));
+	cudaSafeCall(cudaHostRegister(params.uvw_coords,sizeof(imaging::uvw_coord<uvw_base_type>) * params.row_count,0));
+	cudaSafeCall(cudaHostRegister(params.visibility_weights,sizeof(visibility_weights_base_type) * params.row_count * params.channel_count,0));
+	cudaSafeCall(cudaHostRegister(params.flagged_rows,sizeof(bool) * params.row_count,0));
+	cudaSafeCall(cudaHostRegister(params.flags,sizeof(bool) * params.row_count * params.channel_count,0));
+	cudaSafeCall(cudaHostRegister(params.field_array,sizeof(unsigned int) * params.row_count,0));
+	cudaSafeCall(cudaHostRegister(params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1),0));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.uvw_coords,params.uvw_coords,sizeof(imaging::uvw_coord<uvw_base_type>) * params.row_count,cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.baseline_starting_indexes, params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1),cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.field_array,params.field_array,sizeof(unsigned int) * params.row_count,cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.flagged_rows,params.flagged_rows,sizeof(bool) * params.row_count,
+				     cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.spw_index_array,params.spw_index_array,sizeof(unsigned int) * params.row_count,
+				     cudaMemcpyHostToDevice,compute_stream));
+	#pragma omp parallel for
 	for (std::size_t i = 0; i < ubound; ++i){
 	    size_t r = i / params.channel_count;
-	    size_t c = i % params.channel_count;
+	    size_t c = i - r * params.channel_count;
 	    size_t compact_index = r*params.channel_count + c;
-	    size_t strided_index = (r*params.channel_count + c)*params.number_of_polarization_terms + params.polarization_index;
+	    size_t strided_index = (compact_index)*params.number_of_polarization_terms + params.polarization_index;
 	    params.visibilities[compact_index] = params.visibilities[strided_index];
 	    params.visibility_weights[compact_index] = params.visibility_weights[strided_index];
 	    params.flags[compact_index] = params.flags[strided_index];
 	}
+	
 	cudaSafeCall(cudaMemcpyAsync(gpu_params.visibilities,params.visibilities,sizeof(std::complex<visibility_base_type>) * params.row_count * params.channel_count,
-				     cudaMemcpyHostToDevice,compute_stream));
-	cudaSafeCall(cudaMemcpyAsync(gpu_params.spw_index_array,params.spw_index_array,sizeof(unsigned int) * params.row_count,
 				     cudaMemcpyHostToDevice,compute_stream));
 	cudaSafeCall(cudaMemcpyAsync(gpu_params.visibility_weights,params.visibility_weights,sizeof(visibility_weights_base_type) * params.row_count * params.channel_count,
 				     cudaMemcpyHostToDevice,compute_stream));
-	cudaSafeCall(cudaMemcpyAsync(gpu_params.flagged_rows,params.flagged_rows,sizeof(bool) * params.row_count,
-				     cudaMemcpyHostToDevice,compute_stream));
 	cudaSafeCall(cudaMemcpyAsync(gpu_params.flags,params.flags,sizeof(bool) * params.row_count * params.channel_count,
 				     cudaMemcpyHostToDevice,compute_stream));
-	cudaSafeCall(cudaMemcpyAsync(gpu_params.baseline_starting_indexes, params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1),cudaMemcpyHostToDevice,compute_stream));
-	cudaSafeCall(cudaMemcpyAsync(gpu_params.field_array,params.field_array,sizeof(unsigned int) * params.row_count,cudaMemcpyHostToDevice,compute_stream));
+	
+	cudaSafeCall(cudaHostUnregister(params.visibilities));
+	cudaSafeCall(cudaHostUnregister(params.spw_index_array));
+	cudaSafeCall(cudaHostUnregister(params.uvw_coords));
+	cudaSafeCall(cudaHostUnregister(params.visibility_weights));
+	cudaSafeCall(cudaHostUnregister(params.flagged_rows));
+	cudaSafeCall(cudaHostUnregister(params.flags));
+	cudaSafeCall(cudaHostUnregister(params.field_array));
+	cudaSafeCall(cudaHostUnregister(params.baseline_starting_indexes));
       }
       //invoke computation
       {
