@@ -74,17 +74,8 @@ extern "C" {
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.output_buffer, sizeof(std::complex<grid_base_type>) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size));
 	cudaSafeCall(cudaMemset(gpu_params.output_buffer,0,sizeof(std::complex<grid_base_type>) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size));
 	size_t size_of_convolution_function = (params.conv_support * 2 + 1 + 2) * params.conv_oversample; //see algorithms/convolution_policies.h for the reason behind the padding
-	convolution_base_type * coalesced_filter = new convolution_base_type[size_of_convolution_function]();
-	for (size_t x = 0; x < size_of_convolution_function; ++x){
-	  size_t cs = x / params.conv_oversample;
-	  size_t co  = x % params.conv_oversample;
-	  size_t new_index = co * (params.conv_support*2 + 3) + cs;
-	  size_t old_index = params.conv_oversample * cs + co;
-	  coalesced_filter[new_index] = params.conv[old_index];	  
-	}
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.conv, sizeof(convolution_base_type) * size_of_convolution_function));	
-	cudaSafeCall(cudaMemcpy(gpu_params.conv, coalesced_filter, sizeof(convolution_base_type) * size_of_convolution_function,cudaMemcpyHostToDevice));
-	delete[] coalesced_filter;
+	cudaSafeCall(cudaMemcpy(gpu_params.conv, params.conv, sizeof(convolution_base_type) * size_of_convolution_function,cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1)));
 	cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
     }
@@ -165,7 +156,7 @@ extern "C" {
       //invoke computation
       {
 	dim3 no_blocks_per_grid(params.baseline_count,1,1);
-	dim3 no_threads_per_block(params.conv_support*2 + 1,params.conv_support*2 + 1,1);
+	dim3 no_threads_per_block(params.conv_support*2+1,params.conv_support*2+1,1);
 	size_t size_of_convolution_function = (params.conv_support * 2 + 1 + 2) * params.conv_oversample * sizeof(convolution_base_type); //see algorithms/convolution_policies.h for the reason behind the padding
 	imaging::grid_single<<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params,no_blocks_per_grid,no_threads_per_block);
       }
