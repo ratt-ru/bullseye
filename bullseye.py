@@ -104,7 +104,7 @@ if __name__ == "__main__":
   parser.add_argument('--n_facets_m', help='Automatically add coordinates for this number of facets in m', type=int, default=0)
   parser.add_argument('--stitch_facets', help='Will attempt to stitch facets together using Montage', type=bool, default=False)
   parser.add_argument('--channel_select', help="Specify list of spectral windows and channels to image, each with the format 'spw index':'comma-seperated list of channels, "
-					       "for example --channel_select (0:1,3~5,7) (1:2) will select channels 1,3,4,5,7 from spw 0 and channel 2 from spw 1. Default all",
+					       "for example --channel_select 0:1,3~5,7 will select channels 1,3,4,5,7 from spw 0. Default all",
 		      type=channel_range, nargs='+', default=None)
   parser.add_argument('--average_spw_channels', help='Averages selected channels in each spectral window', type=bool, default=False)
   parser.add_argument('--average_all', help='Averages all selected channels together into a single image', type=bool, default=False)

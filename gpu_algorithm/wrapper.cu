@@ -74,7 +74,7 @@ extern "C" {
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.output_buffer, sizeof(std::complex<grid_base_type>) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size));
 	cudaSafeCall(cudaMemset(gpu_params.output_buffer,0,sizeof(std::complex<grid_base_type>) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size));
 	size_t size_of_convolution_function = (params.conv_support * 2 + 1 + 2) * params.conv_oversample; //see algorithms/convolution_policies.h for the reason behind the padding
-	cudaSafeCall(cudaMalloc((void**)&gpu_params.conv, sizeof(convolution_base_type) * size_of_convolution_function));	
+	cudaSafeCall(cudaMalloc((void**)&gpu_params.conv, sizeof(convolution_base_type) * size_of_convolution_function));
 	cudaSafeCall(cudaMemcpy(gpu_params.conv, params.conv, sizeof(convolution_base_type) * size_of_convolution_function,cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1)));
 	cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
