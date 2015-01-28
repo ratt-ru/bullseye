@@ -3,21 +3,22 @@
 #include "gridding_parameters.h"
 
 namespace imaging {
-	template <typename T>
-	struct vec2 { T x; T y;};
-  
-  
 	/*
 		This is a gridding kernel following Romeins distribution stategy.
 		This should be launched with 
-			block dimensions: {conv_dim_size,conv_dim_size,1}
-			blocks per grid: {no_baselines,1,1}
+			block dimensions: {THREADS_PER_BLOCK_DIM,THREADS_PER_BLOCK_DIM,1}
+			blocks per grid: {ceil(conv_support_size/double(THREADS_PER_BLOCK_DIM)),
+					  ceil(conv_support_size/double(THREADS_PER_BLOCK_DIM)),
+					  no_baselines}
 	 */
 	__global__ void grid_single(gridding_parameters params,
                   dim3 no_blocks_per_grid, dim3 no_threads_per_block){
-		size_t my_baseline = blockIdx.x;
-		size_t my_conv_u = threadIdx.x + 1;
-		size_t my_conv_v = threadIdx.y + 1;
+		size_t my_baseline = blockIdx.z;
+		size_t my_conv_u = blockIdx.x * no_threads_per_block.x + (threadIdx.x + 1);
+		size_t my_conv_v = blockIdx.y * no_threads_per_block.y + (threadIdx.y + 1);
+		size_t conv_full_support = (params.conv_support << 1) + 1;
+		if (my_conv_u - 1 >= conv_full_support || my_conv_v - 1 >= conv_full_support) return;
+		
 		size_t starting_row_index = params.baseline_starting_indexes[my_baseline];
 		//the starting index prescan must be n(n-1)/2 + n + 1 elements long since we need the length of the last baseline
 		size_t baseline_num_timestamps = params.baseline_starting_indexes[my_baseline+1] - starting_row_index;
@@ -26,7 +27,6 @@ namespace imaging {
 		uvw_base_type u_scale=params.nx*params.cell_size_x * ARCSEC_TO_RAD;
                 uvw_base_type v_scale=-(params.ny*params.cell_size_y * ARCSEC_TO_RAD);
 		
-		size_t conv_full_support = params.conv_support * 2 + 1;
 		size_t padded_conv_full_support = conv_full_support + 2; //remember we need to reserve some of the support for +/- frac on both sides
 		uvw_base_type conv_offset = (padded_conv_full_support) / 2.0; 
 		
@@ -42,8 +42,8 @@ namespace imaging {
 		}
 		__syncthreads(); //wait for the first thread to put the entire filter into shared memory
 		
-		size_t channel_loop_ubound = params.channel_count/2;
-		size_t channel_loop_rem_ubound = channel_loop_ubound + params.channel_count % 2;
+		size_t channel_loop_ubound = params.channel_count >> 1;
+		size_t channel_loop_rem_lbound = channel_loop_ubound << 1;
 		//we must keep seperate accumulators per spw and channel, so we need to bring these loops outward (contrary to Romein's paper)
 		for (size_t spw = 0; spw < params.spw_count; ++spw){
 		    for (size_t c_i = 0; c_i < channel_loop_ubound; ++c_i){
@@ -69,6 +69,10 @@ namespace imaging {
 			reference_wavelengths_base_type ref_wavelength_2 = params.reference_wavelengths[flat_indexed_spw_channel];
 			ref_wavelength = 1/ref_wavelength;
 			ref_wavelength_2 = 1/ref_wavelength_2;
+			uvw_base_type u_scale_factor = u_scale * ref_wavelength;
+			uvw_base_type v_scale_factor = v_scale * ref_wavelength;
+			uvw_base_type u_scale_factor_2 = u_scale * ref_wavelength;
+			uvw_base_type v_scale_factor_2 = v_scale * ref_wavelength;
 			for (size_t t = 0; t < baseline_num_timestamps; ++t){
 				//read all the data we need for gridding
 				size_t row = starting_row_index + t;
@@ -76,30 +80,30 @@ namespace imaging {
 				size_t vis_index = row * params.channel_count + c;
 				size_t vis_index_2 = vis_index+1;
 				bool currently_considering_spw = (spw == spw_index);
+				bool row_is_in_field_being_imaged = (params.field_array[row] == params.imaging_field);
+				bool currently_considering_row = currently_considering_spw && row_is_in_field_being_imaged;
 				imaging::uvw_coord<uvw_base_type> uvw = params.uvw_coords[row];
 				imaging::uvw_coord<uvw_base_type> uvw_2 = uvw;
 				bool row_flagged = params.flagged_rows[row];
 				bool visibility_flagged = params.flags[vis_index];
 				bool visibility_flagged_2 = params.flags[vis_index_2];
-				bool row_is_in_field_being_imaged = (params.field_array[row] == params.imaging_field);
+				
 				basic_complex<visibility_base_type> vis = ((basic_complex<visibility_base_type>*)params.visibilities)[vis_index];
 				basic_complex<visibility_base_type> vis_2 = ((basic_complex<visibility_base_type>*)params.visibilities)[vis_index_2];
 				visibility_weights_base_type vis_weight = params.visibility_weights[vis_index];
 				visibility_weights_base_type vis_weight_2 = params.visibility_weights[vis_index_2];
 				//compute the weighted visibility and promote the flags to integers so that we don't have unnecessary branch diversion here
 				visibility_base_type combined_vis_weight = vis_weight * (visibility_base_type)(int)(!(row_flagged || visibility_flagged) && 
-														    currently_considering_spw && 
 														    channel_enabled && 
-														    row_is_in_field_being_imaged);
+														    currently_considering_row);
 				visibility_base_type combined_vis_weight_2 = vis_weight_2 * (visibility_base_type)(int)(!(row_flagged || visibility_flagged_2) && 
-														    currently_considering_spw && 
-														    channel_enabled && 
-														    row_is_in_field_being_imaged);
+														    channel_enabled_2 && 
+														    currently_considering_row);
 				//scale the uv coordinates (measured in wavelengths) to the correct FOV by the fourier simularity theorem (pg 146-148 Synthesis Imaging in Radio Astronomy II)
-				uvw._u *= u_scale * ref_wavelength; 
-				uvw._v *= v_scale * ref_wavelength;
-				uvw_2._u *= u_scale * ref_wavelength; 
-				uvw_2._v *= v_scale * ref_wavelength;
+				uvw._u *= u_scale_factor;
+				uvw._v *= v_scale_factor;
+				uvw_2._u *= u_scale_factor_2;
+				uvw_2._v *= v_scale_factor_2;
 				//account for interpolation error (we select the closest sample from the oversampled convolution filter)
 				uvw_base_type cont_current_u = uvw._u + grid_centre_offset_x;
 				uvw_base_type cont_current_v = uvw._v + grid_centre_offset_y;
@@ -176,7 +180,7 @@ namespace imaging {
 				atomicAdd(grid_flat_index + 1,my_grid_accum_2._imag);
 			}
 		    }
-		    for (size_t c = channel_loop_ubound; c < channel_loop_rem_ubound; ++c){
+		    for (size_t c = channel_loop_rem_lbound; c < params.channel_count; ++c){
 			basic_complex<grid_base_type> my_grid_accum = {0,0};
 			size_t my_previous_u = 0;
 			size_t my_previous_v = 0;

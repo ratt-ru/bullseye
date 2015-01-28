@@ -1,9 +1,7 @@
 #include "gpu_wrapper.h"
 #include "dft.h"
 #include "gridder.h"
-#define NO_THREADS_PER_BLOCK_DIM 16
-
-// extern imaging::uvw_coord< double > uvw;
+#define NO_THREADS_PER_BLOCK_DIM 13
 
 extern "C" {
     utils::timer * inversion_walltime;
@@ -155,9 +153,12 @@ extern "C" {
       }
       //invoke computation
       {
-	dim3 no_blocks_per_grid(params.baseline_count,1,1);
-	dim3 no_threads_per_block(params.conv_support*2+1,params.conv_support*2+1,1);
-	size_t size_of_convolution_function = (params.conv_support * 2 + 1 + 2) * params.conv_oversample * sizeof(convolution_base_type); //see algorithms/convolution_policies.h for the reason behind the padding
+	size_t conv_support_size = (params.conv_support*2+1);
+	size_t padded_conv_support_size = (conv_support_size+2);
+	size_t blocks_per_grid_dim = (size_t) ceil(conv_support_size/double(NO_THREADS_PER_BLOCK_DIM));
+	dim3 no_threads_per_block(NO_THREADS_PER_BLOCK_DIM,NO_THREADS_PER_BLOCK_DIM,1);
+	dim3 no_blocks_per_grid(blocks_per_grid_dim,blocks_per_grid_dim,params.baseline_count);
+	size_t size_of_convolution_function = padded_conv_support_size * params.conv_oversample * sizeof(convolution_base_type); //see algorithms/convolution_policies.h for the reason behind the padding
 	imaging::grid_single<<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params,no_blocks_per_grid,no_threads_per_block);
       }
       //swap buffers device -> host when gridded last chunk
