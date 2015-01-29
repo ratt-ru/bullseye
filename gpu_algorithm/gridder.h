@@ -6,18 +6,20 @@ namespace imaging {
 	/*
 		This is a gridding kernel following Romeins distribution stategy.
 		This should be launched with 
-			block dimensions: {THREADS_PER_BLOCK_DIM,THREADS_PER_BLOCK_DIM,1}
-			blocks per grid: {ceil(conv_support_size/double(THREADS_PER_BLOCK_DIM)),
-					  ceil(conv_support_size/double(THREADS_PER_BLOCK_DIM)),
-					  no_baselines}
+			block dimensions: {THREADS_PER_BLOCK,1,1}
+			blocks per grid: {minimum number of blocks required to run baselines*conv_support_size^^2 threads,
+					  1,1}
 	 */
-	__global__ void grid_single(gridding_parameters params,
-                  dim3 no_blocks_per_grid, dim3 no_threads_per_block){
-		size_t my_baseline = blockIdx.z;
-		size_t my_conv_u = blockIdx.x * no_threads_per_block.x + (threadIdx.x + 1);
-		size_t my_conv_v = blockIdx.y * no_threads_per_block.y + (threadIdx.y + 1);
+	__global__ void grid_single(gridding_parameters params){
+		size_t tid = cu_indexing_schemes::getGlobalIdx_1D_1D(gridDim,blockIdx,blockDim,threadIdx);
 		size_t conv_full_support = (params.conv_support << 1) + 1;
-		if (my_conv_u - 1 >= conv_full_support || my_conv_v - 1 >= conv_full_support) return;
+		size_t conv_full_support_sq = conv_full_support * conv_full_support;
+		size_t padded_conv_full_support = conv_full_support + 2; //remember we need to reserve some of the support for +/- frac on both sides
+		if (tid >= params.baseline_count * conv_full_support_sq) return;
+		size_t my_baseline = tid / conv_full_support_sq;
+		size_t conv_theadid_flat_index = tid % conv_full_support_sq;
+		size_t my_conv_v = (conv_theadid_flat_index / conv_full_support) + 1;
+		size_t my_conv_u = (conv_theadid_flat_index % conv_full_support) + 1;
 		
 		size_t starting_row_index = params.baseline_starting_indexes[my_baseline];
 		//the starting index prescan must be n(n-1)/2 + n + 1 elements long since we need the length of the last baseline
@@ -25,18 +27,19 @@ namespace imaging {
 		
 		//Scale the IFFT by the simularity theorem to the correct FOV
 		uvw_base_type u_scale=params.nx*params.cell_size_x * ARCSEC_TO_RAD;
-                uvw_base_type v_scale=-(params.ny*params.cell_size_y * ARCSEC_TO_RAD);
+		uvw_base_type v_scale=-(params.ny*params.cell_size_y * ARCSEC_TO_RAD);
 		
-		size_t padded_conv_full_support = conv_full_support + 2; //remember we need to reserve some of the support for +/- frac on both sides
 		uvw_base_type conv_offset = (padded_conv_full_support) / 2.0; 
-		
 		uvw_base_type grid_centre_offset_x = params.nx/2.0 - conv_offset + my_conv_u;
 		uvw_base_type grid_centre_offset_y = params.ny/2.0 - conv_offset + my_conv_v;
+		size_t grid_size_in_floats = params.nx * params.ny << 1;
 		
 		//load the convolution filter into shared memory
 		extern __shared__ convolution_base_type shared_conv[];
 		if (threadIdx.x == 0){
-		  for (size_t x = 0; x < params.conv_oversample * padded_conv_full_support; ++x){
+		  size_t fir_ubound = ((params.conv_oversample * padded_conv_full_support));
+		  
+		  for (size_t x = 0; x < fir_ubound; ++x){
 		    shared_conv[x] = params.conv[x];
 		  }
 		}
@@ -62,9 +65,9 @@ namespace imaging {
 			size_t channel_grid_index = params.channel_grid_indicies[flat_indexed_spw_channel];
 			size_t channel_grid_index_2 = params.channel_grid_indicies[flat_indexed_spw_channel_2];
 			grid_base_type* grid_flat_ptr = (grid_base_type*)params.output_buffer + 
-							((channel_grid_index * params.nx * params.ny) << 1);
+							((channel_grid_index * grid_size_in_floats));
 			grid_base_type* grid_flat_ptr_2 = (grid_base_type*)params.output_buffer + 
-							  ((channel_grid_index_2 * params.nx * params.ny) << 1);
+							  ((channel_grid_index_2 * grid_size_in_floats));
 			reference_wavelengths_base_type ref_wavelength = params.reference_wavelengths[flat_indexed_spw_channel];
 			reference_wavelengths_base_type ref_wavelength_2 = params.reference_wavelengths[flat_indexed_spw_channel];
 			ref_wavelength = 1/ref_wavelength;
@@ -109,19 +112,19 @@ namespace imaging {
 				uvw_base_type cont_current_v = uvw._v + grid_centre_offset_y;
 				uvw_base_type cont_current_u_2 = uvw_2._u + grid_centre_offset_x;
 				uvw_base_type cont_current_v_2 = uvw_2._v + grid_centre_offset_y;
-				size_t my_current_u = round(cont_current_u);
-				size_t my_current_v = round(cont_current_v);
-				size_t my_current_u_2 = round(cont_current_u_2);
-				size_t my_current_v_2 = round(cont_current_v_2);
-				uvw_base_type frac_u = (-cont_current_u + (uvw_base_type)my_current_u);
-				uvw_base_type frac_v = (-cont_current_v + (uvw_base_type)my_current_v);
-				uvw_base_type frac_u_2 = (-cont_current_u_2 + (uvw_base_type)my_current_u_2);
-				uvw_base_type frac_v_2 = (-cont_current_v_2 + (uvw_base_type)my_current_v_2);
+				size_t my_current_u = rintf(cont_current_u);
+				size_t my_current_v = rintf(cont_current_v);
+				size_t my_current_u_2 = rintf(cont_current_u_2);
+				size_t my_current_v_2 = rintf(cont_current_v_2);
+				size_t frac_u = (-cont_current_u + (uvw_base_type)my_current_u) * params.conv_oversample;
+				size_t frac_v = (-cont_current_v + (uvw_base_type)my_current_v) * params.conv_oversample;
+				size_t frac_u_2 = (-cont_current_u_2 + (uvw_base_type)my_current_u_2) * params.conv_oversample;
+				size_t frac_v_2 = (-cont_current_v_2 + (uvw_base_type)my_current_v_2) * params.conv_oversample;
 				//map the convolution memory access to a coalesced access (bundle #full_support number of fractions together, so that the memory addresses are contigious)
-				size_t closest_conv_u = (frac_u + (uvw_base_type)my_conv_u)* params.conv_oversample;
-				size_t closest_conv_v = (frac_v + (uvw_base_type)my_conv_v)* params.conv_oversample;
-				size_t closest_conv_u_2 = (frac_u_2 + (uvw_base_type)my_conv_u)* params.conv_oversample;
-				size_t closest_conv_v_2 = (frac_v_2 + (uvw_base_type)my_conv_v)* params.conv_oversample;
+				size_t closest_conv_u = frac_u * padded_conv_full_support + my_conv_u;
+				size_t closest_conv_v = frac_v * padded_conv_full_support + my_conv_v;
+				size_t closest_conv_u_2 = frac_u_2 * padded_conv_full_support + my_conv_u;
+				size_t closest_conv_v_2 = frac_v_2 * padded_conv_full_support + my_conv_v;
 				//if this is the first timestamp for this baseline initialize previous_u and previous_v
 				if (t == 0) {
 					my_previous_u = my_current_u;
@@ -130,7 +133,7 @@ namespace imaging {
 					my_previous_v_2 = my_current_v_2;
 				}
 				//if u and v have changed we must dump everything to memory at previous_u and previous_v and reset
-				if ((my_current_u != my_previous_u || my_current_v != my_previous_v) && channel_enabled){
+				if (!(my_current_u == my_previous_u && my_current_v == my_previous_v) && channel_enabled){
 					//don't you dare go off the grid:
 					if (my_previous_v + conv_full_support  < params.ny && my_previous_u + conv_full_support  < params.nx &&
 					    my_previous_v < params.ny && my_previous_u < params.nx){
@@ -144,7 +147,7 @@ namespace imaging {
 					my_previous_v = my_current_v;
 				}
 				//if u and v have changed we must dump everything to memory at previous_u and previous_v and reset
-				if ((my_current_u_2 != my_previous_u_2 || my_current_v_2 != my_previous_v_2) && channel_enabled_2){
+				if (!(my_current_u_2 == my_previous_u_2 && my_current_v_2 == my_previous_v_2) && channel_enabled_2){
 					//don't you dare go off the grid:
 					if (my_previous_v_2 + conv_full_support  < params.ny && my_previous_u_2 + conv_full_support  < params.nx &&
 					    my_previous_v_2 < params.ny && my_previous_u_2 < params.nx){
@@ -214,14 +217,13 @@ namespace imaging {
 				//account for interpolation error (we select the closest sample from the oversampled convolution filter)
 				uvw_base_type cont_current_u = uvw._u + grid_centre_offset_x;
 				uvw_base_type cont_current_v = uvw._v + grid_centre_offset_y;
-				size_t my_current_u = round(cont_current_u);
-				size_t my_current_v = round(cont_current_v);
-				uvw_base_type frac_u = (-cont_current_u + (uvw_base_type)my_current_u);
-				uvw_base_type frac_v = (-cont_current_v + (uvw_base_type)my_current_v);
-				size_t closest_conv_u = (frac_u + (uvw_base_type)my_conv_u)* params.conv_oversample;
-				size_t closest_conv_v = (frac_v + (uvw_base_type)my_conv_v)* params.conv_oversample;
-				
-				
+				size_t my_current_u = rintf(cont_current_u);
+				size_t my_current_v = rintf(cont_current_v);
+				size_t frac_u = (-cont_current_u + (uvw_base_type)my_current_u) * params.conv_oversample;
+				size_t frac_v = (-cont_current_v + (uvw_base_type)my_current_v) * params.conv_oversample;
+				//map the convolution memory access to a coalesced access (bundle #full_support number of fractions together, so that the memory addresses are contigious)
+				size_t closest_conv_u = frac_u * padded_conv_full_support + my_conv_u;
+				size_t closest_conv_v = frac_v * padded_conv_full_support + my_conv_v;
 				//if this is the first timestamp for this baseline initialize previous_u and previous_v
 				if (t == 0) {
 					my_previous_u = my_current_u;

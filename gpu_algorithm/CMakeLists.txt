@@ -9,7 +9,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 find_package(CasaCore REQUIRED COMPONENTS measures scimath tables)
 find_package(Boost REQUIRED)
 
-SET(CUDA_NVCC_FLAGS "-O3 -Xcompiler \"-pthread -fopenmp\" -gencode arch=compute_20,code=sm_20 -gencode arch=compute_20,code=sm_21 -gencode arch=compute_30,code=sm_30 --use_fast_math -Xptxas -dlcm=ca")
+SET(CUDA_NVCC_FLAGS "-O3 -Xcompiler \"-pthread -fopenmp\" -gencode arch=compute_20,code=sm_20 -gencode arch=compute_20,code=sm_21 -gencode arch=compute_30,code=sm_30 --use_fast_math -Xptxas -dlcm=ca -lineinfo")
 include_directories(/usr/include/python2.7 /usr/lib/python2.7/dist-packages/numpy/core/include/numpy /usr/include/casacore/ /usr/local/include/casacore)
 cuda_add_library(gpu_imaging SHARED wrapper.cu finalization_routines.cpp)
 #link external libraries
