@@ -60,9 +60,6 @@ namespace imaging {
 			for (size_t t = 0; t < baseline_num_timestamps; ++t){
 				size_t row = starting_row_index + t;
 				size_t spw = params.spw_index_array[row];
-				if (t == 0) {
-					my_previous_spw = spw;
-				}
 				//read all the stuff that is only dependent on the current spw and channel
 				size_t flat_indexed_spw_channel = spw * params.channel_count + c;
 				size_t flat_indexed_spw_channel_2 = flat_indexed_spw_channel + 1;
@@ -121,9 +118,10 @@ namespace imaging {
 					my_previous_v = my_current_v;
 					my_previous_u_2 = my_current_u_2;
 					my_previous_v_2 = my_current_v_2;
+					my_previous_spw = spw;
 				}
 				//if u and v have changed we must dump everything to memory at previous_u and previous_v and reset
-				if ((my_current_u != my_previous_u || my_current_v != my_previous_v || my_previous_spw != spw) && channel_enabled){
+				if (!(my_current_u == my_previous_u && my_current_v == my_previous_v && my_previous_spw == spw) && channel_enabled){
 					//don't you dare go off the grid:
 					if (my_previous_v + conv_full_support  < params.ny && my_previous_u + conv_full_support  < params.nx &&
 					    my_previous_v < params.ny && my_previous_u < params.nx){
@@ -138,7 +136,7 @@ namespace imaging {
 					my_previous_u = my_current_u;
 					my_previous_v = my_current_v;
 				}
-				if ((my_current_u_2 != my_previous_u_2 || my_current_v_2 != my_previous_v_2 || my_previous_spw != spw) && channel_enabled_2){
+				if (!(my_current_u_2 == my_previous_u_2 && my_current_v_2 == my_previous_v_2 && my_previous_spw == spw) && channel_enabled_2){
 					//don't you dare go off the grid:
 					if (my_previous_v_2 + conv_full_support  < params.ny && my_previous_u_2 + conv_full_support  < params.nx &&
 					    my_previous_v_2 < params.ny && my_previous_u_2 < params.nx){
@@ -190,9 +188,6 @@ namespace imaging {
 			for (size_t t = 0; t < baseline_num_timestamps; ++t){
 				size_t row = starting_row_index + t;
 				size_t spw = params.spw_index_array[row];
-				if (t == 0) {
-					my_previous_spw = spw;
-				}
 				//read all the stuff that is only dependent on the current spw and channel
 				size_t flat_indexed_spw_channel = spw * params.channel_count + c;
 				bool channel_enabled = params.enabled_channels[flat_indexed_spw_channel];
@@ -227,6 +222,7 @@ namespace imaging {
 				if (t == 0) {
 					my_previous_u = my_current_u;
 					my_previous_v = my_current_v;
+					my_previous_spw = spw;
 				}
 				//if u and v have changed we must dump everything to memory at previous_u and previous_v and reset
 				if ((my_current_u != my_previous_u || my_current_v != my_previous_v || my_previous_spw != spw) && channel_enabled){
