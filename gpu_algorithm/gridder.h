@@ -50,8 +50,8 @@ namespace imaging {
 		//we must keep seperate accumulators per channel, so we need to bring these loops outward (contrary to Romein's paper)
 		    for (size_t c_i = 0; c_i < channel_loop_ubound; ++c_i){
 			size_t c = c_i << 1;
-			basic_complex<grid_base_type> my_grid_accum = {0,0};
-			basic_complex<grid_base_type> my_grid_accum_2 = {0,0};
+			basic_complex<grid_base_type> my_grid_accum;
+			basic_complex<grid_base_type> my_grid_accum_2;
 			size_t my_previous_u = 0;
 			size_t my_previous_u_2 = 0;
 			size_t my_previous_v = 0;
@@ -181,7 +181,7 @@ namespace imaging {
 			}
 		    }
 		    for (size_t c = channel_loop_rem_lbound; c < params.channel_count; ++c){
-			basic_complex<grid_base_type> my_grid_accum = {0,0};
+			basic_complex<grid_base_type> my_grid_accum;
 			size_t my_previous_u = 0;
 			size_t my_previous_v = 0;
 			size_t my_previous_spw = 0;

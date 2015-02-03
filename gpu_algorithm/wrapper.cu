@@ -1,6 +1,11 @@
 #include "gpu_wrapper.h"
 #include "dft.h"
 #include "gridder.h"
+
+#include "correlation_gridding_traits.h"
+#include "correlation_gridding_policies.h"
+#include "templated_gridder.h"
+
 #define NO_THREADS_PER_BLOCK_DIM 256
 
 extern "C" {
@@ -174,7 +179,8 @@ extern "C" {
 	dim3 no_threads_per_block(block_size,1,1);
 	dim3 no_blocks_per_grid(total_blocks_needed_per_dim,1,1);
 	size_t size_of_convolution_function = padded_conv_support_size * params.conv_oversample * sizeof(convolution_base_type); //see algorithms/convolution_policies.h for the reason behind the padding
-	imaging::grid_single<<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
+	typedef imaging::correlation_gridding_policy<imaging::grid_single_correlation> correlation_gridding_policy;
+	imaging::templated_gridder<correlation_gridding_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
       }
       //swap buffers device -> host when gridded last chunk
       if (params.is_final_data_chunk){
@@ -187,7 +193,23 @@ extern "C" {
       throw std::runtime_error("Backend Unimplemented exception: facet_single_pol");
     }
     void grid_duel_pol(gridding_parameters & params){
-      throw std::runtime_error("Backend Unimplemented exception: grid_duel_pol");
+      //TODO: pack data for duel correlations and copy to GPU
+      {
+	size_t conv_support_size = (params.conv_support*2+1);
+	size_t padded_conv_support_size = (conv_support_size+2);
+	size_t min_threads_needed = params.baseline_count * conv_support_size * conv_support_size;
+	size_t block_size = NO_THREADS_PER_BLOCK_DIM;
+	size_t total_blocks_needed = ceil(min_threads_needed / double(block_size));
+	size_t total_blocks_needed_per_dim = total_blocks_needed;
+	
+	
+	dim3 no_threads_per_block(block_size,1,1);
+	dim3 no_blocks_per_grid(total_blocks_needed_per_dim,1,1);
+	size_t size_of_convolution_function = padded_conv_support_size * params.conv_oversample * sizeof(convolution_base_type); //see algorithms/convolution_policies.h for the reason behind the padding
+	typedef imaging::correlation_gridding_policy<imaging::grid_duel_correlation> correlation_gridding_policy;
+	imaging::templated_gridder<correlation_gridding_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
+      }
+      //TODO: copy grids back
     }
     void facet_duel_pol(gridding_parameters & params){
       throw std::runtime_error("Backend Unimplemented exception: facet_duel_pol");
