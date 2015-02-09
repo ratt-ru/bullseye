@@ -43,4 +43,17 @@ namespace imaging {
     typedef vec4<visibility_weights_base_type> vis_weight_type;
     typedef vec4<vec2<visibility_base_type> > accumulator_type;
   };
+  
+  /**
+   * scalar multiplication with correlated visibilities (can be up to 4 complex visibilties)
+   */
+  template <typename T>
+  __device__ __host__ vec1<vec2<T> > operator*(const vec1<vec2<T> > & visibilities, const vec1<T> & scalars) {
+    return vec1<vec2<T> >(vec2<T>(visibilities._x._x*scalars._x,visibilities._x._y*scalars._x));
+  }
+  template <typename T>
+  __device__ __host__ vec2<vec2<T> > operator*(const vec2<vec2<T> > & visibilities, const vec2<T> & scalars) {
+    return vec2<vec2<T> >(vec2<T>(visibilities._x._x*scalars._x,visibilities._x._y*scalars._x),
+			vec2<T>(visibilities._y._x*scalars._y,visibilities._y._y*scalars._y));
+  }
 };

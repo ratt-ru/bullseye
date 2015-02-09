@@ -21,6 +21,7 @@ namespace imaging {
 					    size_t slice_size,
 					    size_t nx,
 					    size_t grid_channel_id,
+					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
 					    typename active_trait::accumulator_type & accumulator
@@ -47,6 +48,7 @@ namespace imaging {
 					    size_t slice_size,
 					    size_t nx,
 					    size_t grid_channel_id,
+					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
 					    typename active_trait::accumulator_type & accumulator
@@ -70,7 +72,7 @@ namespace imaging {
 						  typename active_trait::vis_flag_type & flag,
 						  typename active_trait::vis_weight_type & weight
 						 ){
-      size_t vis_index = (row_index * params.channel_count + c) * params.number_of_polarization_terms_being_gridded; //this assumes the data is stripped of excess correlations before transferred to GPU
+      size_t vis_index = (row_index * params.channel_count + c); //this assumes the data is stripped of excess correlations before transferred to GPU
       flag = ((active_trait::vis_flag_type *)params.flags)[vis_index];
       weight = ((active_trait::vis_weight_type *)params.visibility_weights)[vis_index];
       vis = ((active_trait::vis_type *)params.visibilities)[vis_index];
@@ -79,13 +81,14 @@ namespace imaging {
 					    size_t slice_size,
 					    size_t nx,
 					    size_t grid_channel_id,
+					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
 					    typename active_trait::accumulator_type & accumulator
 					   ){
       //duel correlation grids (no_facets * no_channel_averaging_grids * no_correlations * ny * nx * 2)
       grid_base_type* grid_flat_index_corr1 = grid + 
-					      (grid_channel_id * slice_size) + 
+					      ((grid_channel_id * no_polarizations_being_gridded) * slice_size) + 
 					      ((pos_v * nx + pos_u) << 1);
       grid_base_type* grid_flat_index_corr2 = grid_flat_index_corr1 + slice_size;
       atomicAdd(grid_flat_index_corr1,accumulator._x._x);

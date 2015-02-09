@@ -106,6 +106,7 @@ namespace imaging {
 												    grid_size_in_floats,
 												    params.nx,
 												    channel_grid_index,
+												    params.number_of_polarization_terms_being_gridded,
 												    my_previous_u,
 												    my_previous_v,
 												    my_grid_accum
@@ -128,6 +129,7 @@ namespace imaging {
 												    grid_size_in_floats,
 												    params.nx,
 												    channel_grid_index,
+												    params.number_of_polarization_terms_being_gridded,
 												    my_previous_u,
 												    my_previous_v,
 												    my_grid_accum
