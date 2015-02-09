@@ -276,7 +276,66 @@ extern "C" {
       throw std::runtime_error("Backend Unimplemented exception: facet_duel_pol");
     }
     void grid_4_cor(gridding_parameters & params){
-      throw std::runtime_error("Backend Unimplemented exception: grid_4_cor");
+      gridding_walltime->start();
+      printf("Gridding 4 correlation on the GPU...\n");    
+      //copy everything that changed to the gpu
+      {
+	gpu_params.row_count = params.row_count;
+	gpu_params.no_timestamps_read = params.no_timestamps_read;
+	gpu_params.is_final_data_chunk = params.is_final_data_chunk;
+	//copy the read chunk accross to the GPU
+	cudaSafeCall(cudaHostRegister(params.visibilities,sizeof(std::complex<visibility_base_type>) * params.row_count * params.channel_count * params.number_of_polarization_terms_being_gridded,0));
+	cudaSafeCall(cudaHostRegister(params.spw_index_array,sizeof(unsigned int) * params.row_count,0));
+	cudaSafeCall(cudaHostRegister(params.uvw_coords,sizeof(imaging::uvw_coord<uvw_base_type>) * params.row_count,0));
+	cudaSafeCall(cudaHostRegister(params.visibility_weights,sizeof(visibility_weights_base_type) * params.row_count * params.channel_count  * params.number_of_polarization_terms_being_gridded,0));
+	cudaSafeCall(cudaHostRegister(params.flagged_rows,sizeof(bool) * params.row_count,0));
+	cudaSafeCall(cudaHostRegister(params.flags,sizeof(bool) * params.row_count * params.channel_count * params.number_of_polarization_terms_being_gridded,0));
+	cudaSafeCall(cudaHostRegister(params.field_array,sizeof(unsigned int) * params.row_count,0));
+	cudaSafeCall(cudaHostRegister(params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1),0));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.uvw_coords,params.uvw_coords,sizeof(imaging::uvw_coord<uvw_base_type>) * params.row_count,cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.baseline_starting_indexes, params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1),cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.field_array,params.field_array,sizeof(unsigned int) * params.row_count,cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.flagged_rows,params.flagged_rows,sizeof(bool) * params.row_count,
+				     cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.spw_index_array,params.spw_index_array,sizeof(unsigned int) * params.row_count,
+				     cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.visibilities,params.visibilities,sizeof(std::complex<visibility_base_type>) * params.row_count * params.channel_count * params.number_of_polarization_terms_being_gridded,
+				     cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.visibility_weights,params.visibility_weights,sizeof(visibility_weights_base_type) * params.row_count * params.channel_count * params.number_of_polarization_terms_being_gridded,
+				     cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.flags,params.flags,sizeof(bool) * params.row_count * params.channel_count * params.number_of_polarization_terms_being_gridded,
+				     cudaMemcpyHostToDevice,compute_stream));
+	
+	cudaSafeCall(cudaHostUnregister(params.visibilities));
+	cudaSafeCall(cudaHostUnregister(params.spw_index_array));
+	cudaSafeCall(cudaHostUnregister(params.uvw_coords));
+	cudaSafeCall(cudaHostUnregister(params.visibility_weights));
+	cudaSafeCall(cudaHostUnregister(params.flagged_rows));
+	cudaSafeCall(cudaHostUnregister(params.flags));
+	cudaSafeCall(cudaHostUnregister(params.field_array));
+	cudaSafeCall(cudaHostUnregister(params.baseline_starting_indexes));
+	{
+	  size_t conv_support_size = (params.conv_support*2+1);
+	  size_t padded_conv_support_size = (conv_support_size+2);
+	  size_t min_threads_needed = params.baseline_count * conv_support_size * conv_support_size;
+	  size_t block_size = NO_THREADS_PER_BLOCK_DIM;
+	  size_t total_blocks_needed = ceil(min_threads_needed / double(block_size));
+	  size_t total_blocks_needed_per_dim = total_blocks_needed;
+	
+	  dim3 no_threads_per_block(block_size,1,1);
+	  dim3 no_blocks_per_grid(total_blocks_needed_per_dim,1,1);
+	  size_t size_of_convolution_function = padded_conv_support_size * params.conv_oversample * sizeof(convolution_base_type); //see algorithms/convolution_policies.h for the reason behind the padding
+	  typedef imaging::correlation_gridding_policy<imaging::grid_4_correlation> correlation_gridding_policy;
+	  imaging::templated_gridder<correlation_gridding_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
+	}
+	//swap buffers device -> host when gridded last chunk
+	if (params.is_final_data_chunk){
+	  gridding_barrier();
+	  cudaSafeCall(cudaMemcpy(params.output_buffer,gpu_params.output_buffer,sizeof(std::complex<grid_base_type>) * params.nx * params.ny * 
+				  params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size,cudaMemcpyDeviceToHost));
+	}      
+      }
+      gridding_walltime->stop();
     }
     void facet_4_cor(gridding_parameters & params){
       throw std::runtime_error("Backend Unimplemented exception: facet_4_cor");
