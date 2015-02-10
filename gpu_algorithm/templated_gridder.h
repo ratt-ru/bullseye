@@ -2,26 +2,32 @@
 
 #include "cu_common.h"
 #include "gridding_parameters.h"
+#include "baseline_transform_policies.h"
+#include "phase_transform_policies.h"
 
 namespace imaging {
 	/*
 		This is a gridding kernel following Romeins distribution stategy.
 		This should be launched with 
 			block dimensions: {THREADS_PER_BLOCK,1,1}
-			blocks per grid: {minimum number of blocks required to run baselines*conv_support_size^^2 threads,
+			blocks per grid: {minimum number of blocks required to run baselines*conv_support_size*num_facets^^2 threads,
 					  1,1}
 	 */
-	template <typename active_correlation_gridding_policy>
+	template <typename active_correlation_gridding_policy,
+		  typename active_baseline_transformation_policy,
+		  typename active_phase_transformation>
 	__global__ void templated_gridder(gridding_parameters params){
 		size_t tid = cu_indexing_schemes::getGlobalIdx_1D_1D(gridDim,blockIdx,blockDim,threadIdx);
 		size_t conv_full_support = (params.conv_support << 1) + 1;
 		size_t conv_full_support_sq = conv_full_support * conv_full_support;
 		size_t padded_conv_full_support = conv_full_support + 2; //remember we need to reserve some of the support for +/- frac on both sides
 		if (tid >= params.baseline_count * conv_full_support_sq) return;
-		size_t my_baseline = tid / conv_full_support_sq;
 		size_t conv_theadid_flat_index = tid % conv_full_support_sq;
 		size_t my_conv_v = (conv_theadid_flat_index / conv_full_support) + 1;
 		size_t my_conv_u = (conv_theadid_flat_index % conv_full_support) + 1;
+		size_t facet_baseline_index = tid / conv_full_support_sq; //this is baseline_id * facet_id
+		size_t my_facet_id = facet_baseline_index / params.baseline_count;
+		size_t my_baseline = facet_baseline_index % params.baseline_count;
 		
 		size_t starting_row_index = params.baseline_starting_indexes[my_baseline];
 		//the starting index prescan must be n(n-1)/2 + n + 1 elements long since we need the length of the last baseline
@@ -35,7 +41,13 @@ namespace imaging {
 		uvw_base_type grid_centre_offset_x = params.nx/2.0 - conv_offset + my_conv_u;
 		uvw_base_type grid_centre_offset_y = params.ny/2.0 - conv_offset + my_conv_v;
 		size_t grid_size_in_floats = params.nx * params.ny << 1;
-		
+		//Compute the transformation necessary to distort the baseline according to the new facet delay centre (Cornwell & Perley, 1991)
+		baseline_rotation_mat baseline_transformation;
+		uvw_base_type new_delay_ra;
+		uvw_base_type new_delay_dec;
+		active_phase_transformation::read_facet_ra_dec(params,my_facet_id,new_delay_ra,new_delay_dec);
+		active_baseline_transformation_policy::compute_transformation_matrix(params.phase_centre_ra,params.phase_centre_dec,
+										     new_delay_ra,new_delay_dec,baseline_transformation);
 		//load the convolution filter into shared memory
 		extern __shared__ convolution_base_type shared_conv[];
 		if (threadIdx.x == 0){
@@ -81,6 +93,10 @@ namespace imaging {
 				//scale the uv coordinates (measured in wavelengths) to the correct FOV by the fourier simularity theorem (pg 146-148 Synthesis Imaging in Radio Astronomy II)
 				uvw._u *= u_scale * ref_wavelength; 
 				uvw._v *= v_scale * ref_wavelength;
+				//Do phase rotation in accordance with Cornwell & Perley (1992)
+				//TODO
+				//DO baseline rotation in accordance with Cornwell & Perley (1992)
+				active_baseline_transformation_policy::apply_transformation(uvw,baseline_transformation);
 				//account for interpolation error (we select the closest sample from the oversampled convolution filter)
 				uvw_base_type cont_current_u = uvw._u + grid_centre_offset_x;
 				uvw_base_type cont_current_v = uvw._v + grid_centre_offset_y;

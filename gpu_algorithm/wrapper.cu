@@ -4,6 +4,8 @@
 
 #include "correlation_gridding_traits.h"
 #include "correlation_gridding_policies.h"
+#include "baseline_transform_policies.h"
+#include "phase_transform_policies.h"
 #include "templated_gridder.h"
 
 #define NO_THREADS_PER_BLOCK_DIM 256
@@ -74,8 +76,8 @@ extern "C" {
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.field_array, sizeof(unsigned int) * params.chunk_max_row_count));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.visibility_weights, sizeof(visibility_weights_base_type) * params.chunk_max_row_count * params.channel_count * params.number_of_polarization_terms_being_gridded));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.flags, sizeof(bool) * params.chunk_max_row_count * params.channel_count * params.number_of_polarization_terms_being_gridded));
-	cudaSafeCall(cudaMalloc((void**)&gpu_params.output_buffer, sizeof(std::complex<grid_base_type>) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size));
-	cudaSafeCall(cudaMemset(gpu_params.output_buffer,0,sizeof(std::complex<grid_base_type>) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size));
+	cudaSafeCall(cudaMalloc((void**)&gpu_params.output_buffer, sizeof(std::complex<grid_base_type>) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * params.num_facet_centres));
+	cudaSafeCall(cudaMemset(gpu_params.output_buffer,0,sizeof(std::complex<grid_base_type>) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * params.num_facet_centres));
 	size_t size_of_convolution_function = (params.conv_support * 2 + 1 + 2) * params.conv_oversample; //see algorithms/convolution_policies.h for the reason behind the padding
 	convolution_base_type * coalesced_filter = new convolution_base_type[size_of_convolution_function]();
 	#pragma omp parallel for
@@ -90,6 +92,8 @@ extern "C" {
 	cudaSafeCall(cudaMemcpy(gpu_params.conv, coalesced_filter, sizeof(convolution_base_type) * size_of_convolution_function,cudaMemcpyHostToDevice));
 	delete [] coalesced_filter;
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1)));
+	cudaSafeCall(cudaMalloc((void**)&gpu_params.facet_centres, sizeof(uvw_base_type) * params.num_facet_centres * 2)); //enough space to store ra,dec coordinates of facet delay centres
+	cudaSafeCall(cudaMemcpy(gpu_params.facet_centres,params.facet_centres, sizeof(uvw_base_type) * params.num_facet_centres * 2,cudaMemcpyHostToDevice));
 	cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
     }
     void releaseLibrary() {
@@ -106,6 +110,7 @@ extern "C" {
       cudaSafeCall(cudaFree(gpu_params.flags));
       cudaSafeCall(cudaFree(gpu_params.conv));
       cudaSafeCall(cudaFree(gpu_params.baseline_starting_indexes));
+      cudaSafeCall(cudaFree(gpu_params.facet_centres));
       cudaSafeCall(cudaStreamDestroy(compute_stream));
       delete gridding_walltime;
       delete inversion_walltime;
@@ -180,7 +185,9 @@ extern "C" {
 	dim3 no_blocks_per_grid(total_blocks_needed_per_dim,1,1);
 	size_t size_of_convolution_function = padded_conv_support_size * params.conv_oversample * sizeof(convolution_base_type); //see algorithms/convolution_policies.h for the reason behind the padding
 	typedef imaging::correlation_gridding_policy<imaging::grid_single_correlation> correlation_gridding_policy;
-	imaging::templated_gridder<correlation_gridding_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
+	typedef imaging::baseline_transform_policy<imaging::transform_disable_facet_rotation > baseline_transform_policy;
+	typedef imaging::phase_transform_policy<imaging::disable_faceting_phase_shift> phase_transform_policy;
+	imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
       }
       //swap buffers device -> host when gridded last chunk
       if (params.is_final_data_chunk){
@@ -261,7 +268,9 @@ extern "C" {
 	  dim3 no_blocks_per_grid(total_blocks_needed_per_dim,1,1);
 	  size_t size_of_convolution_function = padded_conv_support_size * params.conv_oversample * sizeof(convolution_base_type); //see algorithms/convolution_policies.h for the reason behind the padding
 	  typedef imaging::correlation_gridding_policy<imaging::grid_duel_correlation> correlation_gridding_policy;
-	  imaging::templated_gridder<correlation_gridding_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
+	  typedef imaging::baseline_transform_policy<imaging::transform_disable_facet_rotation > baseline_transform_policy;
+	  typedef imaging::phase_transform_policy<imaging::disable_faceting_phase_shift> phase_transform_policy;
+	  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
 	}
 	//swap buffers device -> host when gridded last chunk
 	if (params.is_final_data_chunk){
@@ -326,7 +335,9 @@ extern "C" {
 	  dim3 no_blocks_per_grid(total_blocks_needed_per_dim,1,1);
 	  size_t size_of_convolution_function = padded_conv_support_size * params.conv_oversample * sizeof(convolution_base_type); //see algorithms/convolution_policies.h for the reason behind the padding
 	  typedef imaging::correlation_gridding_policy<imaging::grid_4_correlation> correlation_gridding_policy;
-	  imaging::templated_gridder<correlation_gridding_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
+	  typedef imaging::baseline_transform_policy<imaging::transform_disable_facet_rotation > baseline_transform_policy;
+	  typedef imaging::phase_transform_policy<imaging::disable_faceting_phase_shift> phase_transform_policy;
+	  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
 	}
 	//swap buffers device -> host when gridded last chunk
 	if (params.is_final_data_chunk){
@@ -347,6 +358,6 @@ extern "C" {
 //       throw std::runtime_error("Backend Unimplemented exception: grid_sampling_function");
     }
     void facet_sampling_function(gridding_parameters & params){
-      throw std::runtime_error("Backend Unimplemented exception: facet_sampling_function");
+//       throw std::runtime_error("Backend Unimplemented exception: facet_sampling_function");
     }
 }
