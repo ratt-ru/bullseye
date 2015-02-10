@@ -21,45 +21,45 @@ namespace imaging {
   template <>
   class correlation_gridding_traits<grid_single_correlation> {
   public:
-    typedef vec1<vec2<visibility_base_type> > vis_type;
+    typedef vec1<basic_complex<visibility_base_type> > vis_type;
     typedef vec1<bool> vis_flag_type;
     typedef vec1<visibility_weights_base_type> vis_weight_type;
-    typedef vec1<vec2<visibility_base_type> > accumulator_type;
+    typedef vec1<basic_complex<visibility_base_type> > accumulator_type;
   };
   template <>
   class correlation_gridding_traits<grid_duel_correlation> {
   public:
-    typedef vec2<vec2<visibility_base_type> > vis_type;
+    typedef vec2<basic_complex<visibility_base_type> > vis_type;
     typedef vec2<bool> vis_flag_type;
     typedef vec2<visibility_weights_base_type> vis_weight_type;
-    typedef vec2<vec2<visibility_base_type> > accumulator_type;
+    typedef vec2<basic_complex<visibility_base_type> > accumulator_type;
   };
   template <>
   class correlation_gridding_traits<grid_4_correlation> {
   public:
-    typedef vec4<vec2<visibility_base_type> > vis_type;
+    typedef vec4<basic_complex<visibility_base_type> > vis_type;
     typedef vec4<bool> vis_flag_type;
     typedef vec4<visibility_weights_base_type> vis_weight_type;
-    typedef vec4<vec2<visibility_base_type> > accumulator_type;
+    typedef vec4<basic_complex<visibility_base_type> > accumulator_type;
   };
   
   /**
    * scalar multiplication with correlated visibilities (can be up to 4 complex visibilties)
    */
   template <typename T>
-  __device__ __host__ vec1<vec2<T> > operator*(const vec1<vec2<T> > & visibilities, const vec1<T> & scalars) {
-    return vec1<vec2<T> >(vec2<T>(visibilities._x._x*scalars._x,visibilities._x._y*scalars._x));
+  __device__ __host__ vec1<basic_complex<T> > operator*(const vec1<basic_complex<T> > & visibilities, const vec1<T> & scalars) {
+    return vec1<basic_complex<T> >(basic_complex<T>(visibilities._x._real*scalars._x,visibilities._x._imag*scalars._x));
   }
   template <typename T>
-  __device__ __host__ vec2<vec2<T> > operator*(const vec2<vec2<T> > & visibilities, const vec2<T> & scalars) {
-    return vec2<vec2<T> >(vec2<T>(visibilities._x._x*scalars._x,visibilities._x._y*scalars._x),
-			vec2<T>(visibilities._y._x*scalars._y,visibilities._y._y*scalars._y));
+  __device__ __host__ vec2<basic_complex<T> > operator*(const vec2<basic_complex<T> > & visibilities, const vec2<T> & scalars) {
+    return vec2<basic_complex<T> >(basic_complex<T>(visibilities._x._real*scalars._x,visibilities._x._imag*scalars._x),
+				   basic_complex<T>(visibilities._y._real*scalars._y,visibilities._y._imag*scalars._y));
   }
   template <typename T>
-  __device__ __host__ vec4<vec2<T> > operator*(const vec4<vec2<T> > & visibilities, const vec4<T> & scalars) {
-    return vec4<vec2<T> >(vec2<T>(visibilities._x._x*scalars._x,visibilities._x._y*scalars._x),
-			vec2<T>(visibilities._y._x*scalars._y,visibilities._y._y*scalars._y),
-			vec2<T>(visibilities._z._x*scalars._z,visibilities._z._y*scalars._z),
-			vec2<T>(visibilities._w._x*scalars._w,visibilities._w._y*scalars._w));
+  __device__ __host__ vec4<basic_complex<T> > operator*(const vec4<basic_complex<T> > & visibilities, const vec4<T> & scalars) {
+    return vec4<basic_complex<T> >(basic_complex<T>(visibilities._x._real*scalars._x,visibilities._x._imag*scalars._x),
+				   basic_complex<T>(visibilities._y._real*scalars._y,visibilities._y._imag*scalars._y),
+				   basic_complex<T>(visibilities._z._real*scalars._z,visibilities._z._imag*scalars._z),
+				   basic_complex<T>(visibilities._w._real*scalars._w,visibilities._w._imag*scalars._w));
   }
 };

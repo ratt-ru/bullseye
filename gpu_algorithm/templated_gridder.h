@@ -41,13 +41,16 @@ namespace imaging {
 		uvw_base_type grid_centre_offset_x = params.nx/2.0 - conv_offset + my_conv_u;
 		uvw_base_type grid_centre_offset_y = params.ny/2.0 - conv_offset + my_conv_v;
 		size_t grid_size_in_floats = params.nx * params.ny << 1;
-		//Compute the transformation necessary to distort the baseline according to the new facet delay centre (Cornwell & Perley, 1991)
+		//Compute the transformation necessary to distort the baseline and phase according to the new facet delay centre (Cornwell & Perley, 1991)
 		baseline_rotation_mat baseline_transformation;
+		lmn_coord phase_offset;
 		uvw_base_type new_delay_ra;
 		uvw_base_type new_delay_dec;
 		active_phase_transformation::read_facet_ra_dec(params,my_facet_id,new_delay_ra,new_delay_dec);
 		active_baseline_transformation_policy::compute_transformation_matrix(params.phase_centre_ra,params.phase_centre_dec,
 										     new_delay_ra,new_delay_dec,baseline_transformation);
+		active_phase_transformation::compute_delta_lmn(params.phase_centre_ra,params.phase_centre_dec,
+							       new_delay_ra,new_delay_dec,phase_offset);
 		//load the convolution filter into shared memory
 		extern __shared__ convolution_base_type shared_conv[];
 		if (threadIdx.x == 0){
@@ -94,7 +97,7 @@ namespace imaging {
 				uvw._u *= u_scale * ref_wavelength; 
 				uvw._v *= v_scale * ref_wavelength;
 				//Do phase rotation in accordance with Cornwell & Perley (1992)
-				//TODO
+				active_phase_transformation::apply_phase_transform(phase_offset,uvw,vis);
 				//DO baseline rotation in accordance with Cornwell & Perley (1992)
 				active_baseline_transformation_policy::apply_transformation(uvw,baseline_transformation);
 				//account for interpolation error (we select the closest sample from the oversampled convolution filter)
@@ -134,7 +137,7 @@ namespace imaging {
 				}
 				//Lets read the convolution weights from the the precomputed filter
 				convolution_base_type conv_weight = shared_conv[closest_conv_u] * shared_conv[closest_conv_v];
-				//then multiply-add into the accumulator 				
+				//then multiply-add into the accumulator
 				my_grid_accum += vis * (combined_vis_weight * conv_weight);
 				
 				//Okay if this is the last channel then dump whatever has been accumulated since the last dump

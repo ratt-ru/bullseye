@@ -56,8 +56,8 @@ namespace imaging {
       grid_base_type* grid_flat_index = grid + 
 					(grid_channel_id * slice_size) + 
 					((pos_v * nx + pos_u) << 1);
-      atomicAdd(grid_flat_index,accumulator._x._x);
-      atomicAdd(grid_flat_index + 1,accumulator._x._y);
+      atomicAdd(grid_flat_index,accumulator._x._real);
+      atomicAdd(grid_flat_index + 1,accumulator._x._imag);
     }
   };
   template <>
@@ -91,10 +91,10 @@ namespace imaging {
 					      ((grid_channel_id * no_polarizations_being_gridded) * slice_size) + 
 					      ((pos_v * nx + pos_u) << 1);
       grid_base_type* grid_flat_index_corr2 = grid_flat_index_corr1 + slice_size;
-      atomicAdd(grid_flat_index_corr1,accumulator._x._x);
-      atomicAdd(grid_flat_index_corr1 + 1,accumulator._x._y);
-      atomicAdd(grid_flat_index_corr2,accumulator._y._x);
-      atomicAdd(grid_flat_index_corr2 + 1,accumulator._y._y);
+      atomicAdd(grid_flat_index_corr1,accumulator._x._real);
+      atomicAdd(grid_flat_index_corr1 + 1,accumulator._x._imag);
+      atomicAdd(grid_flat_index_corr2,accumulator._y._real);
+      atomicAdd(grid_flat_index_corr2 + 1,accumulator._y._imag);
     }
   };
   template <>
@@ -131,14 +131,14 @@ namespace imaging {
       grid_base_type* grid_flat_index_corr2 = grid_flat_index_corr1 + slice_size;
       grid_base_type* grid_flat_index_corr3 = grid_flat_index_corr2 + slice_size;
       grid_base_type* grid_flat_index_corr4 = grid_flat_index_corr3 + slice_size;
-      atomicAdd(grid_flat_index_corr1,accumulator._x._x);
-      atomicAdd(grid_flat_index_corr1 + 1,accumulator._x._y);
-      atomicAdd(grid_flat_index_corr2,accumulator._y._x);
-      atomicAdd(grid_flat_index_corr2 + 1,accumulator._y._y);
-      atomicAdd(grid_flat_index_corr3,accumulator._z._x);
-      atomicAdd(grid_flat_index_corr3 + 1,accumulator._z._y);
-      atomicAdd(grid_flat_index_corr4,accumulator._w._x);
-      atomicAdd(grid_flat_index_corr4 + 1,accumulator._w._y);
+      atomicAdd(grid_flat_index_corr1,accumulator._x._real);
+      atomicAdd(grid_flat_index_corr1 + 1,accumulator._x._imag);
+      atomicAdd(grid_flat_index_corr2,accumulator._y._real);
+      atomicAdd(grid_flat_index_corr2 + 1,accumulator._y._imag);
+      atomicAdd(grid_flat_index_corr3,accumulator._z._real);
+      atomicAdd(grid_flat_index_corr3 + 1,accumulator._z._imag);
+      atomicAdd(grid_flat_index_corr4,accumulator._w._real);
+      atomicAdd(grid_flat_index_corr4 + 1,accumulator._w._imag);
     }
   };
 };
