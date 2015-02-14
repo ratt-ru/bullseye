@@ -17,6 +17,13 @@ namespace imaging {
 						  typename active_trait::vis_flag_type & flag,
 						  typename active_trait::vis_weight_type & weight
 						 );
+    __device__ static void read_channel_grid_index(const gridding_parameters & params,
+						   size_t spw_channel_flat_index,
+						   size_t & out);
+    __device__ static void compute_facet_grid_ptr(const gridding_parameters & params,
+						  size_t facet_id,
+						  size_t grid_size_in_floats,
+						  grid_base_type ** facet_grid_starting_ptr);
     __device__ static void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
@@ -43,6 +50,63 @@ namespace imaging {
       flag = params.flags[vis_index];
       weight = params.visibility_weights[vis_index];
       vis = ((active_trait::vis_type *)params.visibilities)[vis_index];
+    }
+    __device__ static void read_channel_grid_index(const gridding_parameters & params,
+						   size_t spw_channel_flat_index,
+						   size_t & out){
+      out = params.channel_grid_indicies[spw_channel_flat_index];
+    }
+    __device__ static void compute_facet_grid_ptr(const gridding_parameters & params,
+						  size_t facet_id,
+						  size_t grid_size_in_floats,
+						  grid_base_type ** facet_grid_starting_ptr){
+      *facet_grid_starting_ptr = (grid_base_type*)params.output_buffer + grid_size_in_floats * 
+				params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * facet_id;
+    }
+    __device__ static void grid_visibility (grid_base_type* grid,
+					    size_t slice_size,
+					    size_t nx,
+					    size_t grid_channel_id,
+					    size_t no_polarizations_being_gridded,
+					    size_t pos_u,
+					    size_t pos_v,
+					    typename active_trait::accumulator_type & accumulator
+					   ){
+      grid_base_type* grid_flat_index = grid + 
+					(grid_channel_id * slice_size) + 
+					((pos_v * nx + pos_u) << 1);
+      atomicAdd(grid_flat_index,accumulator._x._real);
+      atomicAdd(grid_flat_index + 1,accumulator._x._imag);
+    }
+  };
+  template <>
+  class correlation_gridding_policy<grid_sampling_function>{
+  public:
+    typedef correlation_gridding_traits<grid_single_correlation> active_trait;
+    __device__ static void read_corralation_data (gridding_parameters & params,
+						  size_t row_index,
+						  size_t spw,
+						  size_t c,
+						  typename active_trait::vis_type & vis,
+						  typename active_trait::vis_flag_type & flag,
+						  typename active_trait::vis_weight_type & weight
+						 ){
+      size_t vis_index = row_index * params.channel_count + c;
+      flag = params.flags[vis_index];
+      weight = 1;
+      vis = vec1<basic_complex<visibility_base_type> >(basic_complex<visibility_base_type>(1,0));
+    }
+    __device__ static void read_channel_grid_index(const gridding_parameters & params,
+						   size_t spw_channel_flat_index,
+						   size_t & out){
+      out = params.sampling_function_channel_grid_indicies[spw_channel_flat_index];
+    }
+    __device__ static void compute_facet_grid_ptr(const gridding_parameters & params,
+						  size_t facet_id,
+						  size_t grid_size_in_floats,
+						  grid_base_type ** facet_grid_starting_ptr){
+      *facet_grid_starting_ptr = (grid_base_type*)params.sampling_function_buffer + grid_size_in_floats * 
+				params.sampling_function_channel_count * facet_id;
     }
     __device__ static void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
@@ -76,6 +140,18 @@ namespace imaging {
       flag = ((active_trait::vis_flag_type *)params.flags)[vis_index];
       weight = ((active_trait::vis_weight_type *)params.visibility_weights)[vis_index];
       vis = ((active_trait::vis_type *)params.visibilities)[vis_index];
+    }
+    __device__ static void read_channel_grid_index(const gridding_parameters & params,
+						   size_t spw_channel_flat_index,
+						   size_t & out){
+      out = params.channel_grid_indicies[spw_channel_flat_index];
+    }
+    __device__ static void compute_facet_grid_ptr(const gridding_parameters & params,
+						  size_t facet_id,
+						  size_t grid_size_in_floats,
+						  grid_base_type ** facet_grid_starting_ptr){
+      *facet_grid_starting_ptr = (grid_base_type*)params.output_buffer + grid_size_in_floats * 
+				params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * facet_id;
     }
     __device__ static void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
@@ -114,6 +190,18 @@ namespace imaging {
       flag = ((active_trait::vis_flag_type *)params.flags)[vis_index];
       weight = ((active_trait::vis_weight_type *)params.visibility_weights)[vis_index];
       vis = ((active_trait::vis_type *)params.visibilities)[vis_index];
+    }
+    __device__ static void read_channel_grid_index(const gridding_parameters & params,
+						   size_t spw_channel_flat_index,
+						   size_t & out){
+      out = params.channel_grid_indicies[spw_channel_flat_index];
+    }
+    __device__ static void compute_facet_grid_ptr(const gridding_parameters & params,
+						  size_t facet_id,
+						  size_t grid_size_in_floats,
+						  grid_base_type ** facet_grid_starting_ptr){
+      *facet_grid_starting_ptr = (grid_base_type*)params.output_buffer + grid_size_in_floats * 
+				params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * facet_id;
     }
     __device__ static void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,

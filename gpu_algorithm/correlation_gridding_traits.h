@@ -7,7 +7,7 @@ namespace imaging {
   class grid_single_correlation {};
   class grid_duel_correlation {};
   class grid_4_correlation {};
-  
+  class grid_sampling_function{};
   template <typename correlation_gridding_mode>
   class correlation_gridding_traits {
     //Undefined base class
@@ -42,7 +42,9 @@ namespace imaging {
     typedef vec4<visibility_weights_base_type> vis_weight_type;
     typedef vec4<basic_complex<visibility_base_type> > accumulator_type;
   };
-  
+  template <>
+  class correlation_gridding_traits<grid_sampling_function>:
+	correlation_gridding_traits<grid_single_correlation>{}; //sampling function stays the same accross correlations
   /**
    * scalar multiplication with correlated visibilities (can be up to 4 complex visibilties)
    */

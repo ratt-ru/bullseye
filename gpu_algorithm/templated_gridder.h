@@ -40,8 +40,8 @@ namespace imaging {
 		uvw_base_type grid_centre_offset_x = params.nx/2.0 - conv_offset + my_conv_u;
 		uvw_base_type grid_centre_offset_y = params.ny/2.0 - conv_offset + my_conv_v;
 		size_t grid_size_in_floats = params.nx * params.ny << 1;
-		grid_base_type* facet_output_buffer = (grid_base_type*)params.output_buffer + 
-						      grid_size_in_floats * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * my_facet_id;
+		grid_base_type* facet_output_buffer;
+		active_correlation_gridding_policy::compute_facet_grid_ptr(params,my_facet_id,grid_size_in_floats,&facet_output_buffer);
 		//Compute the transformation necessary to distort the baseline and phase according to the new facet delay centre (Cornwell & Perley, 1991)
 		baseline_rotation_mat baseline_transformation;
 		lmn_coord phase_offset;
@@ -79,7 +79,8 @@ namespace imaging {
 				//read all the stuff that is only dependent on the current spw and channel
 				size_t flat_indexed_spw_channel = spw * params.channel_count + c;
 				bool channel_enabled = params.enabled_channels[flat_indexed_spw_channel];
-				size_t channel_grid_index = params.channel_grid_indicies[flat_indexed_spw_channel];
+				size_t channel_grid_index;
+				active_correlation_gridding_policy::read_channel_grid_index(params,flat_indexed_spw_channel,channel_grid_index);
 				reference_wavelengths_base_type ref_wavelength = 1 / params.reference_wavelengths[flat_indexed_spw_channel];
 				//read all the data we need for gridding
 				imaging::uvw_coord<uvw_base_type> uvw = params.uvw_coords[row];
