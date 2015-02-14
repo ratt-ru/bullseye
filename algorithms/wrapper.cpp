@@ -148,7 +148,7 @@ extern "C" {
     void finalize_psf(gridding_parameters & params){
 	gridding_barrier();
 	inversion_timer.start();
-	std::size_t offset = params.nx*params.ny*params.num_facet_centres*params.sampling_function_channel_count;
+	std::size_t offset = params.nx*params.ny*params.sampling_function_channel_count;
 	#ifdef SHOULD_DO_32_BIT_FFT
 	  for (std::size_t f = 0; f < params.num_facet_centres; ++f) 
 	    utils::ifftshift(params.sampling_function_buffer + f*offset,params.nx,params.ny,params.sampling_function_channel_count);

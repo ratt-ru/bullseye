@@ -565,10 +565,10 @@ if __name__ == "__main__":
     #for c in range(0,cube_chan_dim_size):
       #gridded_vis[f,c,0,:,:] /= normalization_terms[f,c]
   libimaging.finalize(ctypes.byref(params))
-      
-      
+       
   if parser_args['output_psf']:
     libimaging.finalize_psf(ctypes.byref(params))
+    
   for f in range(0, max(1,num_facet_centres)):
     image_prefix = parser_args['output_prefix'] if num_facet_centres == 0 else parser_args['output_prefix']+"_facet"+str(f)
     if parser_args['output_format'] == 'png':
