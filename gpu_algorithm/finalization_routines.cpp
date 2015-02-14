@@ -1,9 +1,8 @@
 #include <fftw3.h>
 #include <stdexcept>
-
 #include "wrapper.h"
 #include "fft_shift_utils.h"
-
+#include "timer.h"
 #ifdef SHOULD_DO_32_BIT_FFT
 typedef fftwf_plan fftw_plan_type;
 #else
@@ -11,10 +10,19 @@ typedef fftw_plan fftw_plan_type;
 #endif
 
 extern "C" {
+    double total_inversion_time = 0;
+    double get_inversion_walltime(){
+      return total_inversion_time;
+    }
     void finalize(gridding_parameters & params) {
         gridding_barrier();
+	cudaStream_t inversion_timing_stream;
+	cudaSafeCall(cudaStreamCreateWithFlags(&inversion_timing_stream,cudaStreamNonBlocking));
+	utils::timer inversion_walltime(inversion_timing_stream);
+	inversion_walltime.start();
         int dims[] = {(int)params.nx,(int)params.ny};
         fftw_plan_type fft_plan;
+	
 	#ifdef SHOULD_DO_32_BIT_FFT
         fft_plan = fftwf_plan_many_dft(2,(int*)&dims,
                                        params.cube_channel_dim_size,
@@ -72,9 +80,16 @@ extern "C" {
 	#else
         fftw_destroy_plan(fft_plan);
 	#endif
+	inversion_walltime.stop();
+	cudaSafeCall(cudaStreamDestroy(inversion_timing_stream));
+	total_inversion_time += inversion_walltime.duration();
     }
     void finalize_psf(gridding_parameters & params) {
         gridding_barrier();
+	cudaStream_t inversion_timing_stream;
+	cudaSafeCall(cudaStreamCreateWithFlags(&inversion_timing_stream,cudaStreamNonBlocking));
+	utils::timer inversion_walltime(inversion_timing_stream);
+	inversion_walltime.start();
 	fftw_plan_type fft_psf_plan;
 	int dims[] = {(int)params.nx,(int)params.ny};
 	#ifdef SHOULD_DO_32_BIT_FFT
@@ -129,5 +144,8 @@ extern "C" {
 	#else
         fftw_destroy_plan(fft_psf_plan);
 	#endif
+	inversion_walltime.stop();
+	cudaSafeCall(cudaStreamDestroy(inversion_timing_stream));
+	total_inversion_time += inversion_walltime.duration();
     }
 }

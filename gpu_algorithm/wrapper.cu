@@ -2,6 +2,7 @@
 #include "dft.h"
 #include "templated_gridder.h"
 
+#include "timer.h"
 #include "correlation_gridding_traits.h"
 #include "correlation_gridding_policies.h"
 #include "baseline_transform_policies.h"
@@ -10,16 +11,12 @@
 #define NO_THREADS_PER_BLOCK_DIM 256
 
 extern "C" {
-    utils::timer * inversion_walltime;
     utils::timer * gridding_walltime;
     cudaStream_t compute_stream;
     gridding_parameters gpu_params;
     
     double get_gridding_walltime(){
       return gridding_walltime->duration();
-    }
-    double get_inversion_walltime(){
-      return inversion_walltime->duration();
     }
     void gridding_barrier(){
       cudaSafeCall(cudaStreamSynchronize(compute_stream));
@@ -59,7 +56,6 @@ extern "C" {
             throw std::runtime_error("Cannot find suitable GPU device. Giving up");
 	cudaSafeCall(cudaStreamCreateWithFlags(&compute_stream,cudaStreamNonBlocking));
 	gridding_walltime = new utils::timer(compute_stream);
-	inversion_walltime = new utils::timer(compute_stream);
 	//alloc memory for all the arrays on the gpu at the beginning of execution...
 	gpu_params = params;
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.visibilities, sizeof(std::complex<visibility_base_type>) * params.chunk_max_row_count*params.channel_count*params.number_of_polarization_terms_being_gridded));
@@ -114,7 +110,6 @@ extern "C" {
       cudaSafeCall(cudaFree(gpu_params.facet_centres));
       cudaSafeCall(cudaStreamDestroy(compute_stream));
       delete gridding_walltime;
-      delete inversion_walltime;
       cudaDeviceReset(); //leave the device in a safe state
     }
     void weight_uniformly(gridding_parameters & params){

@@ -7,7 +7,6 @@
 #include <cstdio>
 
 #include "wrapper.h"
-#include "timer.h"
 #include "cu_common.h"
 #include "cu_indexing_schemes.h"
 
