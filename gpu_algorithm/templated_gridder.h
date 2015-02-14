@@ -21,14 +21,13 @@ namespace imaging {
 		size_t conv_full_support = (params.conv_support << 1) + 1;
 		size_t conv_full_support_sq = conv_full_support * conv_full_support;
 		size_t padded_conv_full_support = conv_full_support + 2; //remember we need to reserve some of the support for +/- frac on both sides
-		if (tid >= params.baseline_count * conv_full_support_sq) return;
+		if (tid >= params.num_facet_centres * params.baseline_count * conv_full_support_sq) return;
 		size_t conv_theadid_flat_index = tid % conv_full_support_sq;
 		size_t my_conv_v = (conv_theadid_flat_index / conv_full_support) + 1;
 		size_t my_conv_u = (conv_theadid_flat_index % conv_full_support) + 1;
-		size_t facet_baseline_index = tid / conv_full_support_sq; //this is baseline_id * facet_id
-		size_t my_facet_id = facet_baseline_index / params.baseline_count;
-		size_t my_baseline = facet_baseline_index % params.baseline_count;
-		
+		size_t facet_mul_baseline_index = tid / conv_full_support_sq; //this is baseline_id * facet_id
+		size_t my_facet_id = facet_mul_baseline_index / params.baseline_count;
+		size_t my_baseline = facet_mul_baseline_index % params.baseline_count;
 		size_t starting_row_index = params.baseline_starting_indexes[my_baseline];
 		//the starting index prescan must be n(n-1)/2 + n + 1 elements long since we need the length of the last baseline
 		size_t baseline_num_timestamps = params.baseline_starting_indexes[my_baseline+1] - starting_row_index;
@@ -41,6 +40,8 @@ namespace imaging {
 		uvw_base_type grid_centre_offset_x = params.nx/2.0 - conv_offset + my_conv_u;
 		uvw_base_type grid_centre_offset_y = params.ny/2.0 - conv_offset + my_conv_v;
 		size_t grid_size_in_floats = params.nx * params.ny << 1;
+		grid_base_type* facet_output_buffer = (grid_base_type*)params.output_buffer + 
+						      grid_size_in_floats * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * my_facet_id;
 		//Compute the transformation necessary to distort the baseline and phase according to the new facet delay centre (Cornwell & Perley, 1991)
 		baseline_rotation_mat baseline_transformation;
 		lmn_coord phase_offset;
@@ -69,8 +70,8 @@ namespace imaging {
 		    typename active_correlation_gridding_policy::active_trait::accumulator_type my_grid_accum;
 		    for (size_t c = 0; c < params.channel_count; ++c){	
 			my_grid_accum = active_correlation_gridding_policy::active_trait::vis_type::zero();
-			size_t my_previous_u = 0;
-			size_t my_previous_v = 0;
+			int my_previous_u = 0;
+			int my_previous_v = 0;
 			size_t my_previous_spw = 0;
 			for (size_t t = 0; t < baseline_num_timestamps; ++t){
 				size_t row = starting_row_index + t;
@@ -93,23 +94,25 @@ namespace imaging {
 														       channel_enabled && row_is_in_field_being_imaged;
  				typename active_correlation_gridding_policy::active_trait::vis_weight_type combined_vis_weight = 
 					 vis_weight * vector_promotion<int,visibility_base_type>(vector_promotion<bool,int>(vis_flagged));
-				//scale the uv coordinates (measured in wavelengths) to the correct FOV by the fourier simularity theorem (pg 146-148 Synthesis Imaging in Radio Astronomy II)
-				uvw._u *= u_scale * ref_wavelength; 
-				uvw._v *= v_scale * ref_wavelength;
+				uvw._u *= ref_wavelength;
+				uvw._v *= ref_wavelength;
+				uvw._w *= ref_wavelength;
 				//Do phase rotation in accordance with Cornwell & Perley (1992)
 				active_phase_transformation::apply_phase_transform(phase_offset,uvw,vis);
 				//DO baseline rotation in accordance with Cornwell & Perley (1992)
 				active_baseline_transformation_policy::apply_transformation(uvw,baseline_transformation);
+				//scale the uv coordinates (measured in wavelengths) to the correct FOV by the fourier simularity theorem (pg 146-148 Synthesis Imaging in Radio Astronomy II)
+				uvw._u *= u_scale; 
+				uvw._v *= v_scale;
 				//account for interpolation error (we select the closest sample from the oversampled convolution filter)
 				uvw_base_type cont_current_u = uvw._u + grid_centre_offset_x;
 				uvw_base_type cont_current_v = uvw._v + grid_centre_offset_y;
-				size_t my_current_u = rintf(cont_current_u);
-				size_t my_current_v = rintf(cont_current_v);
-				size_t frac_u = (-cont_current_u + (uvw_base_type)my_current_u) * params.conv_oversample;
-				size_t frac_v = (-cont_current_v + (uvw_base_type)my_current_v) * params.conv_oversample;
-				//map the convolution memory access to a coalesced access (bundle #full_support number of fractions together, so that the memory addresses are contigious)
-				size_t closest_conv_u = frac_u * padded_conv_full_support + my_conv_u;
-				size_t closest_conv_v = frac_v * padded_conv_full_support + my_conv_v;
+				int my_current_u = lrintf(cont_current_u);
+				int my_current_v = lrintf(cont_current_v);
+				uvw_base_type frac_u = -cont_current_u + (uvw_base_type)my_current_u;
+				uvw_base_type frac_v = -cont_current_v + (uvw_base_type)my_current_v;
+				size_t closest_conv_u = ((uvw_base_type)my_conv_u + frac_u)*params.conv_oversample;
+				size_t closest_conv_v = ((uvw_base_type)my_conv_v + frac_v)*params.conv_oversample;
 				//if this is the first timestamp for this baseline initialize previous_u and previous_v
 				if (t == 0) {
 					my_previous_u = my_current_u;
@@ -121,7 +124,7 @@ namespace imaging {
 					//don't you dare go off the grid:
 					if (my_previous_v + conv_full_support  < params.ny && my_previous_u + conv_full_support  < params.nx &&
 					    my_previous_v < params.ny && my_previous_u < params.nx){
-						active_correlation_gridding_policy::grid_visibility((grid_base_type*)params.output_buffer,
+						active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
 												    grid_size_in_floats,
 												    params.nx,
 												    channel_grid_index,
@@ -144,14 +147,14 @@ namespace imaging {
 				if (channel_enabled && t == baseline_num_timestamps-1){
 				    if (my_previous_u + conv_full_support < params.ny && my_previous_u + conv_full_support  < params.nx &&
 					my_previous_v < params.ny && my_previous_u < params.nx){
-					active_correlation_gridding_policy::grid_visibility((grid_base_type*)params.output_buffer,
-												    grid_size_in_floats,
-												    params.nx,
-												    channel_grid_index,
-												    params.number_of_polarization_terms_being_gridded,
-												    my_previous_u,
-												    my_previous_v,
-												    my_grid_accum
+					active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
+											    grid_size_in_floats,
+											    params.nx,
+											    channel_grid_index,
+											    params.number_of_polarization_terms_being_gridded,
+											    my_previous_u,
+											    my_previous_v,
+											    my_grid_accum
 											   );
 				    }
 				}

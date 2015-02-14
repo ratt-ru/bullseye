@@ -241,7 +241,7 @@ namespace imaging {
 					my_previous_v = my_current_v;
 				}
 				//Lets read the convolution weights from the the precomputed filter
-				convolution_base_type conv_weight = shared_conv[closest_conv_u] * shared_conv[closest_conv_v];	
+				convolution_base_type conv_weight = shared_conv[closest_conv_u] * shared_conv[closest_conv_v];
 				//then multiply-add into the accumulator 				
 				my_grid_accum._real += vis._real * conv_weight * combined_vis_weight;
 				my_grid_accum._imag += vis._imag * conv_weight * combined_vis_weight; 

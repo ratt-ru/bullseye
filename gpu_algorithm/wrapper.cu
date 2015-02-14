@@ -76,21 +76,13 @@ extern "C" {
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.field_array, sizeof(unsigned int) * params.chunk_max_row_count));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.visibility_weights, sizeof(visibility_weights_base_type) * params.chunk_max_row_count * params.channel_count * params.number_of_polarization_terms_being_gridded));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.flags, sizeof(bool) * params.chunk_max_row_count * params.channel_count * params.number_of_polarization_terms_being_gridded));
-	cudaSafeCall(cudaMalloc((void**)&gpu_params.output_buffer, sizeof(std::complex<grid_base_type>) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * params.num_facet_centres));
-	cudaSafeCall(cudaMemset(gpu_params.output_buffer,0,sizeof(std::complex<grid_base_type>) * params.nx * params.ny * params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * params.num_facet_centres));
+	cudaSafeCall(cudaMalloc((void**)&gpu_params.output_buffer, sizeof(std::complex<grid_base_type>) * params.nx * params.ny * 
+								    params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * params.num_facet_centres));
+	cudaSafeCall(cudaMemset(gpu_params.output_buffer,0,sizeof(std::complex<grid_base_type>) * params.nx * params.ny * 
+				params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * params.num_facet_centres));
 	size_t size_of_convolution_function = (params.conv_support * 2 + 1 + 2) * params.conv_oversample; //see algorithms/convolution_policies.h for the reason behind the padding
-	convolution_base_type * coalesced_filter = new convolution_base_type[size_of_convolution_function]();
-	#pragma omp parallel for
-	for (size_t x = 0; x < size_of_convolution_function; ++x){
-	  size_t cs = x / params.conv_oversample;
-	  size_t co = x % params.conv_oversample;
-	  size_t new_index = co * (params.conv_support*2 + 3) + cs;
-	  size_t old_index = params.conv_oversample * cs + co;
-	  coalesced_filter[new_index] = params.conv[old_index];
-	}
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.conv, sizeof(convolution_base_type) * size_of_convolution_function));
-	cudaSafeCall(cudaMemcpy(gpu_params.conv, coalesced_filter, sizeof(convolution_base_type) * size_of_convolution_function,cudaMemcpyHostToDevice));
-	delete [] coalesced_filter;
+	cudaSafeCall(cudaMemcpy(gpu_params.conv, params.conv, sizeof(convolution_base_type) * size_of_convolution_function,cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1)));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.facet_centres, sizeof(uvw_base_type) * params.num_facet_centres * 2)); //enough space to store ra,dec coordinates of facet delay centres
 	cudaSafeCall(cudaMemcpy(gpu_params.facet_centres,params.facet_centres, sizeof(uvw_base_type) * params.num_facet_centres * 2,cudaMemcpyHostToDevice));
@@ -197,7 +189,83 @@ extern "C" {
       gridding_walltime->stop();
     }
     void facet_single_pol(gridding_parameters & params){
-      throw std::runtime_error("Backend Unimplemented exception: facet_single_pol");
+     gridding_walltime->start();
+      printf("Faceting single correlation on the GPU...\n");    
+      //copy everything that changed to the gpu
+      {
+	gpu_params.row_count = params.row_count;
+	gpu_params.no_timestamps_read = params.no_timestamps_read;
+	gpu_params.is_final_data_chunk = params.is_final_data_chunk;
+	//pack and cpy only the necessary visibilities (it doesn't matter if we mod the array here it is not being used again afterwards
+	size_t ubound = params.row_count*params.channel_count;
+	cudaSafeCall(cudaHostRegister(params.visibilities,sizeof(std::complex<visibility_base_type>) * params.row_count * params.channel_count,0));
+	cudaSafeCall(cudaHostRegister(params.spw_index_array,sizeof(unsigned int) * params.row_count,0));
+	cudaSafeCall(cudaHostRegister(params.uvw_coords,sizeof(imaging::uvw_coord<uvw_base_type>) * params.row_count,0));
+	cudaSafeCall(cudaHostRegister(params.visibility_weights,sizeof(visibility_weights_base_type) * params.row_count * params.channel_count,0));
+	cudaSafeCall(cudaHostRegister(params.flagged_rows,sizeof(bool) * params.row_count,0));
+	cudaSafeCall(cudaHostRegister(params.flags,sizeof(bool) * params.row_count * params.channel_count,0));
+	cudaSafeCall(cudaHostRegister(params.field_array,sizeof(unsigned int) * params.row_count,0));
+	cudaSafeCall(cudaHostRegister(params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1),0));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.uvw_coords,params.uvw_coords,sizeof(imaging::uvw_coord<uvw_base_type>) * params.row_count,cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.baseline_starting_indexes, params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1),cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.field_array,params.field_array,sizeof(unsigned int) * params.row_count,cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.flagged_rows,params.flagged_rows,sizeof(bool) * params.row_count,
+				     cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.spw_index_array,params.spw_index_array,sizeof(unsigned int) * params.row_count,
+				     cudaMemcpyHostToDevice,compute_stream));
+	//Do not parallelize this:
+	for (std::size_t i = 0; i < ubound; ++i){
+	    size_t r = i / params.channel_count;
+	    size_t c = i - r * params.channel_count;
+	    size_t compact_index = r*params.channel_count + c;
+	    size_t strided_index = (compact_index)*params.number_of_polarization_terms + params.polarization_index;
+	    params.visibilities[compact_index] = params.visibilities[strided_index];
+	    params.visibility_weights[compact_index] = params.visibility_weights[strided_index];
+	    params.flags[compact_index] = params.flags[strided_index];
+	}
+	
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.visibilities,params.visibilities,sizeof(std::complex<visibility_base_type>) * params.row_count * params.channel_count,
+				     cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.visibility_weights,params.visibility_weights,sizeof(visibility_weights_base_type) * params.row_count * params.channel_count,
+				     cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.flags,params.flags,sizeof(bool) * params.row_count * params.channel_count,
+				     cudaMemcpyHostToDevice,compute_stream));
+	
+	cudaSafeCall(cudaHostUnregister(params.visibilities));
+	cudaSafeCall(cudaHostUnregister(params.spw_index_array));
+	cudaSafeCall(cudaHostUnregister(params.uvw_coords));
+	cudaSafeCall(cudaHostUnregister(params.visibility_weights));
+	cudaSafeCall(cudaHostUnregister(params.flagged_rows));
+	cudaSafeCall(cudaHostUnregister(params.flags));
+	cudaSafeCall(cudaHostUnregister(params.field_array));
+	cudaSafeCall(cudaHostUnregister(params.baseline_starting_indexes));
+      }
+      //invoke computation
+      {
+	size_t conv_support_size = (params.conv_support*2+1);
+	size_t padded_conv_support_size = (conv_support_size+2);
+	size_t min_threads_needed = params.baseline_count * conv_support_size * conv_support_size * params.num_facet_centres;
+	size_t block_size = NO_THREADS_PER_BLOCK_DIM;
+	size_t total_blocks_needed = ceil(min_threads_needed / double(block_size));
+	size_t total_blocks_needed_per_dim = total_blocks_needed;
+	
+	
+	dim3 no_threads_per_block(block_size,1,1);
+	dim3 no_blocks_per_grid(total_blocks_needed_per_dim,1,1);
+	size_t size_of_convolution_function = padded_conv_support_size * params.conv_oversample * sizeof(convolution_base_type); //see algorithms/convolution_policies.h for the reason behind the padding
+	typedef imaging::correlation_gridding_policy<imaging::grid_single_correlation> correlation_gridding_policy;
+	typedef imaging::baseline_transform_policy<imaging::transform_facet_lefthanded_ra_dec > baseline_transform_policy;
+	typedef imaging::phase_transform_policy<imaging::enable_faceting_phase_shift> phase_transform_policy;
+	imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
+      }
+      //swap buffers device -> host when gridded last chunk
+      if (params.is_final_data_chunk){
+	gridding_barrier();
+	cudaSafeCall(cudaMemcpy(params.output_buffer,gpu_params.output_buffer,sizeof(std::complex<grid_base_type>) * params.nx * params.ny * 
+				params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * params.num_facet_centres,
+				cudaMemcpyDeviceToHost));
+      }      
+      gridding_walltime->stop();
     }
     void grid_duel_pol(gridding_parameters & params){
       gridding_walltime->start();
