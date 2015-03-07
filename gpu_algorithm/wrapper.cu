@@ -678,10 +678,12 @@ extern "C" {
 	      }
 	    }
 	  }
-	  
+	  printf("INVERTING %lu JONES MATRICIES\n",repacked_data.size());
+	  invert_all(&repacked_data[0], repacked_data.size());
 	  cudaSafeCall(cudaMemcpyAsync(gpu_params.jones_terms,&repacked_data[0],sizeof(imaging::jones_2x2<visibility_base_type>) * repacked_data.size(),
 		       cudaMemcpyHostToDevice,compute_stream));
 	  cudaSafeCall(cudaHostUnregister(&repacked_data[0]));
+	  printf("TRANSFERRED %lu REPACKED JONES MATRICIES TO DEVICE\n",repacked_data.size());
 	}
 	
 	cudaSafeCall(cudaHostUnregister(params.visibilities));
