@@ -1,3 +1,8 @@
+#include <vector>
+#include <algorithm>
+#include <numeric>
+#include <cstring>
+
 #include "gpu_wrapper.h"
 #include "dft.h"
 #include "templated_gridder.h"
@@ -7,6 +12,7 @@
 #include "correlation_gridding_policies.h"
 #include "baseline_transform_policies.h"
 #include "phase_transform_policies.h"
+#include "jones_2x2.h"
 
 #define NO_THREADS_PER_BLOCK_DIM 256
 
@@ -89,7 +95,18 @@ extern "C" {
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1)));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.facet_centres, sizeof(uvw_base_type) * params.num_facet_centres * 2)); //enough space to store ra,dec coordinates of facet delay centres
 	cudaSafeCall(cudaMemcpy(gpu_params.facet_centres,params.facet_centres, sizeof(uvw_base_type) * params.num_facet_centres * 2,cudaMemcpyHostToDevice));
-	cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
+	if (gpu_params.should_invert_jones_terms){
+	  cudaSafeCall(cudaMalloc((void**)&gpu_params.antenna_1_ids, sizeof(unsigned int) * (params.chunk_max_row_count)));
+	  cudaSafeCall(cudaMalloc((void**)&gpu_params.antenna_2_ids, sizeof(unsigned int) * (params.chunk_max_row_count)));
+	  cudaSafeCall(cudaMalloc((void**)&gpu_params.timestamp_ids, sizeof(size_t) * (params.chunk_max_row_count)));
+	  size_t no_timesteps_needed = (params.chunk_max_row_count / params.baseline_count + 1);
+	  cudaSafeCall(cudaMalloc((void**)&gpu_params.jones_terms,sizeof(imaging::jones_2x2<visibility_base_type>) * (no_timesteps_needed *
+												  params.antenna_count *
+												  params.num_facet_centres * 
+												  params.spw_count * 
+												  params.channel_count)));
+	}
+	cudaSafeCall(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
     }
     void releaseLibrary() {
       cudaDeviceSynchronize();
@@ -108,6 +125,12 @@ extern "C" {
       cudaSafeCall(cudaFree(gpu_params.conv));
       cudaSafeCall(cudaFree(gpu_params.baseline_starting_indexes));
       cudaSafeCall(cudaFree(gpu_params.facet_centres));
+      if (gpu_params.should_invert_jones_terms){
+	cudaSafeCall(cudaFree(gpu_params.antenna_1_ids));
+	cudaSafeCall(cudaFree(gpu_params.antenna_2_ids));
+	cudaSafeCall(cudaFree(gpu_params.timestamp_ids));
+	cudaSafeCall(cudaFree(gpu_params.jones_terms));
+      }
       cudaSafeCall(cudaStreamDestroy(compute_stream));
       delete gridding_walltime;
       cudaDeviceReset(); //leave the device in a safe state
@@ -497,7 +520,7 @@ extern "C" {
     }
     void facet_4_cor(gridding_parameters & params){
       gridding_walltime->start();
-      printf("Gridding 4 correlation on the GPU...\n");    
+      printf("Faceting 4 correlation on the GPU...\n");    
       //copy everything that changed to the gpu
       {
 	gpu_params.row_count = params.row_count;
@@ -556,7 +579,142 @@ extern "C" {
       gridding_walltime->stop();
     }
     void facet_4_cor_corrections(gridding_parameters & params){
-      throw std::runtime_error("Backend Unimplemented exception: facet_4_cor_corrections");
+      gridding_walltime->start();
+      printf("Faceting 4 correlation on the GPU with Jones corrections...\n");    
+      //copy everything that changed to the gpu
+      {
+	gpu_params.row_count = params.row_count;
+	gpu_params.no_timestamps_read = params.no_timestamps_read;
+	gpu_params.is_final_data_chunk = params.is_final_data_chunk;
+	//copy the read chunk accross to the GPU
+	cudaSafeCall(cudaHostRegister(params.visibilities,sizeof(std::complex<visibility_base_type>) * params.row_count * params.channel_count * params.number_of_polarization_terms_being_gridded,0));
+	cudaSafeCall(cudaHostRegister(params.spw_index_array,sizeof(unsigned int) * params.row_count,0));
+	cudaSafeCall(cudaHostRegister(params.uvw_coords,sizeof(imaging::uvw_coord<uvw_base_type>) * params.row_count,0));
+	cudaSafeCall(cudaHostRegister(params.visibility_weights,sizeof(visibility_weights_base_type) * params.row_count * params.channel_count  * params.number_of_polarization_terms_being_gridded,0));
+	cudaSafeCall(cudaHostRegister(params.flagged_rows,sizeof(bool) * params.row_count,0));
+	cudaSafeCall(cudaHostRegister(params.flags,sizeof(bool) * params.row_count * params.channel_count * params.number_of_polarization_terms_being_gridded,0));
+	cudaSafeCall(cudaHostRegister(params.field_array,sizeof(unsigned int) * params.row_count,0));
+	cudaSafeCall(cudaHostRegister(params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1),0));
+	cudaSafeCall(cudaHostRegister(params.antenna_1_ids, sizeof(unsigned int) * (params.row_count), 0));
+	cudaSafeCall(cudaHostRegister(params.antenna_2_ids, sizeof(unsigned int) * (params.row_count), 0));
+	cudaSafeCall(cudaHostRegister(params.timestamp_ids, sizeof(std::size_t) * (params.row_count), 0));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.uvw_coords,params.uvw_coords,sizeof(imaging::uvw_coord<uvw_base_type>) * params.row_count,cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.baseline_starting_indexes, params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1),cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.field_array,params.field_array,sizeof(unsigned int) * params.row_count,cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.flagged_rows,params.flagged_rows,sizeof(bool) * params.row_count,
+				     cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.spw_index_array,params.spw_index_array,sizeof(unsigned int) * params.row_count,
+				     cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.visibilities,params.visibilities,sizeof(std::complex<visibility_base_type>) * params.row_count * params.channel_count * params.number_of_polarization_terms_being_gridded,
+				     cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.visibility_weights,params.visibility_weights,sizeof(visibility_weights_base_type) * params.row_count * params.channel_count * params.number_of_polarization_terms_being_gridded,
+				     cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.flags,params.flags,sizeof(bool) * params.row_count * params.channel_count * params.number_of_polarization_terms_being_gridded,
+				     cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.antenna_1_ids,params.antenna_1_ids,sizeof(unsigned int) * params.row_count,
+				     cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.antenna_2_ids,params.antenna_2_ids,sizeof(unsigned int) * params.row_count,
+				     cudaMemcpyHostToDevice,compute_stream));
+	cudaSafeCall(cudaMemcpyAsync(gpu_params.timestamp_ids,params.timestamp_ids,sizeof(std::size_t) * params.row_count,
+				     cudaMemcpyHostToDevice,compute_stream));
+	//repack the jones terms per antenna so that we don't transfer unnecessary stuff over PCI-e
+	{
+	  using namespace std;
+	  //we want to retrieve the # timestamps for every antenna that means we need (n+1) elements in this array
+	  vector<size_t> antenna_timestamp_starting_indexes(params.antenna_count + 1,0);
+	  //bin
+	  {
+	    vector<long> antenna_current_timestamp(params.antenna_count,-1);
+	    for(size_t row = 0; row < params.row_count; ++row){
+	      if ((long)params.timestamp_ids[row] > antenna_current_timestamp[params.antenna_1_ids[row]]){
+		antenna_timestamp_starting_indexes[params.antenna_1_ids[row] + 1] += 1;
+		antenna_current_timestamp[params.antenna_1_ids[row]] += 1;
+	      }
+	      if ((long)params.timestamp_ids[row] > antenna_current_timestamp[params.antenna_2_ids[row]]){
+		antenna_timestamp_starting_indexes[params.antenna_2_ids[row] + 1] += 1;
+		antenna_current_timestamp[params.antenna_2_ids[row]] += 1;
+	      }
+	    }
+	  }
+	  //because we binned at antenna_id + 1 partial_sum will compute the prescan (starting timestamp index per antenna)
+	  std::partial_sum(antenna_timestamp_starting_indexes.begin(),
+			   antenna_timestamp_starting_indexes.end(),
+			   antenna_timestamp_starting_indexes.begin());
+	  size_t step_size = params.num_facet_centres * params.spw_count * params.channel_count;
+	  vector<imaging::jones_2x2<visibility_base_type> > repacked_data(antenna_timestamp_starting_indexes[(params.antenna_count)] * step_size);
+	  cudaSafeCall(cudaHostRegister(&repacked_data[0], sizeof(imaging::jones_2x2<visibility_base_type>) * repacked_data.size(), 0));
+	  
+	  { //now repack
+	    vector<long> antenna_current_timestamp(params.antenna_count,-1);
+
+	    for(size_t row = 0; row < params.row_count; ++row){
+	      //copy the first antenna into position
+	      if ((long)params.timestamp_ids[row] > antenna_current_timestamp[params.antenna_1_ids[row]]){ //a single antenna may be in multiple baselines... don't recopy
+		antenna_current_timestamp[params.antenna_1_ids[row]] += 1;
+		size_t old_index_antenna_1 = (params.timestamp_ids[row] * params.antenna_count + params.antenna_1_ids[row]) * 
+					      step_size;
+		size_t new_index_antenna_1 = (antenna_timestamp_starting_indexes[params.antenna_1_ids[row]] +
+					      antenna_current_timestamp[params.antenna_1_ids[row]]) *
+					      step_size;
+		
+		imaging::jones_2x2<visibility_base_type> * old_arr = (imaging::jones_2x2<visibility_base_type> *) params.jones_terms;
+		memcpy(&repacked_data[0] + new_index_antenna_1,
+		       old_arr + old_index_antenna_1,
+		       step_size * sizeof(imaging::jones_2x2<visibility_base_type>));
+	      }
+	      //copy the second antenna into position
+	      if ((long)params.timestamp_ids[row] > antenna_current_timestamp[params.antenna_2_ids[row]]){ //a single antenna may be in multiple baselines... don't recopy
+		antenna_current_timestamp[params.antenna_2_ids[row]] += 1;
+		size_t old_index_antenna_2 = (params.timestamp_ids[row] * params.antenna_count + params.antenna_2_ids[row]) * 
+					      step_size;
+		size_t new_index_antenna_2 = (antenna_timestamp_starting_indexes[params.antenna_2_ids[row]] +
+					      antenna_current_timestamp[params.antenna_2_ids[row]]) *
+					      step_size;
+		
+		imaging::jones_2x2<visibility_base_type> * old_arr = (imaging::jones_2x2<visibility_base_type> *) params.jones_terms;
+		memcpy(&repacked_data[0] + new_index_antenna_2,
+		       old_arr + old_index_antenna_2,
+		       step_size * sizeof(imaging::jones_2x2<visibility_base_type>));
+	      }
+	    }
+	  }
+	  
+	  cudaSafeCall(cudaMemcpyAsync(gpu_params.jones_terms,&repacked_data[0],sizeof(imaging::jones_2x2<visibility_base_type>) * repacked_data.size(),
+		       cudaMemcpyHostToDevice,compute_stream));
+	  cudaSafeCall(cudaHostUnregister(&repacked_data[0]));
+	}
+	
+	cudaSafeCall(cudaHostUnregister(params.visibilities));
+	cudaSafeCall(cudaHostUnregister(params.spw_index_array));
+	cudaSafeCall(cudaHostUnregister(params.uvw_coords));
+	cudaSafeCall(cudaHostUnregister(params.visibility_weights));
+	cudaSafeCall(cudaHostUnregister(params.flagged_rows));
+	cudaSafeCall(cudaHostUnregister(params.flags));
+	cudaSafeCall(cudaHostUnregister(params.field_array));
+	cudaSafeCall(cudaHostUnregister(params.baseline_starting_indexes));
+	cudaSafeCall(cudaHostUnregister(params.antenna_1_ids));
+	cudaSafeCall(cudaHostUnregister(params.antenna_2_ids));
+	cudaSafeCall(cudaHostUnregister(params.timestamp_ids));
+	{
+	  size_t conv_support_size = (params.conv_support*2+1);
+	  size_t padded_conv_support_size = (conv_support_size+2);
+	  size_t min_threads_needed = params.baseline_count * conv_support_size * conv_support_size * params.num_facet_centres;
+	  size_t block_size = NO_THREADS_PER_BLOCK_DIM;
+	  size_t total_blocks_needed = ceil(min_threads_needed / double(block_size));
+	  size_t total_blocks_needed_per_dim = total_blocks_needed;
+	
+	  dim3 no_threads_per_block(block_size,1,1);
+	  dim3 no_blocks_per_grid(total_blocks_needed_per_dim,1,1);
+	  size_t size_of_convolution_function = padded_conv_support_size * params.conv_oversample * sizeof(convolution_base_type); //see algorithms/convolution_policies.h for the reason behind the padding
+	  typedef imaging::correlation_gridding_policy<imaging::grid_4_correlation> correlation_gridding_policy;
+	  typedef imaging::baseline_transform_policy<imaging::transform_facet_lefthanded_ra_dec > baseline_transform_policy;
+	  typedef imaging::phase_transform_policy<imaging::enable_faceting_phase_shift> phase_transform_policy;
+	  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
+	}
+	//swap buffers device -> host when gridded last chunk
+	copy_back_grid_if_last_stamp(params,gpu_params);    
+      }
+      gridding_walltime->stop();
     }
     void grid_sampling_function(gridding_parameters & params){
       gridding_walltime->start();

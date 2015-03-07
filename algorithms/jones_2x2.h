@@ -1,11 +1,19 @@
 #pragma once
 
+#ifdef __CUDACC__
+#include "cu_basic_complex.h"
+#else
 #include <complex>
+#endif
 
 namespace imaging {
   template <typename visibility_base_type>
   struct jones_2x2 {
-    std::complex<visibility_base_type> correlations[4];    
+    #ifdef __CUDACC__
+      basic_complex<visibility_base_type> correlations[4];
+    #else
+      std::complex<visibility_base_type> correlations[4];
+    #endif  
   };
   
   /**
@@ -14,7 +22,11 @@ namespace imaging {
   template <typename visibility_base_type>
   inline void do_hermitian_transpose(jones_2x2<visibility_base_type> & __restrict__ mat) {
     mat.correlations[0].imag(-mat.correlations[0].imag());
-    std::complex<visibility_base_type> swp = conj(mat.correlations[1]);
+    #ifdef __CUDACC__
+      basic_complex<visibility_base_type> swp = conj(mat.correlations[1]);
+    #else
+      std::complex<visibility_base_type> swp = conj(mat.correlations[1]);
+    #endif
     mat.correlations[1] = conj(mat.correlations[2]);
     mat.correlations[2] = swp;
     mat.correlations[3].imag(-mat.correlations[3].imag());
@@ -23,7 +35,11 @@ namespace imaging {
    * Calculates the determinant of a 2x2 complex matrix
    */
   template <typename visibility_base_type>
+  #ifdef __CUDACC__
+  inline basic_complex<visibility_base_type> det(const jones_2x2<visibility_base_type> & __restrict__ mat){
+  #else
   inline std::complex<visibility_base_type> det(const jones_2x2<visibility_base_type> & __restrict__ mat){
+  #endif
     return (mat.correlations[0]*mat.correlations[3] - mat.correlations[1]*mat.correlations[2]);
   }
   /**
@@ -36,10 +52,18 @@ namespace imaging {
       A^-1 = det(A)^-1 * |d -b|
 			 |-c a|
     */
-    std::complex<visibility_base_type> detInv = std::complex<visibility_base_type>(1,0)/det(mat);
+    #ifdef __CUDACC__
+      basic_complex<visibility_base_type> detInv = basic_complex<visibility_base_type>(1,0)/det(mat);
+    #else
+      std::complex<visibility_base_type> detInv = std::complex<visibility_base_type>(1,0)/det(mat);
+    #endif
     mat.correlations[1] *= -detInv;
     mat.correlations[2] *= -detInv;
-    std::complex<visibility_base_type> swp = mat.correlations[0];
+    #ifdef __CUDACC__
+      basic_complex<visibility_base_type> swp = mat.correlations[0];
+    #else
+      std::complex<visibility_base_type> swp = mat.correlations[0];
+    #endif
     mat.correlations[0] = mat.correlations[3] * detInv;
     mat.correlations[3] = swp * detInv;
   }
@@ -52,7 +76,11 @@ namespace imaging {
   inline void invert_all(jones_2x2<visibility_base_type> * __restrict__ mat, std::size_t jones_count) {
     #pragma omp parallel for
     for (std::size_t j = 0; j < jones_count; ++j){
+      #ifdef __CUDACC__
+      if (det(mat[j]) == basic_complex<visibility_base_type>(0,0)){
+      #else
       if (det(mat[j]) == std::complex<visibility_base_type>(0,0)){
+      #endif
 	throw std::runtime_error("JONES MATRIX SET CONTAINS SINGULAR MATRICIES. ABORTING.");
       }
       invert(mat[j]);

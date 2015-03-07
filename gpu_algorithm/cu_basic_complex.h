@@ -4,6 +4,9 @@
 template <typename T> struct basic_complex { 
   T _real,_imag; 
   __device__ __host__ basic_complex(T real = 0, T imag = 0):_real(real),_imag(imag) {}
+  __device__ __host__ basic_complex<T> operator+(const basic_complex<T> & rhs){
+    return basic_complex<T>(_real + rhs._real,_imag + rhs._imag);
+  }
   __device__ __host__ basic_complex<T>& operator+=(const basic_complex<T> & rhs){
     _real += rhs._real;
     _imag += rhs._imag;

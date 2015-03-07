@@ -299,7 +299,7 @@ class data_set_loader(object):
 	  tmp_ant_1 = np.empty([no_rows],dtype=np.intc)
 	  tmp_ant_2 = np.empty([no_rows],dtype=np.intc)
 	  tmp_field = np.empty([no_rows],dtype=np.intc)
-	  tmp_time = np.empty([no_rows],dtype=np.intc)
+	  tmp_time = np.empty([no_rows],dtype=np.intp)
 	  with data_set_loader.time_to_load_chunks:
 	    for r in range(0,no_rows):
 		bi = baseline_index(self._arr_antenna_1[r],self._arr_antenna_2[r])
