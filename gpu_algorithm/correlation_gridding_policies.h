@@ -246,6 +246,15 @@ namespace imaging {
   };
   template <>
   class correlation_gridding_policy<grid_4_correlation_with_jones_corrections> {
+  private:
+    __device__ static size_t find_jones_index(size_t * antenna_jones_matricies,size_t count, size_t match_id){
+	for (size_t i = 0; i < count; ++i){
+	  size_t time_index_of_i = antenna_jones_matricies[i];
+	  if (time_index_of_i == match_id)
+	    return i;
+	}
+	return 2 << 31;
+    }
   public:
     typedef correlation_gridding_traits<grid_4_correlation_with_jones_corrections> active_trait;
     __device__ static void read_corralation_data (gridding_parameters & params,
@@ -267,7 +276,31 @@ namespace imaging {
     __device__ static void read_and_apply_antenna_jones_terms(const gridding_parameters & params,
 							      size_t row_index,
 							      typename active_trait::vis_type & vis){
-      //TODO: implement
+	size_t correlator_timestamp_id = params.timestamp_ids[row_index]; //this may / may not correspond to the time loop (depending on how many timestamps are missing per baseline
+	size_t antenna_1_id = params.antenna_1_ids[row_index];
+	size_t antenna_2_id = params.antenna_2_ids[row_index]; //necessary to make sure we apply the matricies in the right order
+	/* Since we've had to compact the Jones matrix arrays to dimensions: #antenna . time(antenna_id) . #spw . #channel . 4 correlations
+	 * and the second term varies per antenna we need an array to check where each antenna's jones matricies start, as well
+	 * as an array with the correlator timestamp index for every set (spw . channel . 4) of jones matricies on a per antenna basis
+	 * We can now find the correct jones term based on its correlator timestamp index (remember some timestamps may be missing)
+	 */
+	size_t starting_jones_index_antenna_1 = params.antenna_jones_starting_indexes[antenna_1_id];
+	size_t starting_jones_index_antenna_2 = params.antenna_jones_starting_indexes[antenna_2_id];
+	size_t number_of_jones_terms_for_antenna_1 = params.antenna_jones_starting_indexes[antenna_1_id + 1] - 
+						     starting_jones_index_antenna_1; //there are N+1 terms in this prefix scan
+	size_t number_of_jones_terms_for_antenna_2 = params.antenna_jones_starting_indexes[antenna_2_id + 1] - 
+						     starting_jones_index_antenna_2; //there are N+1 terms in this prefix scan
+	size_t jones_collection_size = params.antenna_count * params.spw_count * params.channel_count;
+	
+	size_t jones_term_index_id_antenna_1 = find_jones_index(params.jones_time_indicies_per_antenna + starting_jones_index_antenna_1,
+								number_of_jones_terms_for_antenna_1,correlator_timestamp_id);
+	size_t jones_term_index_id_antenna_2 = find_jones_index(params.jones_time_indicies_per_antenna + starting_jones_index_antenna_2,
+								number_of_jones_terms_for_antenna_2,correlator_timestamp_id);
+	jones_2x2<visibility_base_type> * antenna_1_jones_matricies = (jones_2x2<visibility_base_type> *) params.jones_terms + 
+								      (starting_jones_index_antenna_1 * jones_collection_size);
+	jones_2x2<visibility_base_type> * antenna_2_jones_matricies = (jones_2x2<visibility_base_type> *) params.jones_terms + 
+								      (starting_jones_index_antenna_2 * jones_collection_size);
+	vis = (antenna_1_jones_matricies[jones_term_index_id_antenna_1] * (vis * antenna_2_jones_matricies[jones_term_index_id_antenna_2])); //remember matricies don't commute!
     }
     __device__ static void compute_facet_grid_ptr(const gridding_parameters & params,
 						  size_t facet_id,

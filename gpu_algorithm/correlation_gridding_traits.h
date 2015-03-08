@@ -77,8 +77,25 @@ namespace imaging {
   template <typename T>
   __device__ __host__ vec4<basic_complex<T> > operator*(const jones_2x2<T> & jones, const vec4<basic_complex<T> > & vis){
     jones_2x2<T> rhs = *((jones_2x2<T>*)&vis); //structure is equivalent so just reinterpret cast
-    jones_2x2<T> res;
-    inner_product(jones,rhs,res);
-    return res;
+    jones_2x2<T> out;
+    out.correlations[0] = jones.correlations[0]*rhs.correlations[0] + jones.correlations[1]*rhs.correlations[2];
+    out.correlations[1] = jones.correlations[0]*rhs.correlations[1] + jones.correlations[1]*rhs.correlations[3];
+    out.correlations[2] = jones.correlations[2]*rhs.correlations[0] + jones.correlations[3]*rhs.correlations[2];
+    out.correlations[3] = jones.correlations[2]*rhs.correlations[1] + jones.correlations[3]*rhs.correlations[3];
+    return *((vec4<basic_complex<T> >*)&out);
+  }
+  /**
+   * Multiply jones_2x2 matrix with vec4< basic_complex < T > >
+   * Be careful to ensure commutivity: group your operators when doing a string of matrix multiplies!
+   */
+  template <typename T>
+  __device__ __host__ vec4<basic_complex<T> > operator*(const vec4<basic_complex<T> > & vis,const jones_2x2<T> & jones){
+    jones_2x2<T> lhs = *((jones_2x2<T>*)&vis); //structure is equivalent so just reinterpret cast
+    jones_2x2<T> out;
+    out.correlations[0] = lhs.correlations[0]*jones.correlations[0] + lhs.correlations[1]*jones.correlations[2];
+    out.correlations[1] = lhs.correlations[0]*jones.correlations[1] + lhs.correlations[1]*jones.correlations[3];
+    out.correlations[2] = lhs.correlations[2]*jones.correlations[0] + lhs.correlations[3]*jones.correlations[2];
+    out.correlations[3] = lhs.correlations[2]*jones.correlations[1] + lhs.correlations[3]*jones.correlations[3];
+    return *((vec4<basic_complex<T> >*)&out);
   }
 };
