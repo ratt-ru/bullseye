@@ -70,4 +70,6 @@ struct gridding_parameters {
     bool is_final_data_chunk;
     //baseline indexes needed for Romeins distribution strategy
     size_t * baseline_starting_indexes; //this has to be n(n-1)/2 + n + 1 long because we need to compute the length of the last baseline
+    size_t * antenna_jones_starting_indexes; //this has to be n + 1 long because we need to be able to compute the number of jones terms at the last antenna
+    size_t * jones_time_indicies_per_antenna; //this will be the same length as the repacked jones matrix array
 };

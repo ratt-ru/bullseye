@@ -3,10 +3,13 @@
 #include "gpu_wrapper.h"
 #include "cu_vec.h"
 #include "cu_basic_complex.h"
+#include "jones_2x2.h"
+
 namespace imaging {
   class grid_single_correlation {};
   class grid_duel_correlation {};
   class grid_4_correlation {};
+  class grid_4_correlation_with_jones_corrections {};
   class grid_sampling_function{};
   template <typename correlation_gridding_mode>
   class correlation_gridding_traits {
@@ -43,6 +46,9 @@ namespace imaging {
     typedef vec4<basic_complex<visibility_base_type> > accumulator_type;
   };
   template <>
+  class correlation_gridding_traits<grid_4_correlation_with_jones_corrections>:
+	public correlation_gridding_traits<grid_4_correlation>{};
+  template <>
   class correlation_gridding_traits<grid_sampling_function>:
 	correlation_gridding_traits<grid_single_correlation>{}; //sampling function stays the same accross correlations
   /**
@@ -63,5 +69,16 @@ namespace imaging {
 				   basic_complex<T>(visibilities._y._real*scalars._y,visibilities._y._imag*scalars._y),
 				   basic_complex<T>(visibilities._z._real*scalars._z,visibilities._z._imag*scalars._z),
 				   basic_complex<T>(visibilities._w._real*scalars._w,visibilities._w._imag*scalars._w));
+  }
+  /**
+   * Multiply jones_2x2 matrix with vec4< basic_complex < T > >
+   * Be careful to ensure commutivity: group your operators when doing a string of matrix multiplies!
+   */
+  template <typename T>
+  __device__ __host__ vec4<basic_complex<T> > operator*(const jones_2x2<T> & jones, const vec4<basic_complex<T> > & vis){
+    jones_2x2<T> rhs = *((jones_2x2<T>*)&vis); //structure is equivalent so just reinterpret cast
+    jones_2x2<T> res;
+    inner_product(jones,rhs,res);
+    return res;
   }
 };

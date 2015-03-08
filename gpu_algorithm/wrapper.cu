@@ -105,6 +105,8 @@ extern "C" {
 												  params.num_facet_centres * 
 												  params.spw_count * 
 												  params.channel_count)));
+	  cudaSafeCall(cudaMalloc((void**)&gpu_params.antenna_jones_starting_indexes,sizeof(size_t) * (params.antenna_count + 1)));
+	  cudaSafeCall(cudaMalloc((void**)&gpu_params.jones_time_indicies_per_antenna,sizeof(size_t) * params.antenna_count * no_timesteps_needed));
 	}
 	cudaSafeCall(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
     }
@@ -130,6 +132,8 @@ extern "C" {
 	cudaSafeCall(cudaFree(gpu_params.antenna_2_ids));
 	cudaSafeCall(cudaFree(gpu_params.timestamp_ids));
 	cudaSafeCall(cudaFree(gpu_params.jones_terms));
+	cudaSafeCall(cudaFree(gpu_params.antenna_jones_starting_indexes));
+	cudaSafeCall(cudaFree(gpu_params.jones_time_indicies_per_antenna));
       }
       cudaSafeCall(cudaStreamDestroy(compute_stream));
       delete gridding_walltime;
@@ -253,6 +257,7 @@ extern "C" {
 				     cudaMemcpyHostToDevice,compute_stream));
 	cudaSafeCall(cudaMemcpyAsync(gpu_params.spw_index_array,params.spw_index_array,sizeof(unsigned int) * params.row_count,
 				     cudaMemcpyHostToDevice,compute_stream));
+
 	//Do not parallelize this:
 	for (std::size_t i = 0; i < ubound; ++i){
 	    size_t r = i / params.channel_count;
@@ -642,8 +647,12 @@ extern "C" {
 			   antenna_timestamp_starting_indexes.begin());
 	  size_t step_size = params.num_facet_centres * params.spw_count * params.channel_count;
 	  vector<imaging::jones_2x2<visibility_base_type> > repacked_data(antenna_timestamp_starting_indexes[(params.antenna_count)] * step_size);
+	  vector<std::size_t> repacked_indexes(antenna_timestamp_starting_indexes[(params.antenna_count)]);
 	  cudaSafeCall(cudaHostRegister(&repacked_data[0], sizeof(imaging::jones_2x2<visibility_base_type>) * repacked_data.size(), 0));
-	  
+	  cudaSafeCall(cudaHostRegister(&antenna_timestamp_starting_indexes[0], sizeof(size_t) * antenna_timestamp_starting_indexes.size(), 0));
+	  cudaSafeCall(cudaMemcpyAsync(gpu_params.antenna_jones_starting_indexes,&antenna_timestamp_starting_indexes[0],
+				       sizeof(size_t) * antenna_timestamp_starting_indexes.size(),cudaMemcpyHostToDevice,compute_stream));
+	  cudaSafeCall(cudaHostRegister(&repacked_indexes[0], sizeof(size_t) * repacked_indexes.size(), 0));
 	  { //now repack
 	    vector<long> antenna_current_timestamp(params.antenna_count,-1);
 
@@ -656,7 +665,7 @@ extern "C" {
 		size_t new_index_antenna_1 = (antenna_timestamp_starting_indexes[params.antenna_1_ids[row]] +
 					      antenna_current_timestamp[params.antenna_1_ids[row]]) *
 					      step_size;
-		
+		repacked_indexes[new_index_antenna_1/step_size] = params.timestamp_ids[row];
 		imaging::jones_2x2<visibility_base_type> * old_arr = (imaging::jones_2x2<visibility_base_type> *) params.jones_terms;
 		memcpy(&repacked_data[0] + new_index_antenna_1,
 		       old_arr + old_index_antenna_1,
@@ -670,7 +679,7 @@ extern "C" {
 		size_t new_index_antenna_2 = (antenna_timestamp_starting_indexes[params.antenna_2_ids[row]] +
 					      antenna_current_timestamp[params.antenna_2_ids[row]]) *
 					      step_size;
-		
+		repacked_indexes[new_index_antenna_2/step_size] = params.timestamp_ids[row];
 		imaging::jones_2x2<visibility_base_type> * old_arr = (imaging::jones_2x2<visibility_base_type> *) params.jones_terms;
 		memcpy(&repacked_data[0] + new_index_antenna_2,
 		       old_arr + old_index_antenna_2,
@@ -682,7 +691,11 @@ extern "C" {
 	  invert_all(&repacked_data[0], repacked_data.size());
 	  cudaSafeCall(cudaMemcpyAsync(gpu_params.jones_terms,&repacked_data[0],sizeof(imaging::jones_2x2<visibility_base_type>) * repacked_data.size(),
 		       cudaMemcpyHostToDevice,compute_stream));
+	  cudaSafeCall(cudaMemcpyAsync(gpu_params.jones_time_indicies_per_antenna,&repacked_indexes[0],sizeof(size_t) * repacked_indexes.size(),
+		       cudaMemcpyHostToDevice,compute_stream));
 	  cudaSafeCall(cudaHostUnregister(&repacked_data[0]));
+	  cudaSafeCall(cudaHostUnregister(&antenna_timestamp_starting_indexes[0]));
+	  cudaSafeCall(cudaHostUnregister(&repacked_indexes[0]));
 	  printf("TRANSFERRED %lu REPACKED JONES MATRICIES TO DEVICE\n",repacked_data.size());
 	}
 	

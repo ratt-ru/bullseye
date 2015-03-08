@@ -20,6 +20,9 @@ namespace imaging {
     __device__ static void read_channel_grid_index(const gridding_parameters & params,
 						   size_t spw_channel_flat_index,
 						   size_t & out);
+    __device__ static void read_and_apply_antenna_jones_terms(const gridding_parameters & params,
+							      size_t row_index,
+							      typename active_trait::vis_type & vis);
     __device__ static void compute_facet_grid_ptr(const gridding_parameters & params,
 						  size_t facet_id,
 						  size_t grid_size_in_floats,
@@ -56,6 +59,9 @@ namespace imaging {
 						   size_t & out){
       out = params.channel_grid_indicies[spw_channel_flat_index];
     }
+    __device__ static void read_and_apply_antenna_jones_terms(const gridding_parameters & params,
+							      size_t row_index,
+							      typename active_trait::vis_type & vis){}
     __device__ static void compute_facet_grid_ptr(const gridding_parameters & params,
 						  size_t facet_id,
 						  size_t grid_size_in_floats,
@@ -101,6 +107,9 @@ namespace imaging {
 						   size_t & out){
       out = params.sampling_function_channel_grid_indicies[spw_channel_flat_index];
     }
+    __device__ static void read_and_apply_antenna_jones_terms(const gridding_parameters & params,
+							      size_t row_index,
+							      typename active_trait::vis_type & vis){}
     __device__ static void compute_facet_grid_ptr(const gridding_parameters & params,
 						  size_t facet_id,
 						  size_t grid_size_in_floats,
@@ -146,6 +155,9 @@ namespace imaging {
 						   size_t & out){
       out = params.channel_grid_indicies[spw_channel_flat_index];
     }
+    __device__ static void read_and_apply_antenna_jones_terms(const gridding_parameters & params,
+							      size_t row_index,
+							      typename active_trait::vis_type & vis){}
     __device__ static void compute_facet_grid_ptr(const gridding_parameters & params,
 						  size_t facet_id,
 						  size_t grid_size_in_floats,
@@ -196,6 +208,9 @@ namespace imaging {
 						   size_t & out){
       out = params.channel_grid_indicies[spw_channel_flat_index];
     }
+    __device__ static void read_and_apply_antenna_jones_terms(const gridding_parameters & params,
+							      size_t row_index,
+							      typename active_trait::vis_type & vis){}
     __device__ static void compute_facet_grid_ptr(const gridding_parameters & params,
 						  size_t facet_id,
 						  size_t grid_size_in_floats,
@@ -229,4 +244,50 @@ namespace imaging {
       atomicAdd(grid_flat_index_corr4 + 1,accumulator._w._imag);
     }
   };
-};
+  template <>
+  class correlation_gridding_policy<grid_4_correlation_with_jones_corrections> {
+  public:
+    typedef correlation_gridding_traits<grid_4_correlation_with_jones_corrections> active_trait;
+    __device__ static void read_corralation_data (gridding_parameters & params,
+						  size_t row_index,
+						  size_t spw,
+						  size_t c,
+						  typename active_trait::vis_type & vis,
+						  typename active_trait::vis_flag_type & flag,
+						  typename active_trait::vis_weight_type & weight
+						 ){
+	imaging::correlation_gridding_policy<grid_4_correlation>::read_corralation_data(params,row_index,
+											spw,c,vis,flag,weight);
+    }
+    __device__ static void read_channel_grid_index(const gridding_parameters & params,
+						   size_t spw_channel_flat_index,
+						   size_t & out){
+	imaging::correlation_gridding_policy<grid_4_correlation>::read_channel_grid_index(params,spw_channel_flat_index,out);
+    }
+    __device__ static void read_and_apply_antenna_jones_terms(const gridding_parameters & params,
+							      size_t row_index,
+							      typename active_trait::vis_type & vis){
+      //TODO: implement
+    }
+    __device__ static void compute_facet_grid_ptr(const gridding_parameters & params,
+						  size_t facet_id,
+						  size_t grid_size_in_floats,
+						  grid_base_type ** facet_grid_starting_ptr){
+	imaging::correlation_gridding_policy<grid_4_correlation>::compute_facet_grid_ptr(params,facet_id,grid_size_in_floats,facet_grid_starting_ptr);
+    }
+    __device__ static void grid_visibility (grid_base_type* grid,
+					    size_t slice_size,
+					    size_t nx,
+					    size_t grid_channel_id,
+					    size_t no_polarizations_being_gridded,
+					    size_t pos_u,
+					    size_t pos_v,
+					    typename active_trait::accumulator_type & accumulator
+					   ){
+	imaging::correlation_gridding_policy<grid_4_correlation>::grid_visibility(grid,slice_size,nx,
+										  grid_channel_id,
+										  no_polarizations_being_gridded,
+										  pos_u,pos_v,accumulator);
+    }
+  };
+}
