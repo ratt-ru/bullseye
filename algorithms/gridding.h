@@ -123,7 +123,8 @@ namespace imaging {
 				 Refer to Cornwell & Perley (1992), Synthesis Imaging II (1999) and Smirnov I (2011)
 				*/
 				typename polarization_gridding_policy_type::trait_type::pol_vis_type vis;
-				active_polarization_gridding_policy.transform(bt,spw_index,c,uvw,vis); //reads and transforms the current visibility
+				typename polarization_gridding_policy_type::trait_type::pol_vis_weight_type normalization_weight;
+				active_polarization_gridding_policy.transform(bt,spw_index,c,uvw,vis,normalization_weight); //reads and transforms the current visibility
 				//as per Cornwell and Perley... then we rotate the uvw coordinate...
 				active_baseline_transform_policy.transform(uvw);
 				/*
@@ -136,7 +137,10 @@ namespace imaging {
 				uv grid. This corresponds to the baseline and the reversed baseline direction: b and -b. The latter represents the complex conjugate of the visibility
 				on b. This hermitian symetric component need not be gridded and relates to a 2x improvement in runtime
 				*/
-				active_convolution_policy.convolve(uvw, vis, channel_grid_indicies[current_spw_offset + c],facet_id);
+				std::size_t channel_grid_index = channel_grid_indicies[current_spw_offset + c];
+				convolution_base_type accumulated_conv_taps = active_convolution_policy.convolve(uvw, vis, channel_grid_index,facet_id);
+				active_polarization_gridding_policy.update_sample_count_accumulator(channel_grid_index, facet_id, 
+												    normalization_weight,accumulated_conv_taps);
                         }
                 }
         }

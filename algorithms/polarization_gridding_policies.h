@@ -29,10 +29,12 @@ namespace imaging {
      channel_index: channel in current row
      uvw: coordinate of current row
      visibility: reference to visibility to read into and transform (if applicable)
+     vis_weight_store: reference to a weight to store the flagged visibility weight to (this is used for normalization purposes)
      */
     inline void transform(std::size_t baseline_time_index, std::size_t spw_index, std::size_t channel_index, 
 			  const uvw_coord<uvw_base_type> & __restrict__ uvw,
-			  typename trait_type::pol_vis_type & __restrict__ visibility) __restrict__ {
+			  typename trait_type::pol_vis_type & __restrict__ visibility,
+			  typename trait_type::pol_weight_type & __restrict__ vis_weight_store) __restrict__ {
       throw std::runtime_error("Undefined behaviour");
     }
     /**
@@ -41,10 +43,21 @@ namespace imaging {
 		      grid automatically.
      visibility: reference to visibility being gridded
      convolution_weight: convolution weight to be applied to each polarization
-     channel_grid_id: index of the current channel grid being computed
     */
     inline void grid_polarization_terms(std::size_t term_flat_index, const typename trait_type::pol_vis_type & __restrict__ visibility,
-					convolution_base_type convolution_weight, std::size_t channel_grid_id, std::size_t facet_id) __restrict__ {
+					convolution_base_type convolution_weight) __restrict__ {
+      throw std::runtime_error("Undefined behaviour");
+    }
+    /**
+     Serves as proxy to future implementations. Subsequent headers should conform to the following:
+     channel_grid_id: index of the channel grid to which is being accumulated
+     facet_id: index of the facet being processed
+     flagged_vis_weight: flagged vis weight as computed by transform
+     sum_conv_weight: total convolution filter weight (accumulated accross (2N+1)**2 taps)
+     */
+    inline void update_sample_count_accumulator(std::size_t channel_grid_id, std::size_t facet_id, 
+						typename trait_type::pol_vis_weight_type & __restrict__ flagged_vis_weight,
+						convolution_base_type sum_conv_weight){
       throw std::runtime_error("Undefined behaviour");
     }
   };
@@ -110,7 +123,8 @@ namespace imaging {
 				   _num_facet_centres(num_facet_centres){}
       inline void transform(std::size_t baseline_time_index, std::size_t spw_index, std::size_t channel_index, 
 			    const uvw_coord<uvw_base_type> & __restrict__ uvw,
-			    typename trait_type::pol_vis_type & __restrict__ visibility) __restrict__ {
+			    typename trait_type::pol_vis_type & __restrict__ visibility,
+			    typename trait_type::pol_vis_weight_type & __restrict__ vis_weight_store) __restrict__ {
 	std::size_t visibility_flat_index = (baseline_time_index * _channel_count + channel_index) * _no_polarizations_in_data + _polarization_index;
 	visibility = _visibilities[visibility_flat_index];
 	/*
@@ -124,18 +138,23 @@ namespace imaging {
 	 we can apply it to the visibility immediately.
 	*/
 	_phase_transform_term.transform(visibility,uvw);
-	visibility *= weight * (int)(!flag); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
+	vis_weight_store = weight * (int)(!flag);
+	visibility *= vis_weight_store; //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
       }
       inline void grid_polarization_terms(std::size_t term_flat_index, const typename trait_type::pol_vis_type & __restrict__ visibility,
-					  convolution_base_type convolution_weight, std::size_t channel_grid_id, std::size_t facet_id) __restrict__ {
-	_sample_counts[((omp_get_thread_num() * _num_facet_centres + facet_id) * 
-			_cube_channel_dim_size + channel_grid_id) * 
-		       1 + 0] += convolution_weight;
+					  convolution_base_type convolution_weight) __restrict__ {
 	term_flat_index = term_flat_index << 1;
 	#pragma omp atomic
 	_output_grids[term_flat_index] += convolution_weight * visibility.real();
 	#pragma omp atomic
 	_output_grids[term_flat_index + 1] += convolution_weight * visibility.imag();
+      }
+      inline void update_sample_count_accumulator(std::size_t channel_grid_id, std::size_t facet_id, 
+						typename trait_type::pol_vis_weight_type & __restrict__ flagged_vis_weight,
+						convolution_base_type sum_conv_weight){
+	_sample_counts[((omp_get_thread_num() * _num_facet_centres + facet_id) * 
+			_cube_channel_dim_size + channel_grid_id) * 
+		       1 + 0] += sum_conv_weight*flagged_vis_weight;
       }
   };
   
@@ -208,7 +227,8 @@ namespace imaging {
 				   _num_facet_centres(num_facet_centres){}
       inline void transform(std::size_t baseline_time_index, std::size_t spw_index, std::size_t channel_index, 
 			    const uvw_coord<uvw_base_type> & __restrict__ uvw,
-			    typename trait_type::pol_vis_type & __restrict__ visibility) __restrict__ {
+			    typename trait_type::pol_vis_type & __restrict__ visibility,
+			    typename trait_type::pol_vis_weight_type & __restrict__ vis_weight_store) __restrict__ {
 	//fetch four complex visibility terms from memory at a time:
 	std::size_t visibility_flat_index = (baseline_time_index * _channel_count + channel_index) * _no_polarizations_in_data;
 	visibility.v[0] = _visibilities[visibility_flat_index + _first_polarization_index]; 
@@ -227,15 +247,13 @@ namespace imaging {
 	*/
 	_phase_transform_term.transform(visibility.v[0],uvw);
 	_phase_transform_term.transform(visibility.v[1],uvw);
-	visibility.v[0] *= weight.w[0] * (int)(!flag.f[0]); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
-	visibility.v[1] *= weight.w[1] * (int)(!flag.f[1]); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
+	vis_weight_store.w[0] = weight.w[0] * (int)(!flag.f[0]);
+	vis_weight_store.w[1] = weight.w[1] * (int)(!flag.f[1]);
+	visibility.v[0] *= vis_weight_store.w[0]; //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
+	visibility.v[1] *= vis_weight_store.w[1]; //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
       }
       inline void grid_polarization_terms(std::size_t term_flat_index, const typename trait_type::pol_vis_type & __restrict__ visibility,
-					  convolution_base_type convolution_weight, std::size_t channel_grid_id, std::size_t facet_id) __restrict__ {
-	std::size_t sample_count_flat_index = ((omp_get_thread_num() * _num_facet_centres + facet_id) * 
-					      _cube_channel_dim_size + channel_grid_id) * 2;
-	_sample_counts[sample_count_flat_index + 0] += convolution_weight;
-	_sample_counts[sample_count_flat_index + 1] += convolution_weight;
+					  convolution_base_type convolution_weight) __restrict__ {
 	std::size_t flat_indexed_reals_corr_1 = term_flat_index << 1;
 	std::size_t flat_indexed_reals_corr_2 = (term_flat_index + _grid_no_pixels) << 1;
 	#pragma omp atomic
@@ -246,6 +264,14 @@ namespace imaging {
 	_output_grids[flat_indexed_reals_corr_2] += convolution_weight * visibility.v[1].real();
 	#pragma omp atomic
 	_output_grids[flat_indexed_reals_corr_2 + 1] += convolution_weight * visibility.v[1].imag();
+      }
+      inline void update_sample_count_accumulator(std::size_t channel_grid_id, std::size_t facet_id, 
+						typename trait_type::pol_vis_weight_type & __restrict__ flagged_vis_weight,
+						convolution_base_type sum_conv_weight){
+	std::size_t sample_count_flat_index = ((omp_get_thread_num() * _num_facet_centres + facet_id) * 
+					      _cube_channel_dim_size + channel_grid_id) * 2;
+	_sample_counts[sample_count_flat_index + 0] += sum_conv_weight*flagged_vis_weight.w[0];
+	_sample_counts[sample_count_flat_index + 1] += sum_conv_weight*flagged_vis_weight.w[1];
       }
   };
   
@@ -307,7 +333,8 @@ namespace imaging {
       __attribute__((optimize("unroll-loops")))
       inline void transform(std::size_t baseline_time_index, std::size_t spw_index, std::size_t channel_index, 
 			    const uvw_coord<uvw_base_type> & __restrict__ uvw,
-			    typename trait_type::pol_vis_type & __restrict__ visibility) __restrict__ {
+			    typename trait_type::pol_vis_type & __restrict__ visibility,
+			    typename trait_type::pol_vis_weight_type & __restrict__ vis_weight_store) __restrict__ {
 	//fetch four complex visibility terms from memory at a time:
 	std::size_t visibility_jones_flat_index = baseline_time_index * _channel_count + channel_index;
 	visibility = _visibilities[visibility_jones_flat_index];
@@ -321,22 +348,29 @@ namespace imaging {
 	*/
 	for (std::size_t i = 0; i < 4; ++i){
 	  _phase_transform_term.transform(visibility.correlations[i],uvw);
-	  visibility.correlations[i] *= weights.w[i] * (int)(!flags.f[i]); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
+	  vis_weight_store.w[i] = weights.w[i] * (int)(!flags.f[i]);
+	  visibility.correlations[i] *= vis_weight_store.w[i]; //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
 	}
       }
       __attribute__((optimize("unroll-loops")))
       inline void grid_polarization_terms(std::size_t term_flat_index, const typename trait_type::pol_vis_type & __restrict__ visibility,
-					  convolution_base_type convolution_weight, std::size_t channel_grid_id, std::size_t facet_id) __restrict__ {
-	std::size_t sample_count_flat_index = ((omp_get_thread_num() * _num_facet_centres + facet_id) * 
-					      _cube_channel_dim_size + channel_grid_id) * 4;
-	
+					  convolution_base_type convolution_weight) __restrict__ {
 	for (std::size_t i = 0; i < 4; ++i){
-	  _sample_counts[sample_count_flat_index + i] += convolution_weight;
 	  std::size_t grid_offset = i * _grid_no_pixels;
 	  #pragma omp atomic
 	  _output_grids[((grid_offset + term_flat_index) << 1)] += convolution_weight * visibility.correlations[i].real();
 	  #pragma omp atomic
 	  _output_grids[((grid_offset + term_flat_index) << 1) + 1] += convolution_weight * visibility.correlations[i].imag();
+	}
+      }
+      __attribute__((optimize("unroll-loops")))
+      inline void update_sample_count_accumulator(std::size_t channel_grid_id, std::size_t facet_id, 
+						typename trait_type::pol_vis_weight_type & __restrict__ flagged_vis_weight,
+						convolution_base_type sum_conv_weight){
+	std::size_t sample_count_flat_index = ((omp_get_thread_num() * _num_facet_centres + facet_id) * 
+					      _cube_channel_dim_size + channel_grid_id) * 4;
+	for (std::size_t i = 0; i < 4; ++i){				    
+	  _sample_counts[sample_count_flat_index + i] += sum_conv_weight*flagged_vis_weight.w[i];
 	}
       }
   };
@@ -430,7 +464,8 @@ namespace imaging {
       __attribute__((optimize("unroll-loops")))
       inline void transform(std::size_t baseline_time_index, std::size_t spw_index, std::size_t channel_index, 
 			    const uvw_coord<uvw_base_type> & __restrict__ uvw,
-			    typename trait_type::pol_vis_type & __restrict__ visibility) __restrict__ {
+			    typename trait_type::pol_vis_type & __restrict__ visibility,
+			    typename trait_type::pol_vis_weight_type & __restrict__ vis_weight_store) __restrict__ {
 	//fetch four complex visibility terms from memory at a time:
 	std::size_t visibility_jones_flat_index = baseline_time_index * this->_channel_count + channel_index;
 	visibility = this->_visibilities[visibility_jones_flat_index];
@@ -444,7 +479,8 @@ namespace imaging {
 	*/
 	for (std::size_t i = 0; i < 4; ++i){
 	  this->_phase_transform_term.transform(visibility.correlations[i],uvw);
-	  visibility.correlations[i] *= weights.w[i] * (int)(!flags.f[i]); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
+	  vis_weight_store.w[i] = weights.w[i] * (int)(!flags.f[i]);
+	  visibility.correlations[i] *= vis_weight_store.w[i]; //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
 	}
 	/*
 	 fetch antenna 1 and antenna 2 jones matricies (flat-indexed). Assume there is a Jones matrix per 
@@ -527,7 +563,8 @@ namespace imaging {
 				   _channel_count(channel_count){}
       inline void transform(std::size_t baseline_time_index, std::size_t spw_index, std::size_t channel_index, 
 			    const uvw_coord<uvw_base_type> & __restrict__ uvw,
-			    typename trait_type::pol_vis_type & __restrict__ visibility) __restrict__ {
+			    typename trait_type::pol_vis_type & __restrict__ visibility,
+			    typename trait_type::pol_vis_weight_type & __restrict__ vis_weight_store) __restrict__ {
 	//fetch four complex visibility terms from memory at a time:
 	std::size_t visibility_flat_index = (baseline_time_index * _channel_count + channel_index) * _no_polarizations_in_data + _polarization_index;
 	visibility = 1;
@@ -541,13 +578,20 @@ namespace imaging {
 	 This faceting phase shift is a scalar matrix and commutes with everything (Smirnov, 2011), so 
 	 we can apply it to the visibility immediately.
 	*/
-	visibility *= weight * (int)(!flag); //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
+	vis_weight_store = weight * (int)(!flag);
+	visibility *= vis_weight_store; //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
       }
       inline void grid_polarization_terms(std::size_t term_flat_index, const typename trait_type::pol_vis_type & __restrict__ visibility,
-					  convolution_base_type convolution_weight, std::size_t channel_grid_id, std::size_t facet_id) __restrict__ {
+					  convolution_base_type convolution_weight) __restrict__ {
 	term_flat_index = term_flat_index << 1;
 	#pragma omp atomic
 	_output_grids[term_flat_index] += convolution_weight * visibility;
+      }
+      inline void update_sample_count_accumulator(std::size_t channel_grid_id, std::size_t facet_id, 
+						typename trait_type::pol_vis_weight_type & __restrict__ flagged_vis_weight,
+						convolution_base_type sum_conv_weight){
+	//The PSF is normalized according to the centre pixel (should be unity according to Bill Cotton) and 
+	//therefore this method is left blank
       }
   };
 }

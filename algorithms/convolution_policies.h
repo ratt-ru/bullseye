@@ -27,8 +27,10 @@ namespace imaging {
      All specializing policies must have a function conforming to the following function header:
      uvw_coord: reference to central uvw coord (in continious space)
      gridding_function: pointer to member function of active gridding policy
+     
+     Must return the total accumulated weight (accross all (2N+1)**2 filter taps)
      */
-    inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
+    inline convolution_base_type convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
 			 const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__ vis,
 			 std::size_t no_grids_to_offset) const __restrict__ {
       throw std::runtime_error("Undefined behaviour");
@@ -69,10 +71,10 @@ namespace imaging {
 			_active_gridding_policy(active_gridding_policy),
 			_cube_chan_dim_step(nx*ny*no_polarizations)
 			{}
-    inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
-			 const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__ vis,
-			 std::size_t no_grids_to_offset,
-			 size_t facet_id) const __restrict__ {
+    inline convolution_base_type convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
+					  const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__ vis,
+					  std::size_t no_grids_to_offset,
+					  size_t facet_id) const __restrict__ {
 	auto convolve = [this](convolution_base_type x)->convolution_base_type{
 // 	  convolution_base_type beta = 1.6789f * (this->_convolution_support+1) - 0.9644; //regression line
 // 	  convolution_base_type sqr_term = (2 * x / (this->_convolution_support+1));
@@ -118,9 +120,9 @@ namespace imaging {
 	std::size_t  disc_grid_v = std::lrint(translated_grid_v);
 	uvw_base_type frac_u = -translated_grid_u + (uvw_base_type)disc_grid_u;
 	uvw_base_type frac_v = -translated_grid_v + (uvw_base_type)disc_grid_v;
-	
+	convolution_base_type accum = 0;
 	if (disc_grid_v + _convolution_support >= _ny || disc_grid_u + _convolution_support  >= _nx ||
-	  disc_grid_v >= _ny || disc_grid_u >= _nx) return;
+	  disc_grid_v >= _ny || disc_grid_u >= _nx) return 0;
 	{
             for (std::size_t  sup_v = 0; sup_v < _convolution_support; ++sup_v) {
                 std::size_t  convolved_grid_v = disc_grid_v + sup_v;
@@ -132,11 +134,12 @@ namespace imaging {
 
                     convolution_base_type conv_weight = convolve(conv_v) * convolve(conv_u);
                     _active_gridding_policy.grid_polarization_terms(chan_offset + grid_flat_index, 
-								    vis, conv_weight, no_grids_to_offset,
-								    facet_id);
+								    vis, conv_weight);
+		    accum += conv_weight;
                 }
             }
 	}
+	return accum;
     }
   };
   
@@ -176,10 +179,10 @@ namespace imaging {
 			_active_gridding_policy(active_gridding_policy),
 			_cube_chan_dim_step(nx*ny*no_polarizations)
 			{}
-    inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
-			 const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__ vis,
-			 std::size_t no_grids_to_offset,
-			 size_t facet_id) const __restrict__ {
+    inline convolution_base_type convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
+					  const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__ vis,
+					  std::size_t no_grids_to_offset,
+					  size_t facet_id) const __restrict__ {
 	std::size_t chan_offset = no_grids_to_offset * _cube_chan_dim_step;
 
 	uvw_base_type translated_grid_u = uvw._u + _grid_u_centre - _conv_centre_offset;
@@ -191,8 +194,8 @@ namespace imaging {
 	uvw_base_type frac_v = -translated_grid_v + (uvw_base_type)disc_grid_v;
 	//don't you dare go near the edge!
 	if (disc_grid_v + _convolution_support  >= _ny || disc_grid_u + _convolution_support  >= _nx ||
-	  disc_grid_v >= _ny || disc_grid_u >= _nx) return;
-	
+	  disc_grid_v >= _ny || disc_grid_u >= _nx) return 0;
+	convolution_base_type accum = 0;
         std::size_t conv_v = (frac_v + 1) * _oversampling_factor;
 	std::size_t  convolved_grid_v = (disc_grid_v + 1)*_ny;
         for (std::size_t  sup_v = 1; sup_v <= _convolution_support; ++sup_v) { //remember we have a +/- frac at both ends of the filter
@@ -205,13 +208,14 @@ namespace imaging {
 
 	    convolution_base_type conv_weight = conv_u_weight * conv_v_weight;
 	    _active_gridding_policy.grid_polarization_terms(chan_offset + grid_flat_index, vis, 
-							    conv_weight, no_grids_to_offset,
-							    facet_id);
+							    conv_weight);
+	    accum += conv_weight;
 	    conv_u += _oversampling_factor;
 	  }
 	  conv_v += _oversampling_factor;
 	  convolved_grid_v += _ny;
         }
+        return accum;
     }
   };
   
@@ -249,10 +253,10 @@ namespace imaging {
 			_active_gridding_policy(active_gridding_policy),
 			_cube_chan_dim_step(nx*ny*no_polarizations)
 			{}
-    inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
-			 const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__ vis,
-			 std::size_t no_grids_to_offset,
-			 size_t facet_id) const __restrict__ {
+    inline convolution_base_type convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
+					  const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__ vis,
+					  std::size_t no_grids_to_offset,
+					  size_t facet_id) const __restrict__ {
 	std::size_t chan_offset = no_grids_to_offset * _cube_chan_dim_step;
 
 	uvw_base_type translated_grid_u = uvw._u + _grid_u_centre;
@@ -264,10 +268,11 @@ namespace imaging {
 	uvw_base_type frac_v = -translated_grid_v + (uvw_base_type)disc_grid_v;
 	//don't you dare go near the edge!
 	if (disc_grid_v + _convolution_support  >= _ny || disc_grid_u + _convolution_support  >= _nx ||
-	  disc_grid_v >= _ny || disc_grid_u >= _nx) return;
+	  disc_grid_v >= _ny || disc_grid_u >= _nx) return 0;
 	
 	std::size_t grid_flat_index = disc_grid_v*_ny + disc_grid_u;
-	_active_gridding_policy.grid_polarization_terms(chan_offset + grid_flat_index, vis, 1, no_grids_to_offset,facet_id);
+	_active_gridding_policy.grid_polarization_terms(chan_offset + grid_flat_index, vis, 1);
+	return 1;
     }
   };
 }
