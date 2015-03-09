@@ -113,6 +113,30 @@ extern "C" {
  		params.output_buffer[((f*params.cube_channel_dim_size*params.number_of_polarization_terms_being_gridded + g)*params.ny+y)*params.nx+x] *= count;
 	    }
     }
+    void normalize(gridding_parameters & params){
+	gridding_barrier();
+	/*
+	 * Now normalize per facet, per channel accumulator grid and correlation
+	 */
+	for (size_t f = 0; f < params.num_facet_centres; ++f){
+	  for (size_t ch = 0; ch < params.cube_channel_dim_size; ++ch){
+	    for (size_t corr = 0; corr < params.number_of_polarization_terms_being_gridded; ++corr){
+	      convolution_base_type norm_val = 0;
+	      for (size_t thid = 0; thid < omp_get_max_threads(); ++thid)
+		norm_val += sample_count_per_grid[((thid * params.num_facet_centres + f) * 
+						   params.cube_channel_dim_size + ch) * 
+						  params.number_of_polarization_terms_being_gridded + corr];
+	      printf("Normalizing cube slice @ facet %lu, channel slice %lu, correlation term %lu with val %f\n",
+		     f,ch,corr,norm_val);
+	      std::complex<grid_base_type> * __restrict__ grid_ptr = params.output_buffer + 
+								     ((f * params.cube_channel_dim_size + ch) * 
+								     params.number_of_polarization_terms_being_gridded + corr) * params.ny * params.nx;
+	      for (size_t i = 0; i < params.ny * params.nx; ++i)
+		grid_ptr[i] /= norm_val;
+	    }
+	  }
+	}
+    }
     void finalize(gridding_parameters & params){
 	gridding_barrier();
 	inversion_timer.start();
@@ -148,22 +172,6 @@ extern "C" {
 		  std::size_t detapering_flat_index = i % image_size;
 		  grid_ptr_single[i] = (float)(grid_ptr_gridtype[i*2]); //extract all the reals
 	      }
-	  }
-	}
-	/*
-	 * Now normalize per facet, per channel accumulator grid and correlation
-	 */
-	for (size_t f = 0; f < params.num_facet_centres; ++f){
-	  for (size_t ch = 0; ch < params.cube_channel_dim_size; ++ch){
-	    for (size_t corr = 0; corr < params.number_of_polarization_terms_being_gridded; ++corr){
-	      std::size_t norm_val = 0;
-	      for (size_t thid = 0; thid < omp_get_max_threads(); ++thid)
-		norm_val += sample_count_per_grid[((thid * params.num_facet_centres + f) * 
-						   params.cube_channel_dim_size + ch) * 
-						  params.number_of_polarization_terms_being_gridded + corr];
-	      printf("Normalizing cube slice @ facet %lu, channel slice %lu, correlation term %lu with val %lu\n",
-		     f,ch,corr,norm_val);
-	    }
 	  }
 	}
 	inversion_timer.stop();

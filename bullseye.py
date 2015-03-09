@@ -301,13 +301,14 @@ if __name__ == "__main__":
     '''
     Work out to which grid each sampling function (per channel) should be gridded.
     '''
-    sampling_function_channel_grid_index = np.zeros([data._no_spw*data._no_channels],dtype=np.intp)
-    sampling_function_channel_count = len(channels_to_image)
-    current_grid = 0
-    for c in range(0,len(enabled_channels)):
-      sampling_function_channel_grid_index[c] = current_grid
-      if enabled_channels[c]:
-	current_grid += 1
+    if parser_args['output_psf']:
+      sampling_function_channel_grid_index = np.zeros([data._no_spw*data._no_channels],dtype=np.intp)
+      sampling_function_channel_count = len(channels_to_image)
+      current_grid = 0
+      for c in range(0,len(enabled_channels)):
+	sampling_function_channel_grid_index[c] = current_grid
+	if enabled_channels[c]:
+	  current_grid += 1
    
     '''
     allocate enough memory to compute image and or facets (only before gridding the first MS)
@@ -320,10 +321,10 @@ if __name__ == "__main__":
 	if gridded_vis == None:
 	  num_facet_grids = 1 if (num_facet_centres == 0) else num_facet_centres
 	  gridded_vis = np.zeros([num_facet_grids,cube_chan_dim_size,4,parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.grid_type)
-    
-    if sampling_funct == None:
-      num_facet_grids = 1 if (num_facet_centres == 0) else num_facet_centres
-      sampling_funct = np.zeros([num_facet_grids,sampling_function_channel_count,1,parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.psf_type)
+    if parser_args['output_psf']:
+      if sampling_funct == None:
+	num_facet_grids = 1 if (num_facet_centres == 0) else num_facet_centres
+	sampling_funct = np.zeros([num_facet_grids,sampling_function_channel_count,1,parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.psf_type)
     '''
     initiate the backend imaging library
     '''
@@ -351,10 +352,10 @@ if __name__ == "__main__":
     params.antenna_count = ctypes.c_size_t(data._no_antennae) #this ensures a deep copy
     params.enabled_channels = enabled_channels.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
     params.reference_wavelengths = data._chan_wavelengths.ctypes.data_as(ctypes.c_void_p) #this is part of the header of the MS and must stay constant between chunks
-    
-    params.sampling_function_buffer = sampling_funct.ctypes.data_as(ctypes.c_void_p) #we never do 2 computes at the same time (or the reduction is handled at the C++ implementation level)
-    params.sampling_function_channel_grid_indicies = sampling_function_channel_grid_index.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
-    params.sampling_function_channel_count = ctypes.c_size_t(sampling_function_channel_count) #this won't change between chunks
+    if parser_args['output_psf']:
+      params.sampling_function_buffer = sampling_funct.ctypes.data_as(ctypes.c_void_p) #we never do 2 computes at the same time (or the reduction is handled at the C++ implementation level)
+      params.sampling_function_channel_grid_indicies = sampling_function_channel_grid_index.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
+      params.sampling_function_channel_count = ctypes.c_size_t(sampling_function_channel_count) #this won't change between chunks
     
     params.num_facet_centres = ctypes.c_size_t(max(1,num_facet_centres)) #stays constant between strides
     params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p)
@@ -441,16 +442,22 @@ if __name__ == "__main__":
       '''
       Now grid the psfs
       '''
-      if (num_facet_centres == 0):
-	libimaging.grid_sampling_function(ctypes.byref(params))
-      else:
-	libimaging.facet_sampling_function(ctypes.byref(params))
+      if parser_args['output_psf']:
+	if (num_facet_centres == 0):
+	  libimaging.grid_sampling_function(ctypes.byref(params))
+	else:
+	  libimaging.facet_sampling_function(ctypes.byref(params))
 	  
       if chunk_index == no_chunks - 1:
 	libimaging.gridding_barrier()
 	if parser_args['sample_weighting'] == 'uniform':
 	  libimaging.weight_uniformly(ctypes.byref(params))
-	
+  
+  '''
+  before compacting everything we better normalize
+  '''
+  libimaging.normalize(ctypes.byref(params))
+  
   '''
   See Smirnov I (2011) for description on conversion between correlation terms and stokes params for linearly polarized feeds
   See Synthesis Imaging II (1999) Pg. 9 for a description on conversion between correlation terms and stokes params for circularly polarized feeds
@@ -472,26 +479,26 @@ if __name__ == "__main__":
       elif parser_args['pol'] == "U":
 	QpiU = data._polarization_correlations.tolist().index(pol_options['RL'])
 	QmiU = data._polarization_correlations.tolist().index(pol_options['LR'])
-	gridded_vis[:,:,0,:,:] = ((gridded_vis[:,:,QpiU,:,:] - gridded_vis[:,:,QmiU,:,:])/2.0)
+	gridded_vis[:,:,0,:,:] = ((gridded_vis[:,:,QpiU,:,:] - gridded_vis[:,:,QmiU,:,:])/2)
       elif parser_args['pol'] in ['RR','RL','LR','LL']:
 	pass #already stored in gridded_vis[:,0,:,:]
     elif feeds_in_use == 'linear':		#linear correlation products
       if parser_args['pol'] == "I":
 	IpQ = data._polarization_correlations.tolist().index(pol_options['XX'])
 	ImQ = data._polarization_correlations.tolist().index(pol_options['YY'])
-	gridded_vis[:,:,0,:,:] = ((gridded_vis[:,:,IpQ,:,:] + gridded_vis[:,:,ImQ,:,:]))
+	gridded_vis[:,:,0,:,:] = ((gridded_vis[:,:,IpQ,:,:] + gridded_vis[:,:,ImQ,:,:])/2)
       elif parser_args['pol'] == "Q":
 	IpQ = data._polarization_correlations.tolist().index(pol_options['XX'])
 	ImQ = data._polarization_correlations.tolist().index(pol_options['YY'])
-	gridded_vis[:,:,0,:,:] = ((gridded_vis[:,:,IpQ,:,:] - gridded_vis[:,:,ImQ,:,:]))
+	gridded_vis[:,:,0,:,:] = ((gridded_vis[:,:,IpQ,:,:] - gridded_vis[:,:,ImQ,:,:])/2)
       elif parser_args['pol'] == "U":
 	UpiV = data._polarization_correlations.tolist().index(pol_options['XY'])
 	UmiV = data._polarization_correlations.tolist().index(pol_options['YX'])
-	gridded_vis[:,:,0,:,:] = ((gridded_vis[:,:,UpiV,:,:] + gridded_vis[:,:,UmiV,:,:]))
+	gridded_vis[:,:,0,:,:] = ((gridded_vis[:,:,UpiV,:,:] + gridded_vis[:,:,UmiV,:,:])/2)
       elif parser_args['pol'] == "V":
 	UpiV = data._polarization_correlations.tolist().index(pol_options['XY'])
 	UmiV = data._polarization_correlations.tolist().index(pol_options['YX'])
-	gridded_vis[:,:,0,:,:] = ((gridded_vis[:,:,UpiV,:,:] - gridded_vis[:,:,UmiV,:,:]))/1.0
+	gridded_vis[:,:,0,:,:] = ((gridded_vis[:,:,UpiV,:,:] - gridded_vis[:,:,UmiV,:,:])/2)
       elif parser_args['pol'] in ['XX','XY','YX','YY']:
 	pass #already stored in gridded_vis[:,0,:,:]
     else:
@@ -520,19 +527,19 @@ if __name__ == "__main__":
       if parser_args['pol'] == "I":
 	IpQ = correlations_to_grid.index(pol_options['XX'])
 	ImQ = correlations_to_grid.index(pol_options['YY'])
-	gridded_vis[:,:,0,:,:] = ((gridded_vis[:,:,IpQ,:,:] + gridded_vis[:,:,ImQ,:,:]))
+	gridded_vis[:,:,0,:,:] = ((gridded_vis[:,:,IpQ,:,:] + gridded_vis[:,:,ImQ,:,:])/2)
       elif parser_args['pol'] == "Q":
 	IpQ = correlations_to_grid.index(pol_options['XX'])
 	ImQ = correlations_to_grid.index(pol_options['YY'])
-	gridded_vis[:,:,0,:,:] = ((gridded_vis[:,:,IpQ,:,:] - gridded_vis[:,:,ImQ,:,:]))
+	gridded_vis[:,:,0,:,:] = ((gridded_vis[:,:,IpQ,:,:] - gridded_vis[:,:,ImQ,:,:])/2)
       elif parser_args['pol'] == "U":
 	UpiV = correlations_to_grid.index(pol_options['XY'])
 	UmiV = correlations_to_grid.index(pol_options['YX'])
-	gridded_vis[:,:,0,:,:] = ((gridded_vis[:,:,UpiV,:,:] + gridded_vis[:,:,UmiV,:,:]))
+	gridded_vis[:,:,0,:,:] = ((gridded_vis[:,:,UpiV,:,:] + gridded_vis[:,:,UmiV,:,:])/2)
       elif parser_args['pol'] == "V":
 	UpiV = correlations_to_grid.index(pol_options['XY'])
 	UmiV = correlations_to_grid.index(pol_options['YX'])
-	gridded_vis[:,:,0,:,:] = ((gridded_vis[:,:,UpiV,:,:] - gridded_vis[:,:,UmiV,:,:]))
+	gridded_vis[:,:,0,:,:] = ((gridded_vis[:,:,UpiV,:,:] - gridded_vis[:,:,UmiV,:,:])/2)
       elif parser_args['pol'] in ['XX','XY','YX','YY']:
 	pass #already stored in gridded_vis[:,0,:,:]
     else:
@@ -550,20 +557,8 @@ if __name__ == "__main__":
 	nc = shift_count / len(correlations_to_grid)
 	gridded_vis[f,nc,nf,:,:] = gridded_vis[f,c,0,:,:]
   '''
-  now normalize, invert, detaper and write out all the facets to disk:  
+  now invert and write out all the facets to disk:  
   '''
-  #normalization_term_per_channel = np.add.reduce(np.add.reduce(sampling_funct,axis=4),axis=3).reshape(max(1,num_facet_centres),sampling_function_channel_count)
-  #normalization_terms = np.zeros([max(1,num_facet_centres),cube_chan_dim_size])
-  #for f in range(0, max(1,num_facet_centres)):
-    #samp_chan_index = 0
-    #for ci,grid_chan_index in enumerate(channel_grid_index):
-      #if enabled_channels[ci]:
-	#normalization_terms[f,grid_chan_index] += np.real(normalization_term_per_channel[f,samp_chan_index]) #reduce over grids
-	#samp_chan_index += 1
-
-  #for f in range(0, max(1,num_facet_centres)):
-    #for c in range(0,cube_chan_dim_size):
-      #gridded_vis[f,c,0,:,:] /= normalization_terms[f,c]
   libimaging.finalize(ctypes.byref(params))
        
   if parser_args['output_psf']:
@@ -583,6 +578,7 @@ if __name__ == "__main__":
 	  offset = parser_args['npix_l']*parser_args['npix_m']*f*np.dtype(np.float32).itemsize
 	  psf = np.ctypeslib.as_array(ctypes.cast(sampling_funct.ctypes.data + offset, ctypes.POINTER(ctypes.c_float)),
 				      shape=(parser_args['npix_l'],parser_args['npix_m']))
+	  psf /= np.max(psf)
 	  spw_no = c / data._no_channels
 	  chan_no = c % data._no_channels
 	  png_export.png_export(psf,image_prefix+('.spw%d.ch%d.psf' % (spw_no,chan_no)),None)
@@ -611,6 +607,7 @@ if __name__ == "__main__":
 	  offset = i*parser_args['npix_l']*parser_args['npix_m']*f*np.dtype(np.float32).itemsize
 	  psf = np.ctypeslib.as_array(ctypes.cast(sampling_funct.ctypes.data + offset, ctypes.POINTER(ctypes.c_float)),
 				      shape=(1,parser_args['npix_l'],parser_args['npix_m']))
+	  psf /= np.max(psf)
 	  spw_no = c / data._no_channels
 	  chan_no = c % data._no_channels
 	  ra = data._field_centres[parser_args['field_id'],0,0] if num_facet_centres == 0 else facet_centres[f,0]

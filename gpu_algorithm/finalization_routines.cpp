@@ -14,6 +14,9 @@ extern "C" {
     double get_inversion_walltime(){
       return total_inversion_time;
     }
+    void normalize(gridding_parameters & params) {
+      printf("WARNING: GPU NORMALIZATION NOT IMPLEMENTED\n");
+    }
     void finalize(gridding_parameters & params) {
         gridding_barrier();
 	cudaStream_t inversion_timing_stream;
