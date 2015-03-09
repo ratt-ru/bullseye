@@ -30,6 +30,8 @@ extern "C" {
     utils::timer sampling_function_gridding_timer;
     utils::timer inversion_timer;
     std::future<void> gridding_future;
+    grid_base_type * sample_count_per_grid;
+    
     double get_gridding_walltime() {
       return gridding_timer.duration() + sampling_function_gridding_timer.duration();
     }
@@ -78,6 +80,10 @@ extern "C" {
 					  1,(int)(params.nx*params.ny),
 					  FFTW_BACKWARD,FFTW_ESTIMATE | FFTW_UNALIGNED);
       #endif
+      sample_count_per_grid = new grid_base_type[omp_get_max_threads() *
+					      params.num_facet_centres * 
+					      params.cube_channel_dim_size * 
+					      params.number_of_polarization_terms_being_gridded]();
     }
     void releaseLibrary(){
       gridding_barrier();
@@ -88,6 +94,7 @@ extern "C" {
 	fftw_destroy_plan(fft_plan);
 	fftw_destroy_plan(fft_psf_plan);
       #endif
+      delete [] sample_count_per_grid;
     }
     void weight_uniformly(gridding_parameters & params){
       #define EPSILON 0.0000001f
@@ -141,6 +148,22 @@ extern "C" {
 		  std::size_t detapering_flat_index = i % image_size;
 		  grid_ptr_single[i] = (float)(grid_ptr_gridtype[i*2]); //extract all the reals
 	      }
+	  }
+	}
+	/*
+	 * Now normalize per facet, per channel accumulator grid and correlation
+	 */
+	for (size_t f = 0; f < params.num_facet_centres; ++f){
+	  for (size_t ch = 0; ch < params.cube_channel_dim_size; ++ch){
+	    for (size_t corr = 0; corr < params.number_of_polarization_terms_being_gridded; ++corr){
+	      std::size_t norm_val = 0;
+	      for (size_t thid = 0; thid < omp_get_max_threads(); ++thid)
+		norm_val += sample_count_per_grid[((thid * params.num_facet_centres + f) * 
+						   params.cube_channel_dim_size + ch) * 
+						  params.number_of_polarization_terms_being_gridded + corr];
+	      printf("Normalizing cube slice @ facet %lu, channel slice %lu, correlation term %lu with val %lu\n",
+		     f,ch,corr,norm_val);
+	    }
 	  }
 	}
 	inversion_timer.stop();
@@ -205,7 +228,10 @@ extern "C" {
                     params.flags,
                     params.number_of_polarization_terms,
                     params.polarization_index,
-                    params.channel_count);
+                    params.channel_count,
+		    sample_count_per_grid,
+		    params.cube_channel_dim_size,
+		    params.num_facet_centres);
             convolution_policy_type convolution_policy(params.nx,params.ny,1,params.conv_support,params.conv_oversample,
                     params.conv, polarization_policy);
 
@@ -225,7 +251,7 @@ extern "C" {
                      params.row_count,params.reference_wavelengths,params.field_array,
                      params.imaging_field,params.spw_index_array,
 		     params.channel_grid_indicies,
-		     params.enabled_channels);
+		     params.enabled_channels,0);
 	    gridding_timer.stop();
         });
     }
@@ -261,7 +287,10 @@ extern "C" {
                         params.flags,
                         params.number_of_polarization_terms,
                         params.polarization_index,
-                        params.channel_count);
+                        params.channel_count,
+			sample_count_per_grid,
+			params.cube_channel_dim_size,
+			params.num_facet_centres);
                 convolution_policy_type convolution_policy(params.nx,params.ny,1,
                         params.conv_support,params.conv_oversample,
                         params.conv, polarization_policy);
@@ -279,7 +308,7 @@ extern "C" {
                                                  params.row_count,params.reference_wavelengths,params.field_array,
                                                  params.imaging_field,params.spw_index_array,
 						 params.channel_grid_indicies,
-						 params.enabled_channels);
+						 params.enabled_channels,facet_index);
                 printf(" <DONE>\n");
             }
             gridding_timer.stop();
@@ -312,7 +341,10 @@ extern "C" {
                     params.polarization_index,
                     params.second_polarization_index,
                     params.nx*params.ny,
-                    params.channel_count);
+                    params.channel_count,
+		    sample_count_per_grid,
+		    params.cube_channel_dim_size,
+		    params.num_facet_centres);
             convolution_policy_type convolution_policy(params.nx,params.ny,2,params.conv_support,params.conv_oversample,
                     params.conv, polarization_policy);
 
@@ -332,7 +364,7 @@ extern "C" {
                      params.row_count,params.reference_wavelengths,params.field_array,
                      params.imaging_field,params.spw_index_array,
 		     params.channel_grid_indicies,
-		     params.enabled_channels);
+		     params.enabled_channels,0);
 	    gridding_timer.stop();
         });
     }
@@ -374,7 +406,10 @@ extern "C" {
                         params.polarization_index,
                         params.second_polarization_index,
                         params.nx*params.ny,
-                        params.channel_count);
+                        params.channel_count,
+			sample_count_per_grid,
+			params.cube_channel_dim_size,
+			params.num_facet_centres);
                 convolution_policy_type convolution_policy(params.nx,params.ny,2,
                         params.conv_support,params.conv_oversample,
                         params.conv, polarization_policy);
@@ -392,7 +427,7 @@ extern "C" {
                                                  params.row_count,params.reference_wavelengths,params.field_array,
                                                  params.imaging_field,params.spw_index_array,
 						 params.channel_grid_indicies,
-						 params.enabled_channels);
+						 params.enabled_channels,facet_index);
             }
             gridding_timer.stop();
         });
@@ -421,7 +456,10 @@ extern "C" {
                     params.visibilities,
                     params.visibility_weights,
                     params.flags,params.nx*params.ny,
-                    params.channel_count);
+                    params.channel_count,
+		    sample_count_per_grid,
+		    params.cube_channel_dim_size,
+		    params.num_facet_centres);
             convolution_policy_type convolution_policy(params.nx,params.ny,4,params.conv_support,params.conv_oversample,
                     params.conv, polarization_policy);
 
@@ -441,7 +479,7 @@ extern "C" {
                      params.row_count,params.reference_wavelengths,params.field_array,
                      params.imaging_field,params.spw_index_array,
 		     params.channel_grid_indicies,
-		     params.enabled_channels);
+		     params.enabled_channels,0);
 	    gridding_timer.stop();
         });
     }
@@ -481,7 +519,10 @@ extern "C" {
                         params.visibilities,
                         params.visibility_weights,
                         params.flags,params.nx*params.ny,
-                        params.channel_count);
+                        params.channel_count,
+			sample_count_per_grid,
+			params.cube_channel_dim_size,
+			params.num_facet_centres);
                 convolution_policy_type convolution_policy(params.nx,params.ny,4,
                         params.conv_support,params.conv_oversample,
                         params.conv, polarization_policy);
@@ -499,7 +540,7 @@ extern "C" {
                                                  params.row_count,params.reference_wavelengths,params.field_array,
                                                  params.imaging_field,params.spw_index_array,
 						 params.channel_grid_indicies,
-						 params.enabled_channels);
+						 params.enabled_channels,facet_index);
             }
             gridding_timer.stop();
         });
@@ -553,7 +594,10 @@ extern "C" {
                         facet_index,
                         params.num_facet_centres,
                         params.no_timestamps_read,
-                        params.spw_count);
+                        params.spw_count,
+			sample_count_per_grid,
+			params.cube_channel_dim_size,
+			params.num_facet_centres);
                 convolution_policy_type convolution_policy(params.nx,params.ny,4,
                         params.conv_support,params.conv_oversample,
                         params.conv, polarization_policy);
@@ -571,7 +615,7 @@ extern "C" {
                                                  params.row_count,params.reference_wavelengths,params.field_array,
                                                  params.imaging_field,params.spw_index_array,
 						 params.channel_grid_indicies,
-						 params.enabled_channels);
+						 params.enabled_channels,facet_index);
             }
             gridding_timer.stop();
         });
@@ -620,7 +664,7 @@ extern "C" {
                      params.row_count,params.reference_wavelengths,params.field_array,
                      params.imaging_field,params.spw_index_array,
 		     params.sampling_function_channel_grid_indicies,
-		     params.enabled_channels);
+		     params.enabled_channels,0);
 	    sampling_function_gridding_timer.stop();
         });
     }
@@ -677,7 +721,7 @@ extern "C" {
                                                  params.row_count,params.reference_wavelengths,params.field_array,
                                                  params.imaging_field,params.spw_index_array,
 						 params.sampling_function_channel_grid_indicies,
-						 params.enabled_channels);
+						 params.enabled_channels,facet_index);
                 printf(" <DONE>\n");
             }
             sampling_function_gridding_timer.stop();

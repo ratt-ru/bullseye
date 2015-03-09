@@ -33,6 +33,7 @@ namespace imaging {
 		field_array: this corresponds to the FIELD_ID column of an ms, and can be used to identify where each baseline is pointing at a particular time (see also "imaging_field")
 		imaging_field: this is the identifier of the field (pointing) currently being imaged. Only contributions from baselines with this field identifier will be gridded.
 		spw_index_array: this array specifies which reference frequency to select (reference_wavelengths has dimensions no_spws * no_channels)
+		facet_id: facet index
 			PRECONDITIONS:
 			1. timestamp_count x baseline_count x channel_count x polarization_term_count <= ||visibilities||
 			2. ||flagged rows + unflagged rows|| == ||visibilities array||
@@ -66,7 +67,8 @@ namespace imaging {
 		  unsigned int imaging_field,
 		  const unsigned int * __restrict__ spw_index_array,
 		  const std::size_t * __restrict__ channel_grid_indicies,
-		  const bool * __restrict__ enabled_channels
+		  const bool * __restrict__ enabled_channels,
+		  std::size_t facet_id
  		){
 		/*
 		Pg. 138, 145-147, Synthesis Imaging II (Briggs, Schwab & Sramek)
@@ -134,7 +136,7 @@ namespace imaging {
 				uv grid. This corresponds to the baseline and the reversed baseline direction: b and -b. The latter represents the complex conjugate of the visibility
 				on b. This hermitian symetric component need not be gridded and relates to a 2x improvement in runtime
 				*/
-				active_convolution_policy.convolve(uvw, vis, channel_grid_indicies[current_spw_offset + c]);
+				active_convolution_policy.convolve(uvw, vis, channel_grid_indicies[current_spw_offset + c],facet_id);
                         }
                 }
         }

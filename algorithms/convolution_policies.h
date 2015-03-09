@@ -71,7 +71,8 @@ namespace imaging {
 			{}
     inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
 			 const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__ vis,
-			 std::size_t no_grids_to_offset) const __restrict__ {
+			 std::size_t no_grids_to_offset,
+			 size_t facet_id) const __restrict__ {
 	auto convolve = [this](convolution_base_type x)->convolution_base_type{
 // 	  convolution_base_type beta = 1.6789f * (this->_convolution_support+1) - 0.9644; //regression line
 // 	  convolution_base_type sqr_term = (2 * x / (this->_convolution_support+1));
@@ -130,7 +131,9 @@ namespace imaging {
                     std::size_t grid_flat_index = convolved_grid_v*_ny + convolved_grid_u;
 
                     convolution_base_type conv_weight = convolve(conv_v) * convolve(conv_u);
-                    _active_gridding_policy.grid_polarization_terms(chan_offset + grid_flat_index, vis, conv_weight);
+                    _active_gridding_policy.grid_polarization_terms(chan_offset + grid_flat_index, 
+								    vis, conv_weight, no_grids_to_offset,
+								    facet_id);
                 }
             }
 	}
@@ -160,7 +163,9 @@ namespace imaging {
      conv: precomputed convolution FIR of size (conv_support x 2) + 1 + 2 (we need the plus two here for the +/- fraction bits at either side of the support region)
      conv_support: integral half support area for the function
      conv_oversample: integral number of fractional steps per unit support area
-     polarization_index: index of the polarization correlation term currently being gridded
+     no_polarizations: number of correlations being gridded
+     nx,ny: size of image in pixels
+     facet_id: index of facet currently being gridded
     */
     convolution_policy(std::size_t nx, std::size_t ny, std::size_t no_polarizations, std::size_t convolution_support, std::size_t oversampling_factor, 
 		       const convolution_base_type * conv, gridding_policy_type & active_gridding_policy):
@@ -173,7 +178,8 @@ namespace imaging {
 			{}
     inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
 			 const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__ vis,
-			 std::size_t no_grids_to_offset) const __restrict__ {
+			 std::size_t no_grids_to_offset,
+			 size_t facet_id) const __restrict__ {
 	std::size_t chan_offset = no_grids_to_offset * _cube_chan_dim_step;
 
 	uvw_base_type translated_grid_u = uvw._u + _grid_u_centre - _conv_centre_offset;
@@ -198,7 +204,9 @@ namespace imaging {
 	    std::size_t grid_flat_index = convolved_grid_v + convolved_grid_u;
 
 	    convolution_base_type conv_weight = conv_u_weight * conv_v_weight;
-	    _active_gridding_policy.grid_polarization_terms(chan_offset + grid_flat_index, vis, conv_weight);
+	    _active_gridding_policy.grid_polarization_terms(chan_offset + grid_flat_index, vis, 
+							    conv_weight, no_grids_to_offset,
+							    facet_id);
 	    conv_u += _oversampling_factor;
 	  }
 	  conv_v += _oversampling_factor;
@@ -233,7 +241,7 @@ namespace imaging {
      polarization_index: index of the polarization correlation term currently being gridded
     */
     convolution_policy(std::size_t nx, std::size_t ny, std::size_t no_polarizations, std::size_t convolution_support, std::size_t oversampling_factor, 
-		       const convolution_base_type * conv, gridding_policy_type & active_gridding_policy):
+		       const convolution_base_type * conv, gridding_policy_type & active_gridding_policy, size_t facet_id):
 			_nx(nx), _ny(ny), _grid_size_in_pixels(nx*ny), _grid_u_centre(nx / 2.0), _grid_v_centre(ny / 2.0),
 			_convolution_support(convolution_support*2 + 1), _oversampling_factor(oversampling_factor), 
 			_conv(conv), _conv_dim_size(_convolution_support * _oversampling_factor),
@@ -243,7 +251,8 @@ namespace imaging {
 			{}
     inline void convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
 			 const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__ vis,
-			 std::size_t no_grids_to_offset) const __restrict__ {
+			 std::size_t no_grids_to_offset,
+			 size_t facet_id) const __restrict__ {
 	std::size_t chan_offset = no_grids_to_offset * _cube_chan_dim_step;
 
 	uvw_base_type translated_grid_u = uvw._u + _grid_u_centre;
@@ -258,7 +267,7 @@ namespace imaging {
 	  disc_grid_v >= _ny || disc_grid_u >= _nx) return;
 	
 	std::size_t grid_flat_index = disc_grid_v*_ny + disc_grid_u;
-	_active_gridding_policy.grid_polarization_terms(chan_offset + grid_flat_index, vis, 1);
+	_active_gridding_policy.grid_polarization_terms(chan_offset + grid_flat_index, vis, 1, no_grids_to_offset,facet_id);
     }
   };
 }
