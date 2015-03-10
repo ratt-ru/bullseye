@@ -121,7 +121,7 @@ extern "C" {
 	for (size_t f = 0; f < params.num_facet_centres; ++f){
 	  for (size_t ch = 0; ch < params.cube_channel_dim_size; ++ch){
 	    for (size_t corr = 0; corr < params.number_of_polarization_terms_being_gridded; ++corr){
-	      convolution_base_type norm_val = 0;
+	      grid_base_type norm_val = 0;
 	      for (size_t thid = 0; thid < omp_get_max_threads(); ++thid)
 		norm_val += sample_count_per_grid[((thid * params.num_facet_centres + f) * 
 						   params.cube_channel_dim_size + ch) * 

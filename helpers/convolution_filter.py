@@ -37,6 +37,7 @@ class convolution_filter(object):
     for x in range(0,convolution_size):
       self._conv_FIR[x] = convolution_func[function_to_use]((x - convolution_centre)/float(oversampling_factor),convolution_fir_support)
     
+    self._conv_FIR / np.sum(self._conv_FIR) #normalize to unity
     #coalseced_FIR = np.zeros([convolution_size],dtype=base_types.fir_type)
     #for s in range(0,convolution_full_support):
       #coalseced_FIR[s*convolution_full_support:(s+1)*convolution_full_support] = self._conv_FIR[s::oversampling_factor]
