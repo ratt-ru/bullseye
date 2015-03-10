@@ -47,7 +47,13 @@ extern "C" {
       if (initialized) return;
       initialized = true;
       printf("-----------------------------------------------\n"
-	     "      Backend: Multithreaded CPU Library       \n\n");	     
+	     "      Backend: Multithreaded CPU Library       \n\n");
+      #ifdef BULLSEYE_SINGLE
+      printf(" >Double precision mode: disabled \n");
+      #endif
+      #ifdef BULLSEYE_DOUBLE
+      printf(" >Double precision mode: enabled \n");
+      #endif
       printf(" >Number of cores available: %d\n",omp_get_num_procs());
       printf(" >Number of threads being used: %d\n",omp_get_max_threads());
       printf("-----------------------------------------------\n");

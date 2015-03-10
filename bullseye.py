@@ -9,15 +9,6 @@ import pylab
 import re
 from os.path import *
 from pyrap.quanta import quantity
-
-from helpers import data_set_loader
-from helpers import fft_utils
-from helpers import convolution_filter
-from helpers import fits_export
-from helpers import base_types
-from helpers import gridding_parameters
-from helpers import png_export
-from helpers import timer
 import ctypes
 
 def coords(s):  
@@ -45,9 +36,6 @@ def channel_range(s):
 	raise argparse.ArgumentTypeError("Channel ranges should be specified as 'spw index':'comma seperated ranges of channels', for example 0:0,2~5,7 will select channels 0,2,3,4,5,7 from spw 0")
       
 if __name__ == "__main__":
-  total_run_time = timer.timer()
-  total_run_time.start()
-  filter_creation_timer = timer.timer()
   parser = argparse.ArgumentParser(description='Bullseye: An implementation of targetted facet-based synthesis imaging in radio astronomy.')
   pol_options = {'I' : 1, 'Q' : 2, 'U' : 3, 'V' : 4, 'RR' : 5, 'RL' : 6, 'LR' : 7, 'LL' : 8, 'XX' : 9, 'XY' : 10, 'YX' : 11, 'YY' : 12} # as per Stokes.h in casacore, the rest is left unimplemented
   '''
@@ -112,15 +100,33 @@ if __name__ == "__main__":
   parser.add_argument('--sample_weighting',help='Specify weighting technique in use.',choices=['natural','uniform'], default='natural')
   parser.add_argument('--open_default_viewer',help='Uses \'xdg-open\' to fire up the user\'s image viewer of choice.',default=False)
   parser.add_argument('--use_back_end',help='Switch between \'CPU\' or \'GPU\' imaging library.', choices=['CPU','GPU'], default='CPU')
+  parser.add_argument('--precision',help='Force bullseye to use single / double precision when gridding', choices=['single','double'], default='single')
   parser_args = vars(parser.parse_args())
   '''
   Pick a backend to use
   '''
   if parser_args['use_back_end'] == 'CPU':
-    libimaging = ctypes.pydll.LoadLibrary("build/algorithms/libimaging.so")
+    if parser_args['precision'] == 'single':
+      libimaging = ctypes.pydll.LoadLibrary("build/algorithms/single/libimaging32.so")
+    else:
+      libimaging = ctypes.pydll.LoadLibrary("build/algorithms/double/libimaging64.so")
   elif parser_args['use_back_end'] == 'GPU':
-    libimaging = ctypes.pydll.LoadLibrary("build/gpu_algorithm/libgpu_imaging.so")
-  
+    if parser_args['precision'] == 'single':
+      libimaging = ctypes.pydll.LoadLibrary("build/gpu_algorithm/single/libgpu_imaging32.so")
+    else:
+      libimaging = ctypes.pydll.LoadLibrary("build/gpu_algorithm/double/libgpu_imaging64.so")
+  from helpers import base_types
+  base_types.force_precision(parser_args['precision'])
+  from helpers import data_set_loader
+  from helpers import fft_utils
+  from helpers import convolution_filter
+  from helpers import fits_export
+  from helpers import gridding_parameters
+  from helpers import png_export
+  from helpers import timer
+  total_run_time = timer.timer()
+  total_run_time.start()
+  filter_creation_timer = timer.timer()
   '''
   initially the output grids must be set to NONE. Memory will only be allocated before the first MS is read.
   '''

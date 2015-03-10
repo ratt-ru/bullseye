@@ -30,6 +30,14 @@ extern "C" {
     void initLibrary(gridding_parameters & params) {
 	if (initialized) return;
 	initialized = true;
+	printf("---------------------------------------Backend: GPU GRIDDING LIBRARY---------------------------------------\n");
+	#ifdef BULLSEYE_SINGLE
+	printf("Double precision mode: disabled \n");
+	#endif
+	#ifdef BULLSEYE_DOUBLE
+	printf("Double precision mode: enabled \n");
+	#endif
+	printf("-----------------------------------------------------------------------------------------------------------\n");
         int num_devices, device;
         cudaGetDeviceCount(&num_devices);
         if (num_devices > 0) {
@@ -53,7 +61,7 @@ extern "C" {
             size_t mem_tot = 0;
             size_t mem_free = 0;
             cudaMemGetInfo  (&mem_free, & mem_tot);
-            printf("---------------------------------------Backend: GPU GRIDDING LIBRARY---------------------------------------\n");
+            
             printf("%s, device %d on PCI Bus #%d, clocked at %f GHz\n",properties.name,properties.pciDeviceID,
                    properties.pciBusID,properties.clockRate / 1000000.0);
             printf("Compute capability %d.%d with %f GiB global memory (%f GiB free)\n",properties.major,
