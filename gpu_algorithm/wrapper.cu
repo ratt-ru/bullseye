@@ -20,7 +20,7 @@ extern "C" {
     utils::timer * gridding_walltime;
     cudaStream_t compute_stream;
     gridding_parameters gpu_params;
-    
+    bool initialized = false;
     double get_gridding_walltime(){
       return gridding_walltime->duration();
     }
@@ -28,6 +28,8 @@ extern "C" {
       cudaSafeCall(cudaStreamSynchronize(compute_stream));
     }
     void initLibrary(gridding_parameters & params) {
+	if (initialized) return;
+	initialized = true;
         int num_devices, device;
         cudaGetDeviceCount(&num_devices);
         if (num_devices > 0) {
@@ -72,10 +74,12 @@ extern "C" {
 	cudaSafeCall(cudaMemcpy(gpu_params.enabled_channels,params.enabled_channels, sizeof(bool) * params.channel_count * params.spw_count,cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.channel_grid_indicies, sizeof(size_t) * params.channel_count * params.spw_count));
 	cudaSafeCall(cudaMemcpy(gpu_params.channel_grid_indicies,params.channel_grid_indicies, sizeof(size_t) * params.channel_count * params.spw_count,cudaMemcpyHostToDevice));
-	cudaSafeCall(cudaMalloc((void**)&gpu_params.sampling_function_channel_grid_indicies, sizeof(size_t) * params.channel_count * params.spw_count));
-	cudaSafeCall(cudaMemcpy(gpu_params.sampling_function_channel_grid_indicies,
-				params.sampling_function_channel_grid_indicies, 
-				sizeof(size_t) * params.channel_count * params.spw_count,cudaMemcpyHostToDevice));
+	if (params.should_grid_sampling_function){
+	  cudaSafeCall(cudaMalloc((void**)&gpu_params.sampling_function_channel_grid_indicies, sizeof(size_t) * params.channel_count * params.spw_count))
+	  cudaSafeCall(cudaMemcpy(gpu_params.sampling_function_channel_grid_indicies,
+				  params.sampling_function_channel_grid_indicies, 
+				  sizeof(size_t) * params.channel_count * params.spw_count,cudaMemcpyHostToDevice));
+	}
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.spw_index_array, sizeof(unsigned int) * params.chunk_max_row_count));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.flagged_rows, sizeof(bool) * params.chunk_max_row_count));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.field_array, sizeof(unsigned int) * params.chunk_max_row_count));
@@ -83,12 +87,14 @@ extern "C" {
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.flags, sizeof(bool) * params.chunk_max_row_count * params.channel_count * params.number_of_polarization_terms_being_gridded));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.output_buffer, sizeof(std::complex<grid_base_type>) * params.nx * params.ny * 
 								    params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * params.num_facet_centres));
-	cudaSafeCall(cudaMemset(gpu_params.output_buffer,0,sizeof(std::complex<grid_base_type>) * params.nx * params.ny * 
-				params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * params.num_facet_centres));
-	cudaSafeCall(cudaMalloc((void**)&gpu_params.sampling_function_buffer, sizeof(std::complex<grid_base_type>) * params.nx * params.ny * 
-								    params.sampling_function_channel_count * params.num_facet_centres));
-	cudaSafeCall(cudaMemset(gpu_params.sampling_function_buffer,0,sizeof(std::complex<grid_base_type>) * params.nx * params.ny * 
-								    params.sampling_function_channel_count * params.num_facet_centres));
+	cudaSafeCall(cudaMemcpy(gpu_params.output_buffer,params.output_buffer,sizeof(std::complex<grid_base_type>) * params.nx * params.ny * 
+				params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * params.num_facet_centres,cudaMemcpyHostToDevice));
+	if (params.should_grid_sampling_function){
+	  cudaSafeCall(cudaMalloc((void**)&gpu_params.sampling_function_buffer, sizeof(std::complex<grid_base_type>) * params.nx * params.ny * 
+							params.sampling_function_channel_count * params.num_facet_centres));
+	  cudaSafeCall(cudaMemcpy(gpu_params.sampling_function_buffer,params.sampling_function_buffer,sizeof(std::complex<grid_base_type>) * params.nx * params.ny * 
+						    params.sampling_function_channel_count * params.num_facet_centres,cudaMemcpyHostToDevice));
+	}
 	size_t size_of_convolution_function = (params.conv_support * 2 + 1 + 2) * params.conv_oversample; //see algorithms/convolution_policies.h for the reason behind the padding
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.conv, sizeof(convolution_base_type) * size_of_convolution_function));
 	cudaSafeCall(cudaMemcpy(gpu_params.conv, params.conv, sizeof(convolution_base_type) * size_of_convolution_function,cudaMemcpyHostToDevice));
@@ -111,15 +117,19 @@ extern "C" {
 	cudaSafeCall(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
     }
     void releaseLibrary() {
+      if (!initialized) return;
+      initialized = false;
       cudaDeviceSynchronize();
       cudaSafeCall(cudaFree(gpu_params.output_buffer));
-      cudaSafeCall(cudaFree(gpu_params.sampling_function_buffer));
+      if (gpu_params.should_grid_sampling_function)
+	cudaSafeCall(cudaFree(gpu_params.sampling_function_buffer));
       cudaSafeCall(cudaFree(gpu_params.visibilities));
       cudaSafeCall(cudaFree(gpu_params.uvw_coords));
       cudaSafeCall(cudaFree(gpu_params.reference_wavelengths));
       cudaSafeCall(cudaFree(gpu_params.enabled_channels));
       cudaSafeCall(cudaFree(gpu_params.channel_grid_indicies));
-      cudaSafeCall(cudaFree(gpu_params.sampling_function_channel_grid_indicies));
+      if (gpu_params.should_grid_sampling_function)
+	cudaSafeCall(cudaFree(gpu_params.sampling_function_channel_grid_indicies));
       cudaSafeCall(cudaFree(gpu_params.spw_index_array));
       cudaSafeCall(cudaFree(gpu_params.flagged_rows));
       cudaSafeCall(cudaFree(gpu_params.field_array));

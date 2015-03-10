@@ -63,6 +63,7 @@ struct gridding_parameters {
     std::size_t * __restrict__ channel_grid_indicies;
     size_t cube_channel_dim_size;
     //Sampling function
+    bool should_grid_sampling_function;
     std::complex<grid_base_type> * __restrict__ sampling_function_buffer;
     std::size_t * __restrict__ sampling_function_channel_grid_indicies;
     size_t sampling_function_channel_count;

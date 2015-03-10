@@ -53,6 +53,7 @@ gridding_parameters._fields_ = [
   ("channel_grid_indicies",c_void_p),
   ("cube_channel_dim_size",c_size_t),
   #Sampling function
+  ("should_grid_sampling_function",c_bool),
   ("sampling_function_buffer",c_void_p),
   ("sampling_function_channel_grid_indicies",c_void_p),
   ("sampling_function_channel_count",c_size_t),

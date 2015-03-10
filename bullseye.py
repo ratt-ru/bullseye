@@ -352,6 +352,7 @@ if __name__ == "__main__":
     params.antenna_count = ctypes.c_size_t(data._no_antennae) #this ensures a deep copy
     params.enabled_channels = enabled_channels.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
     params.reference_wavelengths = data._chan_wavelengths.ctypes.data_as(ctypes.c_void_p) #this is part of the header of the MS and must stay constant between chunks
+    params.should_grid_sampling_function = ctypes.c_bool(parser_args['output_psf'])
     if parser_args['output_psf']:
       params.sampling_function_buffer = sampling_funct.ctypes.data_as(ctypes.c_void_p) #we never do 2 computes at the same time (or the reduction is handled at the C++ implementation level)
       params.sampling_function_channel_grid_indicies = sampling_function_channel_grid_index.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks

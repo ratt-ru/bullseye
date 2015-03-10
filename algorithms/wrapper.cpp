@@ -31,6 +31,7 @@ extern "C" {
     utils::timer inversion_timer;
     std::future<void> gridding_future;
     grid_base_type * sample_count_per_grid;
+    bool initialized = false;
     
     double get_gridding_walltime() {
       return gridding_timer.duration() + sampling_function_gridding_timer.duration();
@@ -43,6 +44,8 @@ extern "C" {
             gridding_future.get(); //Block until result becomes available
     }
     void initLibrary(gridding_parameters & params){
+      if (initialized) return;
+      initialized = true;
       printf("-----------------------------------------------\n"
 	     "      Backend: Multithreaded CPU Library       \n\n");	     
       printf(" >Number of cores available: %d\n",omp_get_num_procs());
@@ -86,6 +89,8 @@ extern "C" {
 					      params.number_of_polarization_terms_being_gridded]();
     }
     void releaseLibrary(){
+      if (!initialized) return;
+      initialized = false;
       gridding_barrier();
       #ifdef SHOULD_DO_32_BIT_FFT
 	fftwf_destroy_plan(fft_plan);
