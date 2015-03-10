@@ -3,14 +3,14 @@
 #include "uvw_coord.h"
 
 //just swap these for doubles if you're passing double precission numpy arrays through!
-typedef float visibility_base_type;
-typedef float uvw_base_type;
-typedef float reference_wavelengths_base_type;
-typedef float convolution_base_type;
-typedef float visibility_weights_base_type;
-typedef float grid_base_type;
+typedef double visibility_base_type;
+typedef double uvw_base_type;
+typedef double reference_wavelengths_base_type;
+typedef double convolution_base_type;
+typedef double visibility_weights_base_type;
+typedef double grid_base_type;
 // this based on your choice of grid_base_type
-#define SHOULD_DO_32_BIT_FFT
+// #define SHOULD_DO_32_BIT_FFT
 
 struct gridding_parameters {
     //Mandatory data necessary for gridding:

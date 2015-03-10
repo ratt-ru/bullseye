@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <cufft.h>
 
+
 /****************************************************************************************************************
  CUDA error handling macros
 ****************************************************************************************************************/
@@ -20,4 +21,5 @@ inline void __cufftSafeCall( uint32_t err, const char *file, const int line ){
         }
         return;
 }
+
 const float ARCSEC_TO_RAD = M_PI/(180.0*3600.0);

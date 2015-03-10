@@ -3,7 +3,8 @@
 #include "gridding_parameters.h"
 #include "cu_basic_complex.h"
 #include "cu_vec.h"
-
+#include "cu_common.h"
+#include "cu_double_atomic.h"
 namespace imaging {
   template <typename correlation_gridding_mode>
   class correlation_gridding_policy {
