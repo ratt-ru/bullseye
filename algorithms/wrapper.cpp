@@ -30,7 +30,7 @@ extern "C" {
     utils::timer sampling_function_gridding_timer;
     utils::timer inversion_timer;
     std::future<void> gridding_future;
-    grid_base_type * sample_count_per_grid;
+    normalization_base_type * sample_count_per_grid;
     bool initialized = false;
     
     double get_gridding_walltime() {
@@ -89,10 +89,10 @@ extern "C" {
 					  1,(int)(params.nx*params.ny),
 					  FFTW_BACKWARD,FFTW_ESTIMATE | FFTW_UNALIGNED);
       #endif
-      sample_count_per_grid = new grid_base_type[omp_get_max_threads() *
-					      params.num_facet_centres * 
-					      params.cube_channel_dim_size * 
-					      params.number_of_polarization_terms_being_gridded]();
+      sample_count_per_grid = new normalization_base_type[omp_get_max_threads() *
+							  params.num_facet_centres * 
+							  params.cube_channel_dim_size * 
+							  params.number_of_polarization_terms_being_gridded]();
     }
     void releaseLibrary(){
       if (!initialized) return;
@@ -132,7 +132,7 @@ extern "C" {
 	for (size_t f = 0; f < params.num_facet_centres; ++f){
 	  for (size_t ch = 0; ch < params.cube_channel_dim_size; ++ch){
 	    for (size_t corr = 0; corr < params.number_of_polarization_terms_being_gridded; ++corr){
-	      grid_base_type norm_val = 0;
+	      normalization_base_type norm_val = 0;
 	      for (size_t thid = 0; thid < omp_get_max_threads(); ++thid)
 		norm_val += sample_count_per_grid[((thid * params.num_facet_centres + f) * 
 						   params.cube_channel_dim_size + ch) * 

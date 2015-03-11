@@ -82,7 +82,7 @@ namespace imaging {
       std::size_t _no_polarizations_in_data;
       std::size_t _polarization_index;
       std::size_t _channel_count;
-      grid_base_type * __restrict__ _sample_counts;
+      normalization_base_type * __restrict__ _sample_counts;
       std::size_t _cube_channel_dim_size;
       std::size_t _num_facet_centres;
   public:
@@ -108,7 +108,7 @@ namespace imaging {
 				   std::size_t no_polarizations_in_data,
 				   std::size_t polarization_index,
 				   std::size_t channel_count,
-				   grid_base_type * sample_counts,
+				   normalization_base_type * sample_counts,
 				   std::size_t cube_channel_dim_size,
 				   std::size_t num_facet_centres
 				  ):
@@ -180,7 +180,7 @@ namespace imaging {
       std::size_t _second_polarization_index;
       std::size_t _grid_no_pixels;
       std::size_t _channel_count;
-      grid_base_type * __restrict__ _sample_counts;
+      normalization_base_type * __restrict__ _sample_counts;
       std::size_t _cube_channel_dim_size;
       std::size_t _num_facet_centres;
   public:
@@ -209,7 +209,7 @@ namespace imaging {
 				   std::size_t second_polarization_index,
 				   std::size_t grid_no_pixels,
 				   std::size_t channel_count,
-				   grid_base_type * sample_counts,
+				   normalization_base_type * sample_counts,
 				   std::size_t cube_channel_dim_size,
 				   std::size_t num_facet_centres
 				  ):
@@ -293,7 +293,7 @@ namespace imaging {
       const typename trait_type::pol_vis_flag_type * __restrict__ _flags;
       std::size_t _grid_no_pixels;
       std::size_t _channel_count; 
-      grid_base_type * __restrict__ _sample_counts;
+      normalization_base_type * __restrict__ _sample_counts;
       std::size_t _cube_channel_dim_size;
       std::size_t _num_facet_centres;
   public:
@@ -317,7 +317,7 @@ namespace imaging {
 				   const bool* flags,
 				   std::size_t grid_no_pixels,
 				   std::size_t channel_count,
-				   grid_base_type * sample_counts,
+				   normalization_base_type * sample_counts,
 				   std::size_t cube_channel_dim_size,
 				   std::size_t num_facet_centres
 				  ):
@@ -403,7 +403,6 @@ namespace imaging {
       const unsigned int *  __restrict__  _antenna_1_ids;
       const unsigned int *  __restrict__  _antenna_2_ids;
       const std::size_t *  __restrict__  _timestamp_ids;
-      grid_base_type * __restrict__ _sample_counts;
   public:
       /**
        Arguments:
@@ -445,7 +444,7 @@ namespace imaging {
 				   std::size_t antenna_count, std::size_t direction_index, 
 				   std::size_t direction_count, std::size_t calibration_timestamp_count, 
 				   std::size_t spw_count,
-				   grid_base_type * sample_counts,
+				   normalization_base_type * sample_counts,
 				   std::size_t cube_channel_dim_size,
 				   std::size_t num_facet_centres
 				  ):
