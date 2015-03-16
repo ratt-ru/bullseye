@@ -37,6 +37,13 @@ namespace imaging {
 					    size_t pos_v,
 					    typename active_trait::accumulator_type & accumulator
 					   );
+    __device__ static void update_normalization_accumulator(const gridding_parameters & params,
+							    typename active_trait::normalization_accumulator_type & accumulator,
+							    size_t facet_id,
+							    size_t grid_channel_id,
+							    size_t convolution_full_support,
+							    size_t conv_u_id,
+							    size_t conv_v_id);
   };
   template <>
   class correlation_gridding_policy<grid_single_correlation> {
@@ -85,6 +92,18 @@ namespace imaging {
       atomicAdd(grid_flat_index,accumulator._x._real);
       atomicAdd(grid_flat_index + 1,accumulator._x._imag);
     }
+    __device__ static void update_normalization_accumulator(const gridding_parameters & params,
+							    typename active_trait::normalization_accumulator_type & accumulator,
+							    size_t facet_id,
+							    size_t grid_channel_id,
+							    size_t convolution_full_support,
+							    size_t conv_u_id,
+							    size_t conv_v_id){
+      size_t flat_index_up_to_corr = (facet_id * params.cube_channel_dim_size + grid_channel_id);
+      size_t reduction_step_size = convolution_full_support * convolution_full_support;
+      size_t current_reduction_step_flat_index = conv_v_id * convolution_full_support + conv_u_id;
+      atomicAdd(params.normalization_terms + (flat_index_up_to_corr * reduction_step_size + current_reduction_step_flat_index),accumulator._x);
+    }
   };
   template <>
   class correlation_gridding_policy<grid_sampling_function>{
@@ -98,8 +117,7 @@ namespace imaging {
 						  typename active_trait::vis_flag_type & flag,
 						  typename active_trait::vis_weight_type & weight
 						 ){
-      size_t vis_index = row_index * params.channel_count + c;
-      flag = params.flags[vis_index];
+      flag = false;
       weight = 1;
       vis = vec1<basic_complex<visibility_base_type> >(basic_complex<visibility_base_type>(1,0));
     }
@@ -132,6 +150,14 @@ namespace imaging {
 					((pos_v * nx + pos_u) << 1);
       atomicAdd(grid_flat_index,accumulator._x._real);
       atomicAdd(grid_flat_index + 1,accumulator._x._imag);
+    }
+    __device__ static void update_normalization_accumulator(const gridding_parameters & params,
+							    typename active_trait::normalization_accumulator_type & accumulator,
+							    size_t facet_id,
+							    size_t grid_channel_id,
+							    size_t convolution_full_support,
+							    size_t conv_u_id,
+							    size_t conv_v_id){
     }
   };
   template <>
@@ -184,6 +210,19 @@ namespace imaging {
       atomicAdd(grid_flat_index_corr1 + 1,accumulator._x._imag);
       atomicAdd(grid_flat_index_corr2,accumulator._y._real);
       atomicAdd(grid_flat_index_corr2 + 1,accumulator._y._imag);
+    }
+    __device__ static void update_normalization_accumulator(const gridding_parameters & params,
+							    typename active_trait::normalization_accumulator_type & accumulator,
+							    size_t facet_id,
+							    size_t grid_channel_id,
+							    size_t convolution_full_support,
+							    size_t conv_u_id,
+							    size_t conv_v_id){
+      size_t flat_index_up_to_corr = (facet_id * params.cube_channel_dim_size + grid_channel_id) * params.number_of_polarization_terms_being_gridded;
+      size_t reduction_step_size = convolution_full_support * convolution_full_support;
+      size_t current_reduction_step_flat_index = conv_v_id * convolution_full_support + conv_u_id;
+      atomicAdd(params.normalization_terms + (flat_index_up_to_corr * reduction_step_size + current_reduction_step_flat_index),accumulator._x);
+      atomicAdd(params.normalization_terms + ((flat_index_up_to_corr + 1) * reduction_step_size + current_reduction_step_flat_index), accumulator._y);
     }
   };
   template <>
@@ -243,6 +282,21 @@ namespace imaging {
       atomicAdd(grid_flat_index_corr3 + 1,accumulator._z._imag);
       atomicAdd(grid_flat_index_corr4,accumulator._w._real);
       atomicAdd(grid_flat_index_corr4 + 1,accumulator._w._imag);
+    }
+    __device__ static void update_normalization_accumulator(const gridding_parameters & params,
+							    typename active_trait::normalization_accumulator_type & accumulator,
+							    size_t facet_id,
+							    size_t grid_channel_id,
+							    size_t convolution_full_support,
+							    size_t conv_u_id,
+							    size_t conv_v_id){
+      size_t flat_index_up_to_corr = (facet_id * params.cube_channel_dim_size + grid_channel_id) * params.number_of_polarization_terms_being_gridded;
+      size_t reduction_step_size = convolution_full_support * convolution_full_support;
+      size_t current_reduction_step_flat_index = conv_v_id * convolution_full_support + conv_u_id;
+      atomicAdd(params.normalization_terms + (flat_index_up_to_corr * reduction_step_size + current_reduction_step_flat_index),accumulator._x);
+      atomicAdd(params.normalization_terms + ((flat_index_up_to_corr + 1) * reduction_step_size + current_reduction_step_flat_index), accumulator._y);
+      atomicAdd(params.normalization_terms + ((flat_index_up_to_corr + 2) * reduction_step_size + current_reduction_step_flat_index), accumulator._z);
+      atomicAdd(params.normalization_terms + ((flat_index_up_to_corr + 3) * reduction_step_size + current_reduction_step_flat_index), accumulator._w);
     }
   };
   template <>
@@ -322,6 +376,16 @@ namespace imaging {
 										  grid_channel_id,
 										  no_polarizations_being_gridded,
 										  pos_u,pos_v,accumulator);
+    }
+    __device__ static void update_normalization_accumulator(const gridding_parameters & params,
+							    typename active_trait::normalization_accumulator_type & accumulator,
+							    size_t facet_id,
+							    size_t grid_channel_id,
+							    size_t convolution_full_support,
+							    size_t conv_u_id,
+							    size_t conv_v_id){
+	imaging::correlation_gridding_policy<grid_4_correlation>::update_normalization_accumulator(params,accumulator,facet_id,grid_channel_id,
+												   convolution_full_support,conv_u_id,conv_v_id);
     }
   };
 }

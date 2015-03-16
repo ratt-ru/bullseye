@@ -568,23 +568,19 @@ namespace imaging {
 	std::size_t visibility_flat_index = (baseline_time_index * _channel_count + channel_index) * _no_polarizations_in_data + _polarization_index;
 	visibility = 1;
 	/*
-	 MS v2.0: weights are applied for each visibility term (baseline x channel x correlation)
-	*/
-	typename trait_type::pol_vis_flag_type flag = _flags[visibility_flat_index];
-	typename trait_type::pol_vis_weight_type weight = _weights[visibility_flat_index];
-	/*
 	 do faceting phase shift (Cornwell & Perley, 1992) if enabled (through policy)
 	 This faceting phase shift is a scalar matrix and commutes with everything (Smirnov, 2011), so 
 	 we can apply it to the visibility immediately.
 	*/
-	vis_weight_store = weight * (int)(!flag);
-	visibility *= vis_weight_store; //the integral promotion defines false == 0 and true == 1, this avoids unecessary branch divergence
+	_phase_transform_term.transform(visibility,uvw);
       }
       inline void grid_polarization_terms(std::size_t term_flat_index, const typename trait_type::pol_vis_type & __restrict__ visibility,
 					  convolution_base_type convolution_weight) __restrict__ {
 	term_flat_index = term_flat_index << 1;
 	#pragma omp atomic
-	_output_grids[term_flat_index] += convolution_weight * visibility;
+	_output_grids[term_flat_index] += convolution_weight * visibility.real();
+	#pragma omp atomic
+	_output_grids[term_flat_index + 1] += convolution_weight * visibility.imag();
       }
       inline void update_sample_count_accumulator(std::size_t channel_grid_id, std::size_t facet_id, 
 						typename trait_type::pol_vis_weight_type & __restrict__ flagged_vis_weight,

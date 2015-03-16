@@ -20,6 +20,7 @@ namespace imaging {
     typedef undefined_type vis_flag_type;
     typedef undefined_type vis_weight_type;
     typedef undefined_type accumulator_type;
+    typedef undefined_type normalization_accumulator_type;
   };
   template <>
   class correlation_gridding_traits<grid_single_correlation> {
@@ -28,6 +29,7 @@ namespace imaging {
     typedef vec1<bool> vis_flag_type;
     typedef vec1<visibility_weights_base_type> vis_weight_type;
     typedef vec1<basic_complex<visibility_base_type> > accumulator_type;
+    typedef vec1<normalization_base_type> normalization_accumulator_type;
   };
   template <>
   class correlation_gridding_traits<grid_duel_correlation> {
@@ -36,6 +38,7 @@ namespace imaging {
     typedef vec2<bool> vis_flag_type;
     typedef vec2<visibility_weights_base_type> vis_weight_type;
     typedef vec2<basic_complex<visibility_base_type> > accumulator_type;
+    typedef vec2<normalization_base_type> normalization_accumulator_type;
   };
   template <>
   class correlation_gridding_traits<grid_4_correlation> {
@@ -44,6 +47,7 @@ namespace imaging {
     typedef vec4<bool> vis_flag_type;
     typedef vec4<visibility_weights_base_type> vis_weight_type;
     typedef vec4<basic_complex<visibility_base_type> > accumulator_type;
+    typedef vec4<normalization_base_type> normalization_accumulator_type;
   };
   template <>
   class correlation_gridding_traits<grid_4_correlation_with_jones_corrections>:

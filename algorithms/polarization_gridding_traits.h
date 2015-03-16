@@ -26,11 +26,8 @@ namespace imaging {
   };
   
   template <typename visibility_base_type,typename weights_base_type>
-  class polarization_gridding_trait<visibility_base_type,weights_base_type,gridding_sampling_function>{
-    public:
-      typedef visibility_base_type pol_vis_type;
-      typedef weights_base_type pol_vis_weight_type;
-      typedef bool pol_vis_flag_type;
+  class polarization_gridding_trait<visibility_base_type,weights_base_type,gridding_sampling_function>: 
+    public polarization_gridding_trait<visibility_base_type,weights_base_type,gridding_single_pol>{
   };
   
   template <typename visibility_base_type,typename weights_base_type>

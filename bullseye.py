@@ -307,7 +307,7 @@ if __name__ == "__main__":
     '''
     Work out to which grid each sampling function (per channel) should be gridded.
     '''
-    if parser_args['output_psf']:
+    if parser_args['output_psf'] or (parser_args['sample_weighting'] == 'uniform'):
       sampling_function_channel_grid_index = np.zeros([data._no_spw*data._no_channels],dtype=np.intp)
       sampling_function_channel_count = len(channels_to_image)
       current_grid = 0
@@ -327,7 +327,7 @@ if __name__ == "__main__":
 	if gridded_vis == None:
 	  num_facet_grids = 1 if (num_facet_centres == 0) else num_facet_centres
 	  gridded_vis = np.zeros([num_facet_grids,cube_chan_dim_size,4,parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.grid_type)
-    if parser_args['output_psf']:
+    if parser_args['output_psf'] or (parser_args['sample_weighting'] == 'uniform'):
       if sampling_funct == None:
 	num_facet_grids = 1 if (num_facet_centres == 0) else num_facet_centres
 	sampling_funct = np.zeros([num_facet_grids,sampling_function_channel_count,1,parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.psf_type)
@@ -358,8 +358,8 @@ if __name__ == "__main__":
     params.antenna_count = ctypes.c_size_t(data._no_antennae) #this ensures a deep copy
     params.enabled_channels = enabled_channels.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
     params.reference_wavelengths = data._chan_wavelengths.ctypes.data_as(ctypes.c_void_p) #this is part of the header of the MS and must stay constant between chunks
-    params.should_grid_sampling_function = ctypes.c_bool(parser_args['output_psf'])
-    if parser_args['output_psf']:
+    params.should_grid_sampling_function = ctypes.c_bool(parser_args['output_psf'] or (parser_args['sample_weighting'] == 'uniform'))
+    if parser_args['output_psf'] or (parser_args['sample_weighting'] == 'uniform'):
       params.sampling_function_buffer = sampling_funct.ctypes.data_as(ctypes.c_void_p) #we never do 2 computes at the same time (or the reduction is handled at the C++ implementation level)
       params.sampling_function_channel_grid_indicies = sampling_function_channel_grid_index.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
       params.sampling_function_channel_count = ctypes.c_size_t(sampling_function_channel_count) #this won't change between chunks
@@ -449,22 +449,18 @@ if __name__ == "__main__":
       '''
       Now grid the psfs
       '''
-      if parser_args['output_psf']:
+      if parser_args['output_psf'] or (parser_args['sample_weighting'] == 'uniform'):
 	if (num_facet_centres == 0):
 	  libimaging.grid_sampling_function(ctypes.byref(params))
 	else:
 	  libimaging.facet_sampling_function(ctypes.byref(params))
 	  
-      if chunk_index == no_chunks - 1:
-	libimaging.gridding_barrier()
-	if parser_args['sample_weighting'] == 'uniform':
-	  libimaging.weight_uniformly(ctypes.byref(params))
-  
   '''
   before compacting everything we better normalize
   '''
+  if parser_args['sample_weighting'] == 'uniform':
+    libimaging.weight_uniformly(ctypes.byref(params))
   libimaging.normalize(ctypes.byref(params))
-  
   '''
   See Smirnov I (2011) for description on conversion between correlation terms and stokes params for linearly polarized feeds
   See Synthesis Imaging II (1999) Pg. 9 for a description on conversion between correlation terms and stokes params for circularly polarized feeds

@@ -21,6 +21,7 @@ extern "C" {
     cudaStream_t compute_stream;
     gridding_parameters gpu_params;
     bool initialized = false;
+    normalization_base_type * normalization_counts;
     double get_gridding_walltime(){
       return gridding_walltime->duration();
     }
@@ -122,6 +123,15 @@ extern "C" {
 	  cudaSafeCall(cudaMalloc((void**)&gpu_params.antenna_jones_starting_indexes,sizeof(size_t) * (params.antenna_count + 1)));
 	  cudaSafeCall(cudaMalloc((void**)&gpu_params.jones_time_indicies_per_antenna,sizeof(size_t) * params.antenna_count * no_timesteps_needed));
 	}
+	size_t no_reduction_bins = (params.conv_support * 2 + 1) * (params.conv_support * 2 + 1);
+	normalization_counts = new normalization_base_type[params.num_facet_centres * params.cube_channel_dim_size * params.number_of_polarization_terms_being_gridded * no_reduction_bins]();
+	params.normalization_terms = normalization_counts;
+	cudaSafeCall(cudaMalloc((void**)&gpu_params.normalization_terms,sizeof(normalization_base_type) * params.num_facet_centres * 
+									params.cube_channel_dim_size * params.number_of_polarization_terms_being_gridded * 
+									no_reduction_bins));
+	cudaSafeCall(cudaMemset(gpu_params.normalization_terms,0,sizeof(normalization_base_type) * params.num_facet_centres * 
+									params.cube_channel_dim_size * params.number_of_polarization_terms_being_gridded * 
+									no_reduction_bins));
 	cudaSafeCall(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
     }
     void releaseLibrary() {
@@ -153,18 +163,41 @@ extern "C" {
 	cudaSafeCall(cudaFree(gpu_params.antenna_jones_starting_indexes));
 	cudaSafeCall(cudaFree(gpu_params.jones_time_indicies_per_antenna));
       }
+      cudaSafeCall(cudaFree(gpu_params.normalization_terms));
       cudaSafeCall(cudaStreamDestroy(compute_stream));
       delete gridding_walltime;
+      delete[] normalization_counts;
       cudaDeviceReset(); //leave the device in a safe state
     }
     void weight_uniformly(gridding_parameters & params){
-      throw std::runtime_error("Backend Unimplemented exception: weight_uniformly");
+      #define EPSILON 0.0000001f
+      gridding_barrier();
+      for (std::size_t f = 0; f < params.num_facet_centres; ++f)
+	for (std::size_t g = 0; g < params.cube_channel_dim_size; ++g)
+	  for (std::size_t y = 0; y < params.ny; ++y)
+	    for (std::size_t x = 0; x < params.nx; ++x){
+		grid_base_type count = EPSILON;
+		//accumulate all the sampling functions that contribute to the current grid
+		for (std::size_t c = 0; c < params.sampling_function_channel_count; ++c)
+		    count += (int)(params.channel_grid_indicies[c] == g) *
+			     real(params.sampling_function_buffer[((f*params.sampling_function_channel_count + c)*params.ny+y)*params.nx + x]);
+		count = 1/count;
+		//and apply to the continuous block of nx*ny*cube_channel grids (any temporary correlation term buffers should have been collapsed by this point)
+		for (size_t corr = 0; corr < params.number_of_polarization_terms_being_gridded; ++corr)
+		  params.output_buffer[(((f*params.cube_channel_dim_size + g)*params.number_of_polarization_terms_being_gridded+corr)*params.ny+y)*params.nx+x] *= count;
+	    }
     }
     void copy_back_grid_if_last_stamp(gridding_parameters & params,const gridding_parameters & gpu_params){
       if (params.is_final_data_chunk){
 	gridding_barrier();
 	cudaSafeCall(cudaMemcpy(params.output_buffer,gpu_params.output_buffer,sizeof(std::complex<grid_base_type>) * params.nx * params.ny * 
 				params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * params.num_facet_centres,
+				cudaMemcpyDeviceToHost));
+	size_t no_reduction_bins = (params.conv_support * 2 + 1) * (params.conv_support * 2 + 1);
+	cudaSafeCall(cudaMemcpy(params.normalization_terms,gpu_params.normalization_terms,
+				sizeof(normalization_base_type) * params.num_facet_centres * 
+				  params.cube_channel_dim_size * params.number_of_polarization_terms_being_gridded * 
+				  no_reduction_bins,
 				cudaMemcpyDeviceToHost));
       }  
     }
@@ -750,6 +783,7 @@ extern "C" {
       gridding_walltime->stop();
     }
     void grid_sampling_function(gridding_parameters & params){
+      gridding_barrier();
       gridding_walltime->start();
       printf("Gridding sampling function on the GPU...\n");    
       //copy everything that changed to the gpu
@@ -757,36 +791,19 @@ extern "C" {
 	gpu_params.row_count = params.row_count;
 	gpu_params.no_timestamps_read = params.no_timestamps_read;
 	gpu_params.is_final_data_chunk = params.is_final_data_chunk;
-	//pack and cpy only the necessary visibilities (it doesn't matter if we mod the array here it is not being used again afterwards
-	size_t ubound = params.row_count*params.channel_count;
+	//pack and cpy only the necessary parameters
 	cudaSafeCall(cudaHostRegister(params.spw_index_array,sizeof(unsigned int) * params.row_count,0));
 	cudaSafeCall(cudaHostRegister(params.uvw_coords,sizeof(imaging::uvw_coord<uvw_base_type>) * params.row_count,0));
-	cudaSafeCall(cudaHostRegister(params.flagged_rows,sizeof(bool) * params.row_count,0));
-	cudaSafeCall(cudaHostRegister(params.flags,sizeof(bool) * params.row_count * params.channel_count,0));
 	cudaSafeCall(cudaHostRegister(params.field_array,sizeof(unsigned int) * params.row_count,0));
 	cudaSafeCall(cudaHostRegister(params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1),0));
 	cudaSafeCall(cudaMemcpyAsync(gpu_params.uvw_coords,params.uvw_coords,sizeof(imaging::uvw_coord<uvw_base_type>) * params.row_count,cudaMemcpyHostToDevice,compute_stream));
 	cudaSafeCall(cudaMemcpyAsync(gpu_params.baseline_starting_indexes, params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1),cudaMemcpyHostToDevice,compute_stream));
 	cudaSafeCall(cudaMemcpyAsync(gpu_params.field_array,params.field_array,sizeof(unsigned int) * params.row_count,cudaMemcpyHostToDevice,compute_stream));
-	cudaSafeCall(cudaMemcpyAsync(gpu_params.flagged_rows,params.flagged_rows,sizeof(bool) * params.row_count,
-				     cudaMemcpyHostToDevice,compute_stream));
 	cudaSafeCall(cudaMemcpyAsync(gpu_params.spw_index_array,params.spw_index_array,sizeof(unsigned int) * params.row_count,
-				     cudaMemcpyHostToDevice,compute_stream));
-	//Do not parallelize this:
-	for (std::size_t i = 0; i < ubound; ++i){
-	    size_t r = i / params.channel_count;
-	    size_t c = i - r * params.channel_count;
-	    size_t compact_index = r*params.channel_count + c;
-	    size_t strided_index = (compact_index)*params.number_of_polarization_terms + params.polarization_index;
-	    params.flags[compact_index] = params.flags[strided_index];
-	}
-	cudaSafeCall(cudaMemcpyAsync(gpu_params.flags,params.flags,sizeof(bool) * params.row_count * params.channel_count,
 				     cudaMemcpyHostToDevice,compute_stream));
 	
 	cudaSafeCall(cudaHostUnregister(params.spw_index_array));
 	cudaSafeCall(cudaHostUnregister(params.uvw_coords));
-	cudaSafeCall(cudaHostUnregister(params.flagged_rows));
-	cudaSafeCall(cudaHostUnregister(params.flags));
 	cudaSafeCall(cudaHostUnregister(params.field_array));
 	cudaSafeCall(cudaHostUnregister(params.baseline_starting_indexes));
       }
@@ -820,38 +837,19 @@ extern "C" {
 	gpu_params.row_count = params.row_count;
 	gpu_params.no_timestamps_read = params.no_timestamps_read;
 	gpu_params.is_final_data_chunk = params.is_final_data_chunk;
-	//pack and cpy only the necessary visibilities (it doesn't matter if we mod the array here it is not being used again afterwards
-	size_t ubound = params.row_count*params.channel_count;
+	//cpy only the necessary fields
 	cudaSafeCall(cudaHostRegister(params.spw_index_array,sizeof(unsigned int) * params.row_count,0));
 	cudaSafeCall(cudaHostRegister(params.uvw_coords,sizeof(imaging::uvw_coord<uvw_base_type>) * params.row_count,0));
-	cudaSafeCall(cudaHostRegister(params.flagged_rows,sizeof(bool) * params.row_count,0));
-	cudaSafeCall(cudaHostRegister(params.flags,sizeof(bool) * params.row_count * params.channel_count,0));
 	cudaSafeCall(cudaHostRegister(params.field_array,sizeof(unsigned int) * params.row_count,0));
 	cudaSafeCall(cudaHostRegister(params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1),0));
 	cudaSafeCall(cudaMemcpyAsync(gpu_params.uvw_coords,params.uvw_coords,sizeof(imaging::uvw_coord<uvw_base_type>) * params.row_count,cudaMemcpyHostToDevice,compute_stream));
 	cudaSafeCall(cudaMemcpyAsync(gpu_params.baseline_starting_indexes, params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1),cudaMemcpyHostToDevice,compute_stream));
 	cudaSafeCall(cudaMemcpyAsync(gpu_params.field_array,params.field_array,sizeof(unsigned int) * params.row_count,cudaMemcpyHostToDevice,compute_stream));
-	cudaSafeCall(cudaMemcpyAsync(gpu_params.flagged_rows,params.flagged_rows,sizeof(bool) * params.row_count,
-				     cudaMemcpyHostToDevice,compute_stream));
 	cudaSafeCall(cudaMemcpyAsync(gpu_params.spw_index_array,params.spw_index_array,sizeof(unsigned int) * params.row_count,
-				     cudaMemcpyHostToDevice,compute_stream));
-	//Do not parallelize this:
-	for (std::size_t i = 0; i < ubound; ++i){
-	    size_t r = i / params.channel_count;
-	    size_t c = i - r * params.channel_count;
-	    size_t compact_index = r*params.channel_count + c;
-	    size_t strided_index = (compact_index)*params.number_of_polarization_terms + params.polarization_index;
-	    params.flags[compact_index] = params.flags[strided_index];
-	}
-	cudaSafeCall(cudaMemcpyAsync(gpu_params.visibility_weights,params.visibility_weights,sizeof(visibility_weights_base_type) * params.row_count * params.channel_count,
-				     cudaMemcpyHostToDevice,compute_stream));
-	cudaSafeCall(cudaMemcpyAsync(gpu_params.flags,params.flags,sizeof(bool) * params.row_count * params.channel_count,
 				     cudaMemcpyHostToDevice,compute_stream));
 	
 	cudaSafeCall(cudaHostUnregister(params.spw_index_array));
 	cudaSafeCall(cudaHostUnregister(params.uvw_coords));
-	cudaSafeCall(cudaHostUnregister(params.flagged_rows));
-	cudaSafeCall(cudaHostUnregister(params.flags));
 	cudaSafeCall(cudaHostUnregister(params.field_array));
 	cudaSafeCall(cudaHostUnregister(params.baseline_starting_indexes));
       }

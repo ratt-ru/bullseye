@@ -15,7 +15,29 @@ extern "C" {
       return total_inversion_time;
     }
     void normalize(gridding_parameters & params) {
-      printf("WARNING: GPU NORMALIZATION NOT IMPLEMENTED\n");
+      gridding_barrier();
+      size_t no_reduction_bins = (params.conv_support * 2 + 1) * (params.conv_support * 2 + 1);
+      /*
+       * Now normalize per facet, per channel accumulator grid and correlation
+       */
+      for (size_t f = 0; f < params.num_facet_centres; ++f){
+	 for (size_t ch = 0; ch < params.cube_channel_dim_size; ++ch){
+	    for (size_t corr = 0; corr < params.number_of_polarization_terms_being_gridded; ++corr){
+	      normalization_base_type norm_val = 0;
+	      for (size_t thid = 0; thid < no_reduction_bins; ++thid){
+		norm_val += params.normalization_terms[((f * params.cube_channel_dim_size + ch) * 
+							params.number_of_polarization_terms_being_gridded + corr) * no_reduction_bins + thid];
+	      }
+	      printf("Normalizing cube slice @ facet %lu, channel slice %lu, correlation term %lu with val %f\n",
+		     f,ch,corr,norm_val);
+	      std::complex<grid_base_type> * __restrict__ grid_ptr = params.output_buffer + 
+								     ((f * params.cube_channel_dim_size + ch) * 
+								     params.number_of_polarization_terms_being_gridded + corr) * params.ny * params.nx;
+	      for (size_t i = 0; i < params.ny * params.nx; ++i)
+		grid_ptr[i] /= norm_val;
+	    }
+	  }
+	}
     }
     void finalize(gridding_parameters & params) {
         gridding_barrier();

@@ -121,7 +121,8 @@ extern "C" {
 			     real(params.sampling_function_buffer[((f*params.sampling_function_channel_count + c)*params.ny+y)*params.nx + x]);
 		count = 1/count;
 		//and apply to the continuous block of nx*ny*cube_channel grids (any temporary correlation term buffers should have been collapsed by this point)
- 		params.output_buffer[((f*params.cube_channel_dim_size*params.number_of_polarization_terms_being_gridded + g)*params.ny+y)*params.nx+x] *= count;
+		for (size_t corr = 0; corr < params.number_of_polarization_terms_being_gridded; ++corr)
+		  params.output_buffer[(((f*params.cube_channel_dim_size + g)*params.number_of_polarization_terms_being_gridded+corr)*params.ny+y)*params.nx+x] *= count;
 	    }
     }
     void normalize(gridding_parameters & params){

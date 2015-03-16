@@ -73,6 +73,7 @@ namespace imaging {
 			int my_previous_u = 0;
 			int my_previous_v = 0;
 			size_t my_previous_spw = 0;
+			typename active_correlation_gridding_policy::active_trait::normalization_accumulator_type normalization_term = 0;
 			for (size_t t = 0; t < baseline_num_timestamps; ++t){
 				size_t row = starting_row_index + t;
 				size_t spw = params.spw_index_array[row];
@@ -123,6 +124,7 @@ namespace imaging {
 					my_previous_u = my_current_u;
 					my_previous_v = my_current_v;
 					my_previous_spw = spw;
+					//already set: normalization_term = 0;
 				}
 				//if u and v have changed we must dump everything to memory at previous_u and previous_v and reset
 				if ((my_current_u != my_previous_u || my_current_v != my_previous_v || my_previous_spw != spw) && channel_enabled){
@@ -138,16 +140,25 @@ namespace imaging {
 												    my_previous_v,
 												    my_grid_accum
 												   );
+						active_correlation_gridding_policy::update_normalization_accumulator(params,normalization_term,
+														     my_facet_id,
+														     channel_grid_index,
+														     conv_full_support,
+														     my_conv_u - 1,
+														     my_conv_v - 1);
 					}
 					my_grid_accum = active_correlation_gridding_policy::active_trait::vis_type::zero();
 					my_previous_u = my_current_u;
 					my_previous_v = my_current_v;
+					my_previous_spw = spw;
+					normalization_term = 0; //reset for the new spw
 				}
 				//Lets read the convolution weights from the the precomputed filter
 				convolution_base_type conv_weight = shared_conv[closest_conv_u] * shared_conv[closest_conv_v];
 				//then multiply-add into the accumulator
-				my_grid_accum += vis * (combined_vis_weight * conv_weight);
-				
+				typename active_correlation_gridding_policy::active_trait::vis_weight_type conv_weighted_vis_weight = combined_vis_weight * conv_weight;
+				my_grid_accum += vis * conv_weighted_vis_weight;
+				normalization_term += vector_promotion<visibility_weights_base_type,normalization_base_type>(conv_weighted_vis_weight);
 				//Okay if this is the last channel then dump whatever has been accumulated since the last dump
 				if (channel_enabled && t == baseline_num_timestamps-1){
 				    if (my_previous_u + conv_full_support < params.ny && my_previous_u + conv_full_support  < params.nx &&
@@ -161,6 +172,12 @@ namespace imaging {
 											    my_previous_v,
 											    my_grid_accum
 											   );
+					active_correlation_gridding_policy::update_normalization_accumulator(params,normalization_term,
+													     my_facet_id,
+													     channel_grid_index,
+													     conv_full_support,
+													     my_conv_u - 1,
+													     my_conv_v - 1);
 				    }
 				}
 			}
