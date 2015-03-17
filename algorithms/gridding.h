@@ -77,7 +77,8 @@ namespace imaging {
 		-(Ny * celly)/2 < m < (Ny * celly)/2
 		Scaling the uv coordinates will translate to scaling the FFT
 		*/
-		std::fesetround(FE_TONEAREST);
+// 		std::fesetround(FE_TONEAREST);
+		std::fesetround(FE_DOWNWARD);
                 uvw_base_type u_scale=nx*cellx.getValue("rad");
                 uvw_base_type v_scale=ny*celly.getValue("rad");
 		auto uv_scale = uvw_coord<uvw_base_type>(u_scale,-v_scale);

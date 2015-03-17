@@ -115,8 +115,8 @@ namespace imaging {
 				//account for interpolation error (we select the closest sample from the oversampled convolution filter)
 				uvw_base_type cont_current_u = uvw._u + grid_centre_offset_x;
 				uvw_base_type cont_current_v = uvw._v + grid_centre_offset_y;
-				int my_current_u = lrintf(cont_current_u);
-				int my_current_v = lrintf(cont_current_v);
+				int my_current_u = cont_current_u;
+				int my_current_v = cont_current_v;
 				uvw_base_type frac_u = -cont_current_u + (uvw_base_type)my_current_u;
 				uvw_base_type frac_v = -cont_current_v + (uvw_base_type)my_current_v;
 				size_t closest_conv_u = ((uvw_base_type)my_conv_u + frac_u)*params.conv_oversample;
