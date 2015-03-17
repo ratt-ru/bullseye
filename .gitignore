@@ -3,6 +3,7 @@
 *.lo
 *.o
 *.obj
+*.pyc
 
 # Compiled Dynamic libraries
 *.so
@@ -19,3 +20,10 @@
 *.exe
 *.out
 *.app
+
+# Build Directories
+build/
+.kdev4/
+
+# Regeneratable project files (dev box specific config)
+bullseye.kdev4
