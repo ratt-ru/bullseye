@@ -830,6 +830,7 @@ extern "C" {
       gridding_walltime->stop();
     }
     void facet_sampling_function(gridding_parameters & params){
+      gridding_barrier();
       gridding_walltime->start();
       printf("Faceting sampling function on the GPU...\n");    
       //copy everything that changed to the gpu
