@@ -68,21 +68,22 @@ namespace imaging {
 		//we must keep seperate accumulators per channel, so we need to bring these loops outward (contrary to Romein's paper)
 		{
 		    typename active_correlation_gridding_policy::active_trait::accumulator_type my_grid_accum;
-		    for (size_t c = 0; c < params.channel_count; ++c){	
-			my_grid_accum = active_correlation_gridding_policy::active_trait::vis_type::zero();
-			int my_previous_u = 0;
-			int my_previous_v = 0;
-			size_t my_previous_spw = 0;
-			typename active_correlation_gridding_policy::active_trait::normalization_accumulator_type normalization_term = 0;
-			for (size_t t = 0; t < baseline_num_timestamps; ++t){
+		    for (size_t spw = 0; spw < params.spw_count; ++spw){
+			for (size_t c = 0; c < params.channel_count; ++c){	
+			    my_grid_accum = active_correlation_gridding_policy::active_trait::vis_type::zero();
+			    int my_previous_u = 0;
+			    int my_previous_v = 0;
+			    typename active_correlation_gridding_policy::active_trait::normalization_accumulator_type normalization_term = 0;
+			    //read all the stuff that is only dependent on the current spw and channel
+			    size_t flat_indexed_spw_channel = spw * params.channel_count + c;
+			    bool channel_enabled = params.enabled_channels[flat_indexed_spw_channel];
+			    size_t channel_grid_index;
+			    active_correlation_gridding_policy::read_channel_grid_index(params,flat_indexed_spw_channel,channel_grid_index);
+			    reference_wavelengths_base_type ref_wavelength = 1 / params.reference_wavelengths[flat_indexed_spw_channel];
+			    for (size_t t = 0; t < baseline_num_timestamps; ++t){
 				size_t row = starting_row_index + t;
-				size_t spw = params.spw_index_array[row];
-				//read all the stuff that is only dependent on the current spw and channel
-				size_t flat_indexed_spw_channel = spw * params.channel_count + c;
-				bool channel_enabled = params.enabled_channels[flat_indexed_spw_channel];
-				size_t channel_grid_index;
-				active_correlation_gridding_policy::read_channel_grid_index(params,flat_indexed_spw_channel,channel_grid_index);
-				reference_wavelengths_base_type ref_wavelength = 1 / params.reference_wavelengths[flat_indexed_spw_channel];
+				size_t row_spw_id = params.spw_index_array[row];
+				bool row_is_in_current_spw = row_spw_id == spw;
 				//read all the data we need for gridding
 				imaging::uvw_coord<uvw_base_type> uvw = params.uvw_coords[row];
 				bool row_flagged = params.flagged_rows[row];
@@ -97,7 +98,8 @@ namespace imaging {
 				active_correlation_gridding_policy::read_and_apply_antenna_jones_terms(params,row,vis);
 				//compute the weighted visibility and promote the flags to integers so that we don't have unnecessary branch diversion here
 				typename active_correlation_gridding_policy::active_trait::vis_flag_type vis_flagged = !(visibility_flagged || row_flagged) && 
-														       channel_enabled && row_is_in_field_being_imaged;
+														       channel_enabled && row_is_in_field_being_imaged &&
+														       row_is_in_current_spw;
  				typename active_correlation_gridding_policy::active_trait::vis_weight_type combined_vis_weight = 
 					 vis_weight * vector_promotion<int,visibility_base_type>(vector_promotion<bool,int>(vis_flagged));
 				uvw._u *= ref_wavelength;
@@ -123,11 +125,10 @@ namespace imaging {
 				if (t == 0) {
 					my_previous_u = my_current_u;
 					my_previous_v = my_current_v;
-					my_previous_spw = spw;
 					//already set: normalization_term = 0;
 				}
 				//if u and v have changed we must dump everything to memory at previous_u and previous_v and reset
-				if ((my_current_u != my_previous_u || my_current_v != my_previous_v || my_previous_spw != spw) && channel_enabled){
+				if ((my_current_u != my_previous_u || my_current_v != my_previous_v) && channel_enabled){
 					//don't you dare go off the grid:
 					if (my_previous_v + conv_full_support  < params.ny && my_previous_u + conv_full_support  < params.nx &&
 					    my_previous_v < params.ny && my_previous_u < params.nx){
@@ -140,18 +141,10 @@ namespace imaging {
 												    my_previous_v,
 												    my_grid_accum
 												   );
-						active_correlation_gridding_policy::update_normalization_accumulator(params,normalization_term,
-														     my_facet_id,
-														     channel_grid_index,
-														     conv_full_support,
-														     my_conv_u - 1,
-														     my_conv_v - 1);
 					}
 					my_grid_accum = active_correlation_gridding_policy::active_trait::vis_type::zero();
 					my_previous_u = my_current_u;
 					my_previous_v = my_current_v;
-					my_previous_spw = spw;
-					normalization_term = 0; //reset for the new spw
 				}
 				//Lets read the convolution weights from the the precomputed filter
 				convolution_base_type conv_weight = shared_conv[closest_conv_u] * shared_conv[closest_conv_v];
@@ -159,29 +152,27 @@ namespace imaging {
 				typename active_correlation_gridding_policy::active_trait::vis_weight_type conv_weighted_vis_weight = combined_vis_weight * conv_weight;
 				my_grid_accum += vis * conv_weighted_vis_weight;
 				normalization_term += vector_promotion<visibility_weights_base_type,normalization_base_type>(conv_weighted_vis_weight);
-				//Okay if this is the last channel then dump whatever has been accumulated since the last dump
-				if (channel_enabled && t == baseline_num_timestamps-1){
-				    if (my_previous_u + conv_full_support < params.ny && my_previous_u + conv_full_support  < params.nx &&
-					my_previous_v < params.ny && my_previous_u < params.nx){
-					active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
-											    grid_size_in_floats,
-											    params.nx,
-											    channel_grid_index,
-											    params.number_of_polarization_terms_being_gridded,
-											    my_previous_u,
-											    my_previous_v,
-											    my_grid_accum
-											   );
-					active_correlation_gridding_policy::update_normalization_accumulator(params,normalization_term,
-													     my_facet_id,
-													     channel_grid_index,
-													     conv_full_support,
-													     my_conv_u - 1,
-													     my_conv_v - 1);
-				    }
-				}
-			}
-		    }
+			    } //time
+			    //Okay time to dump everything since the last uv shift
+			    if (my_previous_u + conv_full_support < params.ny && my_previous_u + conv_full_support  < params.nx &&
+				my_previous_v < params.ny && my_previous_u < params.nx){
+				active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
+										    grid_size_in_floats,
+										    params.nx,
+										    channel_grid_index,
+										    params.number_of_polarization_terms_being_gridded,
+										    my_previous_u,
+										    my_previous_v,
+										    my_grid_accum);
+				active_correlation_gridding_policy::update_normalization_accumulator(params,normalization_term,
+												     my_facet_id,
+												     channel_grid_index,
+												     conv_full_support,
+												     my_conv_u - 1,
+												     my_conv_v - 1);
+			    }//dumping last accumulation
+			}//channel
+		    }//spw
 		}
 	}
 }
