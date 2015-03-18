@@ -1,12 +1,10 @@
 #include <vector>
-#include <algorithm>
 #include <numeric>
 #include <cstring>
 
 #include "gpu_wrapper.h"
 #include "dft.h"
 #include "templated_gridder.h"
-
 #include "timer.h"
 #include "correlation_gridding_traits.h"
 #include "correlation_gridding_policies.h"
@@ -14,16 +12,22 @@
 #include "phase_transform_policies.h"
 #include "jones_2x2.h"
 
+#include "fft_and_repacking_routines.h"
 #define NO_THREADS_PER_BLOCK_DIM 256
 
 extern "C" {
     utils::timer * gridding_walltime;
+    utils::timer * inversion_timer;
+    imaging::ifft_machine * fftw_ifft_machine;
     cudaStream_t compute_stream;
     gridding_parameters gpu_params;
     bool initialized = false;
     normalization_base_type * normalization_counts;
     double get_gridding_walltime(){
       return gridding_walltime->duration();
+    }
+    double get_inversion_walltime() {
+      return inversion_timer->duration();
     }
     void gridding_barrier(){
       cudaSafeCall(cudaStreamSynchronize(compute_stream));
@@ -73,6 +77,8 @@ extern "C" {
             throw std::runtime_error("Cannot find suitable GPU device. Giving up");
 	cudaSafeCall(cudaStreamCreateWithFlags(&compute_stream,cudaStreamNonBlocking));
 	gridding_walltime = new utils::timer(compute_stream);
+	inversion_timer = new utils::timer(compute_stream);
+	fftw_ifft_machine = new imaging::ifft_machine(params);
 	//alloc memory for all the arrays on the gpu at the beginning of execution...
 	gpu_params = params;
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.visibilities, sizeof(std::complex<visibility_base_type>) * params.chunk_max_row_count*params.channel_count*params.number_of_polarization_terms_being_gridded));
@@ -166,6 +172,8 @@ extern "C" {
       cudaSafeCall(cudaFree(gpu_params.normalization_terms));
       cudaSafeCall(cudaStreamDestroy(compute_stream));
       delete gridding_walltime;
+      delete inversion_timer;
+      delete fftw_ifft_machine;
       delete[] normalization_counts;
       cudaDeviceReset(); //leave the device in a safe state
     }
@@ -209,6 +217,53 @@ extern "C" {
 				cudaMemcpyDeviceToHost));
       }  
     }
+    void normalize(gridding_parameters & params) {
+      gridding_barrier();
+      size_t no_reduction_bins = (params.conv_support * 2 + 1) * (params.conv_support * 2 + 1);
+      /*
+       * Now normalize per facet, per channel accumulator grid and correlation
+       */
+      for (size_t f = 0; f < params.num_facet_centres; ++f){
+	 for (size_t ch = 0; ch < params.cube_channel_dim_size; ++ch){
+	    for (size_t corr = 0; corr < params.number_of_polarization_terms_being_gridded; ++corr){
+	      normalization_base_type norm_val = 0;
+	      for (size_t thid = 0; thid < no_reduction_bins; ++thid){
+		norm_val += params.normalization_terms[((f * params.cube_channel_dim_size + ch) * 
+							params.number_of_polarization_terms_being_gridded + corr) * no_reduction_bins + thid];
+	      }
+	      printf("Normalizing cube slice @ facet %lu, channel slice %lu, correlation term %lu with val %f\n",
+		     f,ch,corr,norm_val);
+	      std::complex<grid_base_type> * __restrict__ grid_ptr = params.output_buffer + 
+								     ((f * params.cube_channel_dim_size + ch) * 
+								     params.number_of_polarization_terms_being_gridded + corr) * params.ny * params.nx;
+	      for (size_t i = 0; i < params.ny * params.nx; ++i)
+		grid_ptr[i] /= norm_val;
+	    }
+	  }
+	}
+    }
+    void finalize(gridding_parameters & params) {
+        gridding_barrier();
+	cudaStream_t inversion_timing_stream;
+	cudaSafeCall(cudaStreamCreateWithFlags(&inversion_timing_stream,cudaStreamNonBlocking));
+	utils::timer inversion_walltime(inversion_timing_stream);
+	inversion_walltime.start();
+        fftw_ifft_machine->repack_and_ifft_uv_grids(params);
+	inversion_walltime.stop();
+	cudaSafeCall(cudaStreamDestroy(inversion_timing_stream));
+    }
+    void finalize_psf(gridding_parameters & params) {
+        gridding_barrier();
+	cudaStream_t inversion_timing_stream;
+	cudaSafeCall(cudaStreamCreateWithFlags(&inversion_timing_stream,cudaStreamNonBlocking));
+	utils::timer inversion_walltime(inversion_timing_stream);
+	inversion_walltime.start();
+	fftw_ifft_machine->repack_and_ifft_sampling_function_grids(params);
+	inversion_walltime.stop();
+	cudaSafeCall(cudaStreamDestroy(inversion_timing_stream));
+    }
+    
+    
     void grid_single_pol(gridding_parameters & params){
       gridding_walltime->start();
       printf("Gridding single correlation on the GPU...\n");    

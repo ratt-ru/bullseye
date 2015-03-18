@@ -12,5 +12,5 @@ include_directories(/usr/include/casacore/ /usr/local/include/casacore)
 set(CMAKE_BUILD_TYPE Release)
 
 set(CMAKE_CXX_FLAGS "-lfftw3 -std=c++0x -O3 -pthread -fopenmp -DBULLSEYE_DOUBLE")
-add_library(imaging64 SHARED ../wrapper.cpp)
+add_library(imaging64 SHARED ../wrapper.cpp ../../algorithms/fft_shift_utils.cpp ../../algorithms/fft_and_repacking_routines.cpp)
 target_link_libraries(imaging64 casa_casa fftw3 fftw3f)
