@@ -156,7 +156,7 @@ namespace imaging {
 			    } //time
 			    //Okay time to dump everything since the last uv shift
 			    if (my_previous_u + conv_full_support < params.ny && my_previous_u + conv_full_support  < params.nx &&
-				my_previous_v < params.ny && my_previous_u < params.nx){
+				my_previous_v < params.ny && my_previous_u < params.nx && channel_enabled){
 				active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
 										    grid_size_in_floats,
 										    params.nx,
