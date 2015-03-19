@@ -119,6 +119,9 @@ extern "C" {
 	fftw_ifft_machine->repack_and_ifft_sampling_function_grids(params);
 	inversion_timer.stop();
     }
+    void repack_input_data(gridding_parameters & params){
+      throw std::runtime_error("Unimplemented: CPU data repacking not necessary");
+    }
     void grid_single_pol(gridding_parameters & params) {
         gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();

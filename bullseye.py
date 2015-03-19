@@ -421,8 +421,9 @@ if __name__ == "__main__":
       arr_time_indicies_cpy = data._time_indicies #gridding will operate with deep copied data
       params.timestamp_ids = arr_time_indicies_cpy.ctypes.data_as(ctypes.c_void_p)
       if parser_args['use_back_end'] == 'GPU':
-	arr_starting_indicies_cpy = data._starting_indexes
-	params.baseline_starting_indexes = arr_starting_indicies_cpy.ctypes.data_as(ctypes.c_void_p)
+	starting_indexes = np.zeros([data._no_baselines+1],dtype=np.intp) #this must be n(n-1)/2+n+1 since we want to be able to compute the number of timestamps for the last baseline
+	params.baseline_starting_indexes = starting_indexes.ctypes.data_as(ctypes.c_void_p)
+	libimaging.repack_input_data(ctypes.byref(params))
       '''
       no need to grid more than one of the correlations if the user isn't interrested in imaging one of the stokes terms (I,Q,U,V) or the stokes terms are the correlation products:
       '''

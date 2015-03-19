@@ -8,6 +8,7 @@ extern "C" {
     void releaseLibrary();
     void weight_uniformly(gridding_parameters & params);
     void normalize(gridding_parameters & params);
+    void repack_input_data(gridding_parameters & params);
     void finalize(gridding_parameters & params);
     void finalize_psf(gridding_parameters & params);
     void grid_single_pol(gridding_parameters & params);

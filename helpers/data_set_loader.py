@@ -270,62 +270,6 @@ class data_set_loader(object):
 	  self._no_timestamps_read = timestamp_index + 1  #the last timestamp may be partially read depending on memory constraints
 	
 	'''
-	Romein's gridding algorithm requires ordered baselines. We'll therefore count the number of timestamps per baseline
-	(some baselines may not be present in one or more timestamps) and compute prescan of this count in order to get the starting
-	positions per baseline.
-	'''
-	if do_romein_baseline_ordering:
-	  def baseline_index(a1,a2):
-		slow_changing_antenna_index = min(self._arr_antenna_1[r],self._arr_antenna_2[r])
-		#the unique index per baseline is given by a quadratic series on the slow-varying index plus the fast varying index...
-		baseline_flat_index = (slow_changing_antenna_index*(-slow_changing_antenna_index + (2*self._no_antennae + 1))) // 2 + abs(self._arr_antenna_2[r] - self._arr_antenna_1[r])
-		return baseline_flat_index
-
-	  self._baseline_timestamp_count = np.zeros([self._no_baselines],dtype=np.intp)
-	  self._starting_indexes = np.zeros([self._no_baselines+1],dtype=np.intp) #this must be n(n-1)/2+n+1 since we want to be able to compute the number of timestamps for the last baseline
-	  current_baseline_timestamp_index = np.zeros([self._no_baselines],dtype=np.intp)
-	  with data_set_loader.time_to_load_chunks:
-		for r in range(0,no_rows): #bin the data according to index
-			bi = baseline_index(self._arr_antenna_1[r],self._arr_antenna_2[r])
-			self._baseline_timestamp_count[bi] += 1
-		self._starting_indexes[1:len(self._baseline_timestamp_count)+1] = np.cumsum(self._baseline_timestamp_count) #this will give us the prescan operator
-	
-	  tmp_uvw = np.zeros([no_rows,3],dtype=base_types.uvw_type)
-	  tmp_data = np.zeros([no_rows,self._no_channels,self._no_polarization_correlations],dtype=base_types.visibility_type)
-	  tmp_weights = np.ones([no_rows,self._no_channels,self._no_polarization_correlations],dtype=base_types.weight_type)
-	  tmp_flags = np.zeros([no_rows,self._no_channels,self._no_polarization_correlations],dtype=np.bool_)
-	  tmp_flag_rows = np.zeros([no_rows],dtype=np.bool_)
-	  tmp_data_desc = np.empty([no_rows],dtype=np.intc)
-	  tmp_ant_1 = np.empty([no_rows],dtype=np.intc)
-	  tmp_ant_2 = np.empty([no_rows],dtype=np.intc)
-	  tmp_field = np.empty([no_rows],dtype=np.intc)
-	  tmp_time = np.empty([no_rows],dtype=np.intp)
-	  with data_set_loader.time_to_load_chunks:
-	    for r in range(0,no_rows):
-		bi = baseline_index(self._arr_antenna_1[r],self._arr_antenna_2[r])
-		rearanged_index = current_baseline_timestamp_index[bi] + self._starting_indexes[bi]
-		current_baseline_timestamp_index[bi] += 1
-		tmp_uvw[rearanged_index] = self._arr_uvw[r,:]
-		tmp_data[rearanged_index,:,:] = self._arr_data[r,:,:]
-		tmp_weights[rearanged_index,:] = self._arr_weights[r,:]
-		tmp_flags[rearanged_index,:] = self._arr_flaged[r,:]
-		tmp_flag_rows[rearanged_index] = self._arr_flagged_rows[r]
-		tmp_data_desc[rearanged_index] = self._description_col[r]
-		tmp_ant_1[rearanged_index] = self._arr_antenna_1[r]
-		tmp_ant_2[rearanged_index] = self._arr_antenna_2[r]
-		tmp_field[rearanged_index] = self._row_field_id[r]
-		tmp_time[rearanged_index] = self._time_indicies[r]
-	  self._arr_uvw = tmp_uvw
-	  self._arr_data = tmp_data
-	  self._arr_weights = tmp_weights
-	  self._arr_flaged = tmp_flags
-	  self._arr_flagged_rows = tmp_flag_rows
-	  self._description_col = tmp_data_desc
-	  self._arr_antenna_1 = tmp_ant_1
-	  self._arr_antenna_2 = tmp_ant_2
-	  self._row_field_id = tmp_field
-	  self._time_indicies = tmp_time
-	'''
 	Read set of jones matricies from disk
 	'''
 	if self._should_read_jones_terms:

@@ -262,7 +262,101 @@ extern "C" {
 	inversion_walltime.stop();
 	cudaSafeCall(cudaStreamDestroy(inversion_timing_stream));
     }
-    
+    long compute_baseline_index(long a1, long a2, long no_antennae){
+      //There is a quadratic series expression relating a1 and a2 to a unique baseline index (can be found by the double difference method)
+      //Let slow varying index be S = min(a1,a2)
+      //The goal is to find the number of fast varying terms (as the slow varying terms increase these get fewer and fewer, because we
+      //only consider unique baselines and not the negative baselines)
+      //B = (-S^2 + 2*S*#Ant + S) / 2 + diff between the slowest and fastest varying antenna
+      long slow_changing_antenna_index = std::min(a1,a2);
+      return (slow_changing_antenna_index*(-slow_changing_antenna_index + (2*no_antennae + 1))) / 2 + std::abs(a1 - a2);
+    }
+    void repack_input_data(gridding_parameters & params){
+	//Romein's gridding strategy requires that we repack things per baseline
+	using namespace std;
+	using namespace imaging;
+	//this expects ||params.baseline_staring_indexes|| == N*(N-1)/2 + N + 1 (because we want to implicitly encode the size of the last baseline)
+	//This section will compute the prescan operation over addition
+	{
+	  memset((void*)params.baseline_starting_indexes,0,sizeof(size_t)*(params.baseline_count + 1));
+	  for (size_t r = 0; r < params.row_count; ++r){
+	    size_t bi = compute_baseline_index(params.antenna_1_ids[r],params.antenna_2_ids[r],params.antenna_count);
+	    ++params.baseline_starting_indexes[bi+1];
+	  }
+	  partial_sum(params.baseline_starting_indexes,
+		      params.baseline_starting_indexes + params.baseline_count + 1,
+		      params.baseline_starting_indexes);
+	}
+	//Now alloc temp storage and run through the rows again to copy the data per baseline
+	{
+	  //these are all sizes of each of the columns specified in the NRAO Measurement Set v2.0 definition (http://casa.nrao.edu/Memos/229.html)
+	  vector<uvw_coord<uvw_base_type> > tmp_uvw(params.row_count,0);
+	  vector<std::complex<visibility_base_type> > tmp_data(params.row_count*params.channel_count*params.number_of_polarization_terms,0);
+	  vector<visibility_weights_base_type> tmp_weights(params.row_count*params.channel_count*params.number_of_polarization_terms,1);
+	  typedef uint8_t std_bool; //something is wrong with nv_bool... cant get the address of the damn thing so lets just copy bytes
+	  vector<std_bool> tmp_flags(params.row_count*params.channel_count*params.number_of_polarization_terms,0);
+	  vector<std_bool> tmp_flag_rows(params.row_count,0);
+	  vector<unsigned int> tmp_data_desc(params.row_count,0);
+	  vector<unsigned int> tmp_ant_1(params.row_count,0);
+	  vector<unsigned int> tmp_ant_2(params.row_count,0);
+	  vector<unsigned int> tmp_field(params.row_count,0);
+	  vector<size_t> tmp_time(params.row_count,0);
+	  vector<size_t> current_baseline_timestamp_index(params.baseline_count,0);
+	  //reorder per baseline
+	  for (size_t r = 0; r < params.row_count; ++r){
+		size_t bi = compute_baseline_index(params.antenna_1_ids[r],params.antenna_2_ids[r],params.antenna_count);
+		size_t rearanged_index = current_baseline_timestamp_index[bi] + params.baseline_starting_indexes[bi];
+		++current_baseline_timestamp_index[bi];
+		tmp_uvw[rearanged_index] = ((uvw_coord<uvw_base_type> *)(params.uvw_coords))[r];
+		memcpy((void*)(&tmp_data[rearanged_index*params.channel_count*params.number_of_polarization_terms]),
+		       (void*)(params.visibilities + r*params.channel_count*params.number_of_polarization_terms),
+		       params.channel_count*params.number_of_polarization_terms * sizeof(std::complex<visibility_base_type>));
+		memcpy((void*)(&tmp_weights[rearanged_index*params.channel_count*params.number_of_polarization_terms]),
+		       (void*)(params.visibility_weights + r*params.channel_count*params.number_of_polarization_terms),
+		       params.channel_count*params.number_of_polarization_terms * sizeof(visibility_weights_base_type));
+		memcpy((void*)(&tmp_flags[rearanged_index*params.channel_count*params.number_of_polarization_terms]),
+		       (void*)(params.flags + r*params.channel_count*params.number_of_polarization_terms),
+		       params.channel_count*params.number_of_polarization_terms * sizeof(std_bool));
+		tmp_flag_rows[rearanged_index] = params.flagged_rows[r];
+		tmp_data_desc[rearanged_index] = params.spw_index_array[r];
+		tmp_ant_1[rearanged_index] = params.antenna_1_ids[r];
+		tmp_ant_2[rearanged_index] = params.antenna_2_ids[r];
+		tmp_field[rearanged_index] = params.field_array[r];
+		tmp_time[rearanged_index] = params.timestamp_ids[r];
+	  }
+	  //copy back to python variables
+	  memcpy((void*)(params.uvw_coords),
+		 (void*)(&tmp_uvw[0]),
+		 params.row_count * sizeof(uvw_coord<uvw_base_type>));
+	  memcpy((void*)(params.visibilities),
+		 (void*)(&tmp_data[0]),
+		 params.row_count*params.channel_count*params.number_of_polarization_terms * sizeof(std::complex<visibility_base_type>));
+	  memcpy((void*)(params.visibility_weights),
+		 (void*)(&tmp_weights[0]),
+		 params.row_count*params.channel_count*params.number_of_polarization_terms * sizeof(visibility_weights_base_type));
+	  memcpy((void*)(params.flags),
+		 (void*)(&tmp_flags[0]),
+		 params.row_count*params.channel_count*params.number_of_polarization_terms * sizeof(std_bool));
+	  memcpy((void*)(params.flagged_rows),
+		 (void*)(&tmp_flag_rows[0]),
+		 params.row_count * sizeof(std_bool));
+	  memcpy((void*)(params.spw_index_array),
+		 (void*)(&tmp_data_desc[0]),
+		 params.row_count * sizeof(unsigned int));
+	  memcpy((void*)(params.antenna_1_ids),
+		 (void*)(&tmp_ant_1[0]),
+		 params.row_count * sizeof(unsigned int));
+	  memcpy((void*)(params.antenna_2_ids),
+		 (void*)(&tmp_ant_2[0]),
+		 params.row_count * sizeof(unsigned int));
+	  memcpy((void*)(params.field_array),
+		 (void*)(&tmp_field[0]),
+		 params.row_count * sizeof(unsigned int));
+	  memcpy((void*)(params.timestamp_ids),
+		 (void*)(&tmp_time[0]),
+		 params.row_count * sizeof(size_t));
+	}
+    }
     
     void grid_single_pol(gridding_parameters & params){
       gridding_walltime->start();
