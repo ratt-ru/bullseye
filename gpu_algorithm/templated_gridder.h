@@ -10,8 +10,9 @@ namespace imaging {
 		This is a gridding kernel following Romeins distribution stategy.
 		This should be launched with 
 			block dimensions: {THREADS_PER_BLOCK,1,1}
-			blocks per grid: {minimum number of blocks required to run baselines*conv_support_size*num_facets^^2 threads,
+			blocks per grid: {minimum number of blocks required to run baselines*(conv_support_size^2)*num_facets threads,
 					  1,1}
+			shared memory: sizeof(conv_base_type) * (2*conv_support + 1 + 2) * conv_oversample
 	 */
 	template <typename active_correlation_gridding_policy,
 		  typename active_baseline_transformation_policy,
