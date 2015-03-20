@@ -2,7 +2,9 @@ bullseye
 ========
 
 A multithreaded CPU & GPU-based facet imager
+
 (C) Benjamin Hugo, James Gain, Oleg Smirnov and Cyril Tasse (2014-2015)
+
 Dependencies:
   1. Python 2.7.6
   2. casacore
@@ -20,12 +22,15 @@ Dependencies:
   14. Montage (available: http://montage.ipac.caltech.edu/index.html). Montage's bin folder must be in the PATH
   15. CfitsIO
   16. WcsLib
+
 Build instructions (outputs CPU and GPU single and double precision libraries)
 - Create a "build" folder inside your cloned copy of bullseye
 - "cd build && cmake ../ && make"
+
 Run instructions
 - Ensure your current working directory is bullseye's root directory
 - "./bullseye.py --help" to display a full list of options
 - Enjoy
+
 Toy GUI is available (proof of concept demonstrator for targetted faceting)
 - "./bullseye_frontend.py"
