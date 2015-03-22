@@ -65,6 +65,7 @@ class frmMain:
 		self.__change_visibilities()
 		
 	def on_cvsLowRes_draw(self,widget,cr):
+		cairo.Context.set_source_rgb(cr, 0, 0, 0);
 		if self._low_res_image != None:
 			rect = self._builder.get_object("cvsLowRes").get_allocation()
 			img_height = self._low_res_image.get_height()
@@ -72,6 +73,28 @@ class frmMain:
 			cr.scale(rect.width/float(img_width),rect.height/float(img_height))
 			cr.set_source_surface(self._low_res_image,0,0)	
 			cr.paint()
+			
+			
+			model = self._builder.get_object("lstFacetingProperties")
+			itr = model.get_iter(0)
+			facet_size_l = int(model.get_value(itr,1))
+			itr = model.iter_next(itr)
+			facet_size_m = int(model.get_value(itr,1))
+			itr = model.iter_next(itr)
+			facet_cell_l = float(model.get_value(itr,1))
+			itr = model.iter_next(itr)
+			facet_cell_m = float(model.get_value(itr,1))
+		
+			selection_box_height = int(self._img_cell_l / facet_cell_l * facet_size_l)
+			selection_box_width = int(self._img_cell_m / facet_cell_m * facet_size_m)
+		
+			cairo.Context.set_source_rgb(cr, 0, 0.75, 0)
+			cairo.Context.set_line_width(cr, 5)
+			cairo.Context.move_to(cr, 0, 0)
+			cairo.Context.rectangle(cr, self._l_pos-(selection_box_width//2), 
+						self._m_pos-(selection_box_height//2), 
+						selection_box_width, selection_box_height)
+			cairo.Context.stroke_preserve(cr)
 		else:	
 			text = "Create low resolution image first before faceting"
 			cairo.Context.select_font_face (cr, "Sans",cairo.FONT_SLANT_NORMAL,cairo.FONT_WEIGHT_NORMAL)
@@ -79,11 +102,11 @@ class frmMain:
 			cairo.Context.set_font_size (cr, 12.0)
 			(x_bearing,y_bearing,width,height,x_advance,y_advance) = cairo.Context.text_extents(cr,text)
 			rect = self._builder.get_object("cvsLowRes").get_allocation()
-			x = rect.width/2-(width/2 + x_bearing);
-			y = rect.height/2-(height/2 + y_bearing);
-			cairo.Context.move_to(cr, x, y);
-			cairo.Context.show_text (cr,text);
-
+			x = rect.width/2-(width/2 + x_bearing)
+			y = rect.height/2-(height/2 + y_bearing)
+			cairo.Context.move_to(cr, x, y)
+			cairo.Context.show_text (cr,text)
+		
 	def on_mitExit_click(self,widget):
 		Gtk.main_quit()
 
@@ -162,18 +185,18 @@ class frmMain:
 		if self._low_res_image != None: 
 			sbrMain = self._builder.get_object("sbrMain")
 			sbrMain.remove_all(sbrMain.get_context_id("CursorPos"))
-			
-			rect = self._builder.get_object("cvsLowRes").get_allocation()
+			handle = self._builder.get_object("cvsLowRes")
+			handle.queue_draw()
+			rect = handle.get_allocation()
                         img_height = self._low_res_image.get_height()
                         img_width = self._low_res_image.get_width()
-                        l_pos = int(event.x/float(rect.width) * img_width) 
-			m_pos = int(event.y/float(rect.height) * img_height) 
+                        
+                        self._l_pos = int(event.x/float(rect.width) * img_width) 
+			self._m_pos = int(event.y/float(rect.height) * img_height) 
 			
-			sbrMain.push(sbrMain.get_context_id("CursorPos"),"Pixel position: (l,m) = (%d,%d), (ra,dec) = (%s,%s)" % (l_pos, m_pos,
-							    		 quantity(quantity(self._phase_centres[self._field_id,0,0],"rad").get_value("arcsec") + (-l_pos + img_width/2)*self._img_cell_l,"arcsec").get("deg").formatted("[+-]dd.mm.ss.t.."),
-							    		 quantity(quantity(self._phase_centres[self._field_id,0,1],"rad").get_value("arcsec") + (-m_pos + img_height/2)*self._img_cell_m,"arcsec").get("deg").formatted("[+-]dd.mm.ss.t..")))
-				
-
+			sbrMain.push(sbrMain.get_context_id("CursorPos"),"Pixel position: (l,m) = (%d,%d), (ra,dec) = (%s,%s)" % (self._l_pos, self._m_pos,
+							    		 quantity(quantity(self._phase_centres[self._field_id,0,0],"rad").get_value("arcsec") + (-self._l_pos + img_width/2)*self._img_cell_l,"arcsec").get("deg").formatted("[+-]dd.mm.ss.t.."),
+							    		 quantity(quantity(self._phase_centres[self._field_id,0,1],"rad").get_value("arcsec") + (-self._m_pos + img_height/2)*self._img_cell_m,"arcsec").get("deg").formatted("[+-]dd.mm.ss.t..")))
 	def __init__(self):
 		self._builder = Gtk.Builder()
 		self._builder.add_from_file("viewcontrollers/main.glade")
@@ -184,3 +207,7 @@ class frmMain:
 		self._data_set = None
 		self._low_res_image = None
 		self.__change_visibilities()
+		handle = self._builder.get_object("cvsLowRes")
+		rect = handle.get_allocation()
+		self._l_pos = rect.width // 2
+		self._m_pos = rect.height // 2

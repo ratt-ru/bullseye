@@ -26,19 +26,19 @@
       </row>
       <row>
         <col id="0" translatable="yes">Cell size l (arcsec)</col>
-        <col id="1">2</col>
+        <col id="1">18</col>
       </row>
       <row>
         <col id="0" translatable="yes">Cell size m (arcsec)</col>
-        <col id="1">2</col>
+        <col id="1">18</col>
       </row>
       <row>
         <col id="0" translatable="yes">Convolution support (px)</col>
-        <col id="1">1</col>
+        <col id="1">3</col>
       </row>
       <row>
         <col id="0" translatable="yes">Convolution oversampling factor (px)</col>
-        <col id="1">1</col>
+        <col id="1">63</col>
       </row>
     </data>
   </object>
@@ -60,19 +60,19 @@
       </row>
       <row>
         <col id="0" translatable="yes">Cell size l (arcsec)</col>
-        <col id="1">2</col>
+        <col id="1">18</col>
       </row>
       <row>
         <col id="0" translatable="yes">Cell size m (arcsec)</col>
-        <col id="1">2</col>
+        <col id="1">18</col>
       </row>
       <row>
         <col id="0" translatable="yes">Convolution support (px)</col>
-        <col id="1">1</col>
+        <col id="1">3</col>
       </row>
       <row>
         <col id="0" translatable="yes">Convolution oversampling factor (px)</col>
-        <col id="1">1</col>
+        <col id="1">63</col>
       </row>
       <row>
         <col id="0" translatable="yes">Correlation (lin./circ.) or Stokes term</col>
