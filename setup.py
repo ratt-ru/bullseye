@@ -17,15 +17,15 @@ def bullseye_pkg_dirs():
 
     print '-'*80, '\n'
 
-    path = pjoin('cbuild', 'algorithms')
+    path = pjoin(pkg, 'cbuild', 'algorithms')
     # Ignore
     exclude = ['docs', '.git', '.svn', 'CMakeFiles']
 
     # Walk 'bullseye/src'
     for root, dirs, files in os.walk(path, topdown=True):
-        #print '-'*20, 'ROOTS %s' % root
-        #print '-'*20, 'DIRS %s' % dirs
-        #print '-'*20, 'FILES %s' % files
+        print '-'*20, 'ROOTS %s' % root
+        print '-'*20, 'DIRS %s' % dirs
+        print '-'*20, 'FILES %s' % files
 
         # Prune out everything we're not interested in
         # from os.walk's next yield.
@@ -57,13 +57,13 @@ setup(name=pkg,
     author='Benjamin Hugo',
     author_email='bennahugo@aol.com',
     license='MIT',
-    packages=[
-        'viewcontrollers',
-        'helpers'],
+    packages=['bullseye',
+        'bullseye.viewcontrollers',
+        'bullseye.helpers'],
     install_requires=[
         'numpy',
         'pyfits'],
-    package_data={'' : bullseye_pkg_dirs()},
+    package_data={pkg : bullseye_pkg_dirs()},
     include_package_data=True,
     zip_safe=False)
 
