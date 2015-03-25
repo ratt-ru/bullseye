@@ -17,7 +17,7 @@ def bullseye_pkg_dirs():
 
     #print '-'*80, '\n'
 
-    path = pjoin(pkg, 'cbuild', 'algorithms')
+    path = pjoin(pkg, 'cbuild')
     # Ignore
     exclude = ['docs', '.git', '.svn', 'CMakeFiles']
 
