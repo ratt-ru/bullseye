@@ -1,7 +1,7 @@
 import os
 from os.path import join as pjoin
 from setuptools import setup
-
+import subprocess
 pkg='bullseye_measurement_operator'
 
 def readme():
@@ -16,12 +16,14 @@ def bullseye_pkg_dirs():
     pkg_dirs = []
 
     #print '-'*80, '\n'
-
+    
     path = pjoin(pkg, 'cbuild')
+    subprocess.call(["mkdir",path])
+    subprocess.check_call(["cd %s && cmake .. && make -j4" % path,""],shell=True)
     # Ignore
     exclude = ['docs', '.git', '.svn', 'CMakeFiles']
 
-    # Walk 'bullseye/src'
+    # Walk 'bullseye_measurement_operator'
     for root, dirs, files in os.walk(path, topdown=True):
         #print '-'*20, 'ROOTS %s' % root
         #print '-'*20, 'DIRS %s' % dirs
@@ -35,7 +37,7 @@ def bullseye_pkg_dirs():
             pkg_dirs.append(pjoin(root, d, '*.*'))
 
 
-    #print 'pkgdirs %s' % pkg_dirs
+    print 'pkgdirs %s' % pkg_dirs
 
     return pkg_dirs
 
