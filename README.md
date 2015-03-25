@@ -18,14 +18,16 @@ Dependencies:
   10. The GNU C++ compiler >= 4.8
   11. libboost-all and libboost-dev
   12. OpenMP
-  13. CUDA toolkit (nvcc,nvprof) >=5.0 
+  13. CUDA toolkit (nvcc,nvprof) >=5.0
   14. Montage (available: http://montage.ipac.caltech.edu/index.html). Montage's bin folder must be in the PATH
   15. CfitsIO
   16. WcsLib
 
 Build instructions (outputs CPU and GPU single and double precision libraries)
-- Create a "build" folder inside your cloned copy of bullseye
-- "cd build && cmake ../ && make"
+- Create a `cbuild` folder inside your cloned copy of bullseye. It **must** be called `cbuild`, because the python install process will overwrite the `build` folder.
+- `cd cbuild && cmake ../ && make`
+- `cd ..`
+- `python setup.py install --user`
 
 Run instructions
 - Ensure your current working directory is bullseye's root directory

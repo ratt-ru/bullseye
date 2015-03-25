@@ -1,5 +1,8 @@
-import base_types
+import bullseye_measurement_operator.base_types as base_types
 from ctypes import *
+
+if base_types.uvw_ctypes_convert_type == None:
+  raise Exception("Please import base_types.py first and select a precision mode before importing gridding_parameters.py")
 class gridding_parameters(Structure):
   pass
 gridding_parameters._fields_ = [

@@ -1,4 +1,4 @@
-import base_types
+import bullseye_measurement_operator.base_types as base_types
 from pyrap.quanta import quantity
 import numpy as np
 import sys
@@ -27,7 +27,7 @@ def create_facet_centre_list(parser_args,data,num_facet_centres):
   facet_centres[:parser_args['n_facets_m'],:parser_args['n_facets_l'],0] = np.repeat(range_of_l_coords,parser_args['n_facets_m']).reshape(parser_args['n_facets_m'],parser_args['n_facets_l'])
   #the range of m coordinates repeat l times in the m dim
   facet_centres[:parser_args['n_facets_m'],:parser_args['n_facets_l'],1] = np.tile(range_of_m_coords,parser_args['n_facets_l']).reshape(parser_args['n_facets_m'],parser_args['n_facets_l'])
-  
+
   #create a flat list of coordinates
   facet_centres = facet_centres.reshape(parser_args['n_facets_l']*parser_args['n_facets_m'],2)
   if (parser_args['facet_centres'] != None):
@@ -39,7 +39,7 @@ def print_facet_centre_list(facet_centres,num_facet_centres):
       print "REQUESTED FACET CENTRES:"
       for i,c in enumerate(facet_centres):
 	print "\tFACET %d RA: %s DEC: %s" % (i,quantity(c[0],'arcsec').get('deg'),quantity(c[1],'arcsec').get('deg'))
-	
+
 '''
 This uses Montage:
 Montage: a grid portal and software toolkit for science-grade astronomical image mosaicking
