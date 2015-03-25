@@ -1,4 +1,4 @@
-import base_types
+import bullseye.helpers.base_types as base_types
 from ctypes import *
 class gridding_parameters(Structure):
   pass

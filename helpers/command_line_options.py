@@ -1,13 +1,13 @@
 import argparse
-from coord_extractor import *
-from stokes import *
-from channel_list_extractor import *
+from bullseye.helper.coord_extractor import *
+from bullseye.helper.stokes import *
+from bullseye.helper.channel_list_extractor import *
 
 def build_command_line_options_parser():
   parser = argparse.ArgumentParser(description='Bullseye: An implementation of targetted facet-based synthesis imaging in radio astronomy.')
   parser.add_argument('input_ms', help='Name of the measurement set(s) to read. Multiple MSs must be comma-delimited without any separating spaces, eg. "\'one.ms\',\'two.ms\'"', type=str)
   parser.add_argument('--output_prefix', help='Prefix for the output FITS images. Facets will be indexed as [prefix_1.fits ... prefix_n.fits]', type=str, default='out.bullseye')
-  parser.add_argument('--facet_centres', help='List of coordinate tupples indicating facet centres (RA,DEC).' 
+  parser.add_argument('--facet_centres', help='List of coordinate tupples indicating facet centres (RA,DEC).'
 		      'If none are specified and n_facet_l and/or n_facet_m are not set, the default pointing centre will be used', type=coords, nargs='+', default=None)
   parser.add_argument('--npix_l', help='Number of facet pixels in l', type=int, default=256)
   parser.add_argument('--npix_m', help='Number of facet pixels in m', type=int, default=256)

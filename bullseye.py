@@ -7,22 +7,22 @@ import pylab
 from pyrap.quanta import quantity
 import ctypes
 
-from helpers.channel_indexer import *
-from helpers.command_line_options import *
-from helpers.facet_list_parser import *
-from helpers import timer
-from helpers import png_export
-from helpers import fits_export
+from bullseye.helpers.channel_indexer import *
+from bullseye.helpers.command_line_options import *
+from bullseye.helpers.facet_list_parser import *
+from bullseye.helpers import timer
+from bullseye.helpers import png_export
+from bullseye.helpers import fits_export
 
 if __name__ == "__main__":
   total_run_time = timer.timer()
   total_run_time.start()
-  
+
   '''
   Parse command line arguments
   '''
   (parser,parser_args) = build_command_line_options_parser()
-  
+
   '''
   Pick a backend to use
   '''
@@ -36,11 +36,11 @@ if __name__ == "__main__":
       libimaging = ctypes.pydll.LoadLibrary("build/gpu_algorithm/single/libgpu_imaging32.so")
     else:
       libimaging = ctypes.pydll.LoadLibrary("build/gpu_algorithm/double/libgpu_imaging64.so")
-  from helpers import base_types
+  from bullseye.helpers import base_types
   base_types.force_precision(parser_args['precision'])
-  from helpers import data_set_loader
-  from helpers import convolution_filter
-  from helpers import gridding_parameters
+  from bullseye.helpers import data_set_loader
+  from bullseye.helpers import convolution_filter
+  from bullseye.helpers import gridding_parameters
 
   '''
   Create convolution filter
@@ -50,14 +50,14 @@ if __name__ == "__main__":
     conv = convolution_filter.convolution_filter(parser_args['conv_sup'],
 						 parser_args['conv_oversamp'],parser_args['npix_l'],
 						 parser_args['npix_m'],parser_args['conv'])
-  
+
   '''
   initially the output grids must be set to NONE. Memory will only be allocated before the first MS is read.
   '''
   gridded_vis = None
   sampling_funct = None
   ms_names = commaSeparatedList.parseString(parser_args['input_ms'])
-  
+
   '''
   General strategy for IO and processing:
     for all measurement sets:
@@ -72,7 +72,7 @@ if __name__ == "__main__":
 	load chunk from disk (buffer the io)
 	wait for any previous gridding operations to finish up
 	deep copy chunk
-	call the correct gridding method (single / duel / quad with corrections) to operate on the 
+	call the correct gridding method (single / duel / quad with corrections) to operate on the
 	in parallel start up the gridder
 	if last chunk then normalize else continue on to start buffering the next chunk
       #end for chunks
@@ -89,18 +89,18 @@ if __name__ == "__main__":
     if no_chunks < 1:
       raise Exception("Cannot read less than one chunk from measurement set!")
     chunk_size = int(np.ceil(data._no_rows / float(no_chunks)))
-    
+
     '''
     check that the measurement set contains the correlation terms necessary to create the requested pollarization / Stokes term:
     '''
     (correlations_to_grid, feeds_in_use) = find_necessary_correlations_indexes(parser_args['do_jones_corrections'],parser_args['pol'],data)
     if correlations_to_grid == None:
       raise argparse.ArgumentTypeError("Cannot obtain requested gridded polarization from the provided measurement set. Need one of %s" % pol_dependencies[parser_args['pol']])
-    
+
     '''
     check that we have 4 correlations before trying to apply jones corrective terms:
     '''
-    if (parser_args['do_jones_corrections'] and 
+    if (parser_args['do_jones_corrections'] and
 	data._polarization_correlations.tolist() not in [
 							 #4 circular correlation products:
 							 [pol_options['RR'],pol_options['RL'],pol_options['LR'],pol_options['LL']],
@@ -109,18 +109,18 @@ if __name__ == "__main__":
 							 #4 stokes terms:
 							 [pol_options['I'],pol_options['Q'],pol_options['U'],pol_options['V']]
 							]
-      ):	
+      ):
       raise argparse.ArgumentTypeError("Applying jones corrective terms require a measurement set with 4 linear or 4 circular or 4 stokes terms")
     if parser_args['do_jones_corrections'] and (not data._dde_cal_info_exists or not data._dde_cal_info_desc_exists):
       raise argparse.ArgumentTypeError("Measurement set does not contain corrective DDE terms or the description table is missing.")
-    
+
     '''
     check that the field id is valid
     '''
     if parser_args['field_id'] not in range(0,len(data._field_centre_names)):
       raise argparse.ArgumentTypeError("Specified field does not exist Must be in 0 ... %d for this Measurement Set" % (len(data._field_centre_names) - 1))
     print "IMAGING ONLY FIELD %s" % data._field_centre_names[parser_args['field_id']]
-    
+
     '''
     check how many facets we have to create (if none we'll do normal gridding without any transformations)
     '''
@@ -130,24 +130,24 @@ if __name__ == "__main__":
 	raise argparse.ArgumentTypeError("Need at least two facets to perform stitching")
       if parser_args['output_format'] != 'fits':
 	raise argparse.ArgumentTypeError("Facet output format must be of type FITS")
-    
+
     facet_centres = create_facet_centre_list(parser_args,data,num_facet_centres)
     print_facet_centre_list(facet_centres,num_facet_centres)
-    
+
     if parser_args['do_jones_corrections'] and num_facet_centres != data._cal_no_dirs:
       raise argparse.ArgumentTypeError("Number of calibrated directions does not correspond to number of directions being faceted")
-    
+
     '''
     populate the channels to be imaged:
     '''
     (channels_to_image,enabled_channels) = parse_channels_to_be_imaged(parser_args['channel_select'],data)
-    
+
     if channels_to_image[len(channels_to_image)-1] >= data._no_spw*data._no_channels:
       raise argparse.ArgumentTypeError("One or more channels don't exist. Only %d spw's of %d channels each are available" % (data._no_spw,data._no_channels))
     print_requested_channels(channels_to_image,data)
-    
+
     '''
-    Compute the fits cube reference wavelength and delta wavelength, and check that the 
+    Compute the fits cube reference wavelength and delta wavelength, and check that the
     channels / spw-centres are evenly spaced
     '''
     cube_first_wavelength = 0
@@ -164,7 +164,7 @@ if __name__ == "__main__":
       (cube_delta_wavelength,cube_first_wavelength) = compute_cube_chan_dim_all_channel_averaging(data)
     else: #only one channel
       (cube_delta_wavelength,cube_first_wavelength) = compute_cube_chan_dim_single_channel(data,channels_to_image)
-      
+
     '''
     work out how many channels / averaged SPWs this cube will have (remember each SPW may have 0 <= x <= no_channels enabled)
     '''
@@ -178,7 +178,7 @@ if __name__ == "__main__":
     '''
     if parser_args['output_psf'] or (parser_args['sample_weighting'] == 'uniform'):
       sampling_function_channel_grid_index = compute_sampling_function_grid_indicies(data,channels_to_image)
-   
+
     '''
     allocate enough memory to compute image and or facets (only before gridding the first MS)
     '''
@@ -189,11 +189,11 @@ if __name__ == "__main__":
     else:
 	if gridded_vis == None:
 	  gridded_vis = np.zeros([num_facet_grids,cube_chan_dim_size,4,parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.grid_type)
-	  
+
     if parser_args['output_psf'] or (parser_args['sample_weighting'] == 'uniform'):
       if sampling_funct == None:
 	sampling_funct = np.zeros([num_facet_grids,sampling_function_channel_count,1,parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.psf_type)
-	
+
     '''
     initiate the backend imaging library
     '''
@@ -226,10 +226,10 @@ if __name__ == "__main__":
       params.sampling_function_buffer = sampling_funct.ctypes.data_as(ctypes.c_void_p) #we never do 2 computes at the same time (or the reduction is handled at the C++ implementation level)
       params.sampling_function_channel_grid_indicies = sampling_function_channel_grid_index.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
       params.sampling_function_channel_count = ctypes.c_size_t(sampling_function_channel_count) #this won't change between chunks
-    
+
     params.num_facet_centres = ctypes.c_size_t(max(1,num_facet_centres)) #stays constant between strides
     params.facet_centres = facet_centres.ctypes.data_as(ctypes.c_void_p)
-    
+
     if len(correlations_to_grid) == 1 and not parser_args['do_jones_corrections']:
 	pol_index = data._polarization_correlations.tolist().index(correlations_to_grid[0])
 	params.polarization_index = ctypes.c_size_t(pol_index) #stays constant between strides
@@ -241,7 +241,7 @@ if __name__ == "__main__":
     else:#the user want to apply corrective terms
 	pass
     libimaging.initLibrary(ctypes.byref(params))
-    
+
     '''
     each chunk will start processing while data is being read in, we will wait until until this process rejoins
     before copying the buffers and starting to grid the next chunk
@@ -252,15 +252,15 @@ if __name__ == "__main__":
       chunk_ubound = min((chunk_index+1) * chunk_size,data._no_rows)
       chunk_linecount = chunk_ubound - chunk_lbound
       print "READING CHUNK %d OF %d" % (chunk_index+1,no_chunks)
-      data.read_data(start_row=chunk_lbound,no_rows=chunk_linecount,data_column = parser_args['data_column'], 
+      data.read_data(start_row=chunk_lbound,no_rows=chunk_linecount,data_column = parser_args['data_column'],
 		       do_romein_baseline_ordering=(parser_args['use_back_end'] == 'GPU'))
-	
+
       '''
-      after the compute of the previous cycle finishes make deep copies and 
+      after the compute of the previous cycle finishes make deep copies and
       fill out the common parameters for gridding this cycle:
       '''
       libimaging.gridding_barrier()   #WARNING: This async barrier is cricical for valid gridding results
-     
+
       arr_data_cpy = data._arr_data #gridding will operate on deep copied memory
       params.visibilities = arr_data_cpy.ctypes.data_as(ctypes.c_void_p)
       arr_uvw_cpy = data._arr_uvw #gridding will operate on deep copied memory
@@ -308,7 +308,7 @@ if __name__ == "__main__":
 	else:
 	  if parser_args['do_jones_corrections']: #do faceting with jones corrections
 	    jones_terms_cpy = data._jones_terms #gridding will operate with deep copied data
-	    params.jones_terms = jones_terms_cpy.ctypes.data_as(ctypes.c_void_p) 
+	    params.jones_terms = jones_terms_cpy.ctypes.data_as(ctypes.c_void_p)
 	    libimaging.facet_4_cor_corrections(ctypes.byref(params))
 	  else: #skip the jones corrections
 	    libimaging.facet_4_cor(ctypes.byref(params))
@@ -320,22 +320,22 @@ if __name__ == "__main__":
 	  libimaging.grid_sampling_function(ctypes.byref(params))
 	else:
 	  libimaging.facet_sampling_function(ctypes.byref(params))
-	  
+
   '''
   before compacting everything we better normalize
   '''
   if parser_args['sample_weighting'] == 'uniform':
     libimaging.weight_uniformly(ctypes.byref(params))
   libimaging.normalize(ctypes.byref(params))
-  
+
   '''
   Compute the stokes term from the gridded visibilities
   '''
   create_stokes_term_from_gridded_vis(parser_args['do_jones_corrections'],data,correlations_to_grid,feeds_in_use,gridded_vis.view(),parser_args['pol'])
-  
+
   '''
-  now compact all the grids per facet into continuous blocks [channels,nx,ny] 
-  ie. remove the extra temporary correlation term grids per facet. There will 
+  now compact all the grids per facet into continuous blocks [channels,nx,ny]
+  ie. remove the extra temporary correlation term grids per facet. There will
   still be some space left between the facets
   '''
   if parser_args['pol'] in ["I","Q","U","V"]:
@@ -345,15 +345,15 @@ if __name__ == "__main__":
 	nf = shift_count % len(correlations_to_grid)
 	nc = shift_count / len(correlations_to_grid)
 	gridded_vis[f,nc,nf,:,:] = gridded_vis[f,c,0,:,:]
-	
+
   '''
   now finalize images
   '''
   libimaging.finalize(ctypes.byref(params))
-       
+
   if parser_args['output_psf']:
     libimaging.finalize_psf(ctypes.byref(params))
-    
+
   '''
   finally we can write to disk
   '''
@@ -375,14 +375,14 @@ if __name__ == "__main__":
 	  spw_no = c / data._no_channels
 	  chan_no = c % data._no_channels
 	  png_export.png_export(psf,image_prefix+('.spw%d.ch%d.psf' % (spw_no,chan_no)),None)
-      
+
     else: #export to FITS cube
       ra = data._field_centres[parser_args['field_id'],0,0] if num_facet_centres == 0 else facet_centres[f,0]
       dec = data._field_centres[parser_args['field_id'],0,1] if num_facet_centres == 0 else facet_centres[f,1]
       offset = cube_chan_dim_size*len(correlations_to_grid)*parser_args['npix_l']*parser_args['npix_m']*f*np.dtype(np.float32).itemsize
       dirty = np.ctypeslib.as_array(ctypes.cast(gridded_vis.ctypes.data + offset, ctypes.POINTER(ctypes.c_float)),
 				    shape=(cube_chan_dim_size,parser_args['npix_l'],parser_args['npix_m']))
-      
+
       fits_export.save_to_fits_image(image_prefix+'.fits',
 				     parser_args['npix_l'],parser_args['npix_m'],
 				     quantity(parser_args['cell_l'],'arcsec'),quantity(parser_args['cell_m'],'arcsec'),
@@ -415,7 +415,7 @@ if __name__ == "__main__":
 					 0,
 					 1,
 					 psf)
-      
+
   '''
   attempt to stitch the facets together:
   '''
@@ -424,7 +424,7 @@ if __name__ == "__main__":
     output_mosaic(parser_args['output_prefix'],num_facet_centres)
     if parser_args['open_default_viewer']:
 	os.system("xdg-open %s.combined.fits" % parser_args['output_prefix'])
-	
+
   print "FINISHED WORK SUCCESSFULLY"
   total_run_time.stop()
   print "STATISTICS:"
