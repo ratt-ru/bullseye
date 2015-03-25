@@ -1,0 +1,2 @@
+recursive-include bullseye/cbuild/algorithms/single libimaging*
+recursive-include bullseye/cbuild/algorithms/double libimaging*
