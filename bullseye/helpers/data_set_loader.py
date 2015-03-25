@@ -13,7 +13,7 @@ import math
 import time
 import datetime
 import pylab
-import base_types
+import bullseye_measurement_operator.base_types as base_types 
 import traceback
 from timer import timer
 class data_set_loader(object):

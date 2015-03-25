@@ -2,7 +2,7 @@ import os
 from os.path import join as pjoin
 from setuptools import setup
 
-pkg='bullseye'
+pkg='bullseye_measurement_operator'
 
 def readme():
     with open('README.md') as f:
@@ -11,7 +11,7 @@ def readme():
 def bullseye_pkg_dirs():
     """
     Recursively provide package_data directories for
-    bullseye.
+    bullseye's measurement operator.
     """
     pkg_dirs = []
 
@@ -42,7 +42,7 @@ def bullseye_pkg_dirs():
 
 setup(name=pkg,
     version='0.0.1',
-    description='Bullseye Gridder',
+    description='Bullseye Measurement Operator',
     long_description=readme(),
     url='https://github.com/ratt-ru/bullseye.git',
     classifiers=[
@@ -57,12 +57,8 @@ setup(name=pkg,
     author='Benjamin Hugo',
     author_email='bennahugo@aol.com',
     license='MIT',
-    packages=['bullseye',
-        'bullseye.viewcontrollers',
-        'bullseye.helpers'],
-    install_requires=[
-        'numpy',
-        'pyfits'],
-    #package_data={pkg : bullseye_pkg_dirs()},
+    packages=['bullseye_measurement_operator'],
+    install_requires=['numpy','matplotlib'],
+    package_data={pkg : bullseye_pkg_dirs()},
     include_package_data=True,
     zip_safe=False)

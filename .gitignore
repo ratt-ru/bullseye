@@ -22,8 +22,11 @@
 *.app
 
 # Build Directories
+cbuild/
 build/
 .kdev4/
+bullseye_measurement_operator.egg-info/
+dist/
 
 # Regeneratable project files (dev box specific config)
 bullseye.kdev4

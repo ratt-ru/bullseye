@@ -1,19 +1,20 @@
 #!/usr/bin/python
 import argparse
-from pyparsing import commaSeparatedList
 import numpy as np
+from pyparsing import commaSeparatedList
 import pylab
+import os
 
 from pyrap.quanta import quantity
 import ctypes
 
-from bullseye.helpers.channel_indexer import *
-from bullseye.helpers.command_line_options import *
-from bullseye.helpers.facet_list_parser import *
-from bullseye.helpers import timer
-from bullseye.helpers import png_export
-from bullseye.helpers import fits_export
-
+import helpers.channel_indexer as channel_indexer
+import helpers.command_line_options as command_line_options
+import helpers.facet_list_parser as facet_list_parser
+import bullseye_measurement_operator.library_loader as library_loader
+from helpers import timer
+from helpers import png_export
+from helpers import fits_export 
 if __name__ == "__main__":
   total_run_time = timer.timer()
   total_run_time.start()
@@ -21,26 +22,17 @@ if __name__ == "__main__":
   '''
   Parse command line arguments
   '''
-  (parser,parser_args) = build_command_line_options_parser()
+  (parser,parser_args) = command_line_options.build_command_line_options_parser()
 
   '''
   Pick a backend to use
   '''
-  if parser_args['use_back_end'] == 'CPU':
-    if parser_args['precision'] == 'single':
-      libimaging = ctypes.pydll.LoadLibrary("cbuild/algorithms/single/libimaging32.so")
-    else:
-      libimaging = ctypes.pydll.LoadLibrary("cbuild/algorithms/double/libimaging64.so")
-  elif parser_args['use_back_end'] == 'GPU':
-    if parser_args['precision'] == 'single':
-      libimaging = ctypes.pydll.LoadLibrary("cbuild/gpu_algorithm/single/libgpu_imaging32.so")
-    else:
-      libimaging = ctypes.pydll.LoadLibrary("cbuild/gpu_algorithm/double/libgpu_imaging64.so")
-  from bullseye.helpers import base_types
+  libimaging = library_loader.load_library(parser_args['use_back_end'],parser_args['precision'])
+  from bullseye_measurement_operator import base_types
   base_types.force_precision(parser_args['precision'])
-  from bullseye.helpers import data_set_loader
-  from bullseye.helpers import convolution_filter
-  from bullseye.helpers import gridding_parameters
+  from helpers import data_set_loader
+  from bullseye_measurement_operator import convolution_filter
+  from bullseye_measurement_operator import gridding_parameters
 
   '''
   Create convolution filter
@@ -93,9 +85,9 @@ if __name__ == "__main__":
     '''
     check that the measurement set contains the correlation terms necessary to create the requested pollarization / Stokes term:
     '''
-    (correlations_to_grid, feeds_in_use) = find_necessary_correlations_indexes(parser_args['do_jones_corrections'],parser_args['pol'],data)
+    (correlations_to_grid, feeds_in_use) = command_line_options.find_necessary_correlations_indexes(parser_args['do_jones_corrections'],parser_args['pol'],data)
     if correlations_to_grid == None:
-      raise argparse.ArgumentTypeError("Cannot obtain requested gridded polarization from the provided measurement set. Need one of %s" % pol_dependencies[parser_args['pol']])
+      raise argparse.ArgumentTypeError("Cannot obtain requested gridded polarization from the provided measurement set. Need one of %s" % command_line_options.pol_dependencies[parser_args['pol']])
 
     '''
     check that we have 4 correlations before trying to apply jones corrective terms:
@@ -124,15 +116,15 @@ if __name__ == "__main__":
     '''
     check how many facets we have to create (if none we'll do normal gridding without any transformations)
     '''
-    num_facet_centres = compute_number_of_facet_centres(parser_args)
+    num_facet_centres = facet_list_parser.compute_number_of_facet_centres(parser_args)
     if parser_args['stitch_facets']:
       if num_facet_centres < 2:
 	raise argparse.ArgumentTypeError("Need at least two facets to perform stitching")
       if parser_args['output_format'] != 'fits':
 	raise argparse.ArgumentTypeError("Facet output format must be of type FITS")
 
-    facet_centres = create_facet_centre_list(parser_args,data,num_facet_centres)
-    print_facet_centre_list(facet_centres,num_facet_centres)
+    facet_centres = facet_list_parser.create_facet_centre_list(parser_args,data,num_facet_centres)
+    facet_list_parser.print_facet_centre_list(facet_centres,num_facet_centres)
 
     if parser_args['do_jones_corrections'] and num_facet_centres != data._cal_no_dirs:
       raise argparse.ArgumentTypeError("Number of calibrated directions does not correspond to number of directions being faceted")
@@ -140,11 +132,11 @@ if __name__ == "__main__":
     '''
     populate the channels to be imaged:
     '''
-    (channels_to_image,enabled_channels) = parse_channels_to_be_imaged(parser_args['channel_select'],data)
+    (channels_to_image,enabled_channels) = channel_indexer.parse_channels_to_be_imaged(parser_args['channel_select'],data)
 
     if channels_to_image[len(channels_to_image)-1] >= data._no_spw*data._no_channels:
       raise argparse.ArgumentTypeError("One or more channels don't exist. Only %d spw's of %d channels each are available" % (data._no_spw,data._no_channels))
-    print_requested_channels(channels_to_image,data)
+    channel_indexer.print_requested_channels(channels_to_image,data)
 
     '''
     Compute the fits cube reference wavelength and delta wavelength, and check that the
@@ -157,18 +149,18 @@ if __name__ == "__main__":
     if parser_args['average_spw_channels'] and parser_args['average_all']:
       raise argparse.ArgumentTypeError("Both --average_spw_channels and --average_all are enabled. These are mutually exclusive")
     elif len(channels_to_image) > 1 and not (parser_args['average_spw_channels'] or parser_args['average_all']):
-      (cube_delta_wavelength,cube_first_wavelength) = compute_cube_chan_dim_spacing_no_averaging(data,channels_to_image)
+      (cube_delta_wavelength,cube_first_wavelength) = channel_indexer.compute_cube_chan_dim_spacing_no_averaging(data,channels_to_image)
     elif len(channels_to_image) > 1 and parser_args['average_spw_channels']:
-      (cube_delta_wavelength,cube_first_wavelength) = compute_cube_chan_dim_spw_averaging(data,channels_to_image)
+      (cube_delta_wavelength,cube_first_wavelength) = channel_indexer.compute_cube_chan_dim_spw_averaging(data,channels_to_image)
     elif parser_args['average_all']:
-      (cube_delta_wavelength,cube_first_wavelength) = compute_cube_chan_dim_all_channel_averaging(data)
+      (cube_delta_wavelength,cube_first_wavelength) = channel_indexer.compute_cube_chan_dim_all_channel_averaging(data)
     else: #only one channel
-      (cube_delta_wavelength,cube_first_wavelength) = compute_cube_chan_dim_single_channel(data,channels_to_image)
+      (cube_delta_wavelength,cube_first_wavelength) = channel_indexer.compute_cube_chan_dim_single_channel(data,channels_to_image)
 
     '''
     work out how many channels / averaged SPWs this cube will have (remember each SPW may have 0 <= x <= no_channels enabled)
     '''
-    (channel_grid_index,cube_chan_dim_size) = compute_vis_grid_indicies(parser_args['average_spw_channels'],
+    (channel_grid_index,cube_chan_dim_size) = channel_indexer.compute_vis_grid_indicies(parser_args['average_spw_channels'],
 									parser_args['average_all'],
 									data,
 									enabled_channels,
@@ -177,7 +169,7 @@ if __name__ == "__main__":
     Work out to which grid each sampling function (per channel) should be gridded.
     '''
     if parser_args['output_psf'] or (parser_args['sample_weighting'] == 'uniform'):
-      sampling_function_channel_grid_index = compute_sampling_function_grid_indicies(data,channels_to_image)
+      sampling_function_channel_grid_index = channel_indexer.compute_sampling_function_grid_indicies(data,channels_to_image)
 
     '''
     allocate enough memory to compute image and or facets (only before gridding the first MS)
@@ -329,9 +321,14 @@ if __name__ == "__main__":
   libimaging.normalize(ctypes.byref(params))
 
   '''
-  Compute the stokes term from the gridded visibilities
+  Compute the stokes term from the gridded visibilities (here we're passing a view)
   '''
-  create_stokes_term_from_gridded_vis(parser_args['do_jones_corrections'],data,correlations_to_grid,feeds_in_use,gridded_vis.view(),parser_args['pol'])
+  command_line_options.create_stokes_term_from_gridded_vis(parser_args['do_jones_corrections'],
+                                                           data,
+                                                           correlations_to_grid,
+                                                           feeds_in_use,
+                                                           gridded_vis.view(),
+                                                           parser_args['pol'])
 
   '''
   now compact all the grids per facet into continuous blocks [channels,nx,ny]

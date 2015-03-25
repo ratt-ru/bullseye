@@ -1,4 +1,4 @@
-import bullseye.helpers.base_types as base_types
+import bullseye_measurement_operator.base_types as base_types
 from ctypes import *
 
 if base_types.uvw_ctypes_convert_type == None:
