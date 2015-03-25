@@ -4,7 +4,7 @@ Created on Mar 20, 2014
 @author: bhugo
 '''
 import numpy as np
-import bullseye.helper.base_types as base_types
+import bullseye.helpers.base_types as base_types
 import matplotlib.pyplot as plt
 
 DEBUG_KERNEL_ON = False

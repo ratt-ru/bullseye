@@ -1,4 +1,4 @@
-import bullseye.helper.base_types as base_types
+import bullseye.helpers.base_types as base_types
 from pyrap.quanta import quantity
 import numpy as np
 import sys

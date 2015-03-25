@@ -1,7 +1,7 @@
 import argparse
-from bullseye.helper.coord_extractor import *
-from bullseye.helper.stokes import *
-from bullseye.helper.channel_list_extractor import *
+from bullseye.helpers.coord_extractor import *
+from bullseye.helpers.stokes import *
+from bullseye.helpers.channel_list_extractor import *
 
 def build_command_line_options_parser():
   parser = argparse.ArgumentParser(description='Bullseye: An implementation of targetted facet-based synthesis imaging in radio astronomy.')
