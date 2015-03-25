@@ -28,14 +28,14 @@ if __name__ == "__main__":
   '''
   if parser_args['use_back_end'] == 'CPU':
     if parser_args['precision'] == 'single':
-      libimaging = ctypes.pydll.LoadLibrary("build/algorithms/single/libimaging32.so")
+      libimaging = ctypes.pydll.LoadLibrary("cbuild/algorithms/single/libimaging32.so")
     else:
-      libimaging = ctypes.pydll.LoadLibrary("build/algorithms/double/libimaging64.so")
+      libimaging = ctypes.pydll.LoadLibrary("cbuild/algorithms/double/libimaging64.so")
   elif parser_args['use_back_end'] == 'GPU':
     if parser_args['precision'] == 'single':
-      libimaging = ctypes.pydll.LoadLibrary("build/gpu_algorithm/single/libgpu_imaging32.so")
+      libimaging = ctypes.pydll.LoadLibrary("cbuild/gpu_algorithm/single/libgpu_imaging32.so")
     else:
-      libimaging = ctypes.pydll.LoadLibrary("build/gpu_algorithm/double/libgpu_imaging64.so")
+      libimaging = ctypes.pydll.LoadLibrary("cbuild/gpu_algorithm/double/libgpu_imaging64.so")
   from bullseye.helpers import base_types
   base_types.force_precision(parser_args['precision'])
   from bullseye.helpers import data_set_loader
