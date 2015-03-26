@@ -11,7 +11,7 @@ import ctypes
 import helpers.channel_indexer as channel_indexer
 import helpers.command_line_options as command_line_options
 import helpers.facet_list_parser as facet_list_parser
-import bullseye_measurement_operator.library_loader as library_loader
+import bullseye_mo.library_loader as library_loader
 from helpers import timer
 from helpers import png_export
 from helpers import fits_export 
@@ -28,11 +28,11 @@ if __name__ == "__main__":
   Pick a backend to use
   '''
   libimaging = library_loader.load_library(parser_args['use_back_end'],parser_args['precision'])
-  from bullseye_measurement_operator import base_types
+  from bullseye_mo import base_types
   base_types.force_precision(parser_args['precision'])
   from helpers import data_set_loader
-  from bullseye_measurement_operator import convolution_filter
-  from bullseye_measurement_operator import gridding_parameters
+  from bullseye_mo import convolution_filter
+  from bullseye_mo import gridding_parameters
 
   '''
   Create convolution filter

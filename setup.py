@@ -2,7 +2,7 @@ import os
 from os.path import join as pjoin
 from setuptools import setup
 import subprocess
-pkg='bullseye_measurement_operator'
+pkg='bullseye_mo'
 
 def readme():
     with open('README.md') as f:
@@ -23,7 +23,7 @@ def bullseye_pkg_dirs():
     # Ignore
     exclude = ['docs', '.git', '.svn', 'CMakeFiles']
 
-    # Walk 'bullseye_measurement_operator'
+    # Walk 'bullseye_mo'
     for root, dirs, files in os.walk(path, topdown=True):
         #print '-'*20, 'ROOTS %s' % root
         #print '-'*20, 'DIRS %s' % dirs
@@ -59,7 +59,7 @@ setup(name=pkg,
     author='Benjamin Hugo',
     author_email='bennahugo@aol.com',
     license='MIT',
-    packages=['bullseye_measurement_operator'],
+    packages=['bullseye_mo'],
     install_requires=['numpy','matplotlib'],
     package_data={pkg : bullseye_pkg_dirs()},
     include_package_data=True,
