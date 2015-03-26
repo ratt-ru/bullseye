@@ -1,4 +1,4 @@
-recursive-include bullseye_measurement_operator/cbuild/algorithms/single lib*
-recursive-include bullseye_measurement_operator/cbuild/algorithms/double lib*
-recursive-include bullseye_measurement_operator/cbuild/gpu_algorithm/single lib*
-recursive-include bullseye_measurement_operator/cbuild/gpu_algorithm/double lib*
+recursive-include bullseye_mo/cbuild/algorithms/single lib*
+recursive-include bullseye_mo/cbuild/algorithms/double lib*
+recursive-include bullseye_mo/cbuild/gpu_algorithm/single lib*
+recursive-include bullseye_mo/cbuild/gpu_algorithm/double lib*
