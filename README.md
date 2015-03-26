@@ -23,14 +23,11 @@ Dependencies:
   15. CfitsIO
   16. WcsLib
 
-Build instructions (outputs CPU and GPU single and double precision libraries)
-- Create a `cbuild` folder inside your cloned copy of bullseye. It **must** be called `cbuild`, because the python install process will overwrite the `build` folder.
-- `cd cbuild && cmake ../ && make`
-- `cd ..`
-- `python setup.py install --user`
+Build instructions (outputs CPU and GPU single and double precision libraries and a python wrapper for these)
+- run: python setup.py install --user (this will install into the python user directory)
 
 Run instructions
-- Ensure your current working directory is bullseye's root directory
+- Navigate to the bullseye/bullseye directory
 - "./bullseye.py --help" to display a full list of options
 - Enjoy
 
