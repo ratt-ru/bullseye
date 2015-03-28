@@ -284,20 +284,18 @@ extern "C" {
         gridding_barrier();
 	cudaStream_t inversion_timing_stream;
 	cudaSafeCall(cudaStreamCreateWithFlags(&inversion_timing_stream,cudaStreamNonBlocking));
-	utils::timer inversion_walltime(inversion_timing_stream);
-	inversion_walltime.start();
+	inversion_timer->start();
         fftw_ifft_machine->repack_and_ifft_uv_grids(params);
-	inversion_walltime.stop();
+	inversion_timer->stop();
 	cudaSafeCall(cudaStreamDestroy(inversion_timing_stream));
     }
     void finalize_psf(gridding_parameters & params) {
         gridding_barrier();
 	cudaStream_t inversion_timing_stream;
 	cudaSafeCall(cudaStreamCreateWithFlags(&inversion_timing_stream,cudaStreamNonBlocking));
-	utils::timer inversion_walltime(inversion_timing_stream);
-	inversion_walltime.start();
+	inversion_timer->start();
 	fftw_ifft_machine->repack_and_ifft_sampling_function_grids(params);
-	inversion_walltime.stop();
+	inversion_timer->stop();
 	cudaSafeCall(cudaStreamDestroy(inversion_timing_stream));
     }
     long compute_baseline_index(long a1, long a2, long no_antennae){
