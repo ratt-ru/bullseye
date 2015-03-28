@@ -47,5 +47,5 @@ Run instructions
 - "./bullseye.py --help" to display a full list of options
 - Enjoy
 
-Toy GUI is available (proof of concept demonstrator for targetted faceting)
+Toy GUI is available (proof of concept demonstrator for targeted faceting)
 - "./bullseye_frontend.py"
