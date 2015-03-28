@@ -5,21 +5,9 @@ A multithreaded CPU & GPU-based facet imager
 
 Authors: Benjamin Hugo, Oleg Smirnov, Cyril Tasse, James Gain
 
-Copyright (C) 2014-2015 Rhodes Centre for Radio Astronomy Techniques and Technologies
-Department of Physics and Electronics
-Rhodes University
-Artillery Road P O Box 94
-Grahamstown
-6140
-Eastern Cape South Africa
+Copyright (C) 2014-2015 Rhodes Centre for Radio Astronomy Techniques and Technologies, Department of Physics and Electronics, Rhodes University, Artillery Road P O Box 94, Grahamstown, 6140, Eastern Cape, South Africa
 
-Copyright (C) 2014-2015 Department of Computer Science
-University of Cape Town
-18 University Avenue
-University of Cape Town
-Rondebosch
-Cape Town
-South Africa
+Copyright (C) 2014-2015 Department of Computer Science, University of Cape Town, 18 University Avenue, University of Cape Town, Rondebosch, Cape Town, South Africa
 
 Dependencies:
   1. Python 2.7.6
