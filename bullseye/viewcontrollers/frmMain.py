@@ -124,8 +124,8 @@ class frmMain:
 			itr = model.iter_next(itr)
 			facet_cell_m = float(model.get_value(itr,1))
 		
-			selection_box_height = int(self._img_cell_l / facet_cell_l * facet_size_l)
-			selection_box_width = int(self._img_cell_m / facet_cell_m * facet_size_m)
+			selection_box_height = int(facet_cell_l / self._img_cell_l * facet_size_l)
+			selection_box_width = int(facet_cell_m / self._img_cell_m * facet_size_m)
 		
 			cairo.Context.set_source_rgb(cr, 0, 0.75, 0)
 			cairo.Context.set_line_width(cr, 5)
