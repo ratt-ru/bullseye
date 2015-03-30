@@ -73,6 +73,7 @@ extern "C" {
     void initLibrary(gridding_parameters & params) {
 	if (initialized) return;
 	initialized = true;
+	cudaDeviceReset(); //ensure the device in a safe state
 	printf("---------------------------------------Backend: GPU GRIDDING LIBRARY---------------------------------------\n");
 	#ifdef BULLSEYE_SINGLE
 	printf("Double precision mode: disabled \n");
@@ -436,7 +437,6 @@ extern "C" {
 				     cudaMemcpyHostToDevice,compute_stream));
 	cudaSafeCall(cudaMemcpyAsync(gpu_params.flags,params.flags,sizeof(bool) * params.row_count * params.channel_count,
 				     cudaMemcpyHostToDevice,compute_stream));
-	
 	cudaSafeCall(cudaHostUnregister(params.visibilities));
 	cudaSafeCall(cudaHostUnregister(params.spw_index_array));
 	cudaSafeCall(cudaHostUnregister(params.uvw_coords));

@@ -79,8 +79,7 @@ if __name__ == "__main__":
   filter_creation_timer = timer.timer()
   with filter_creation_timer:
     conv = convolution_filter.convolution_filter(parser_args['conv_sup'],
-						 parser_args['conv_oversamp'],parser_args['npix_l'],
-						 parser_args['npix_m'],parser_args['conv'])
+						 parser_args['conv_oversamp'],parser_args['conv'])
 
   '''
   initially the output grids must be set to NONE. Memory will only be allocated before the first MS is read.
@@ -230,10 +229,10 @@ if __name__ == "__main__":
     '''
     params = gridding_parameters.gridding_parameters()
     params.chunk_max_row_count = ctypes.c_size_t(chunk_size)
-    params.nx = ctypes.c_size_t(parser_args['npix_l']) #this ensures a deep copy
-    params.ny = ctypes.c_size_t(parser_args['npix_m']) #this ensures a deep copy
-    params.cell_size_x = base_types.uvw_ctypes_convert_type(parser_args['cell_l']) #this ensures a deep copy
-    params.cell_size_y = base_types.uvw_ctypes_convert_type(parser_args['cell_m']) #this ensures a deep copy
+    params.nx = ctypes.c_size_t(parser_args['npix_m']) #this ensures a deep copy
+    params.ny = ctypes.c_size_t(parser_args['npix_l']) #this ensures a deep copy
+    params.cell_size_x = base_types.uvw_ctypes_convert_type(parser_args['cell_m']) #this ensures a deep copy
+    params.cell_size_y = base_types.uvw_ctypes_convert_type(parser_args['cell_l']) #this ensures a deep copy
     params.conv = conv._conv_FIR.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
     params.conv_support = ctypes.c_size_t(parser_args['conv_sup']) #this ensures a deep copy
     params.conv_oversample = ctypes.c_size_t(parser_args['conv_oversamp'])#this ensures a deep copy
@@ -404,7 +403,7 @@ if __name__ == "__main__":
 	os.system("xdg-open %s.png" % image_prefix)
       if parser_args['output_psf']:
 	for i,c in enumerate(channels_to_image):
-	  offset = parser_args['npix_l']*parser_args['npix_m']*f*np.dtype(np.float32).itemsize
+	  offset = parser_args['npix_m']*parser_args['npix_l']*f*np.dtype(np.float32).itemsize
 	  psf = np.ctypeslib.as_array(ctypes.cast(sampling_funct.ctypes.data + offset, ctypes.POINTER(ctypes.c_float)),
 				      shape=(parser_args['npix_l'],parser_args['npix_m']))
 	  psf /= np.max(psf)
@@ -420,8 +419,8 @@ if __name__ == "__main__":
 				    shape=(cube_chan_dim_size,parser_args['npix_l'],parser_args['npix_m']))
 
       fits_export.save_to_fits_image(image_prefix+'.fits',
-				     parser_args['npix_l'],parser_args['npix_m'],
-				     quantity(parser_args['cell_l'],'arcsec'),quantity(parser_args['cell_m'],'arcsec'),
+				     parser_args['npix_m'],parser_args['npix_l'],
+				     quantity(parser_args['cell_m'],'arcsec'),quantity(parser_args['cell_l'],'arcsec'),
 				     quantity(ra,'arcsec'),
 				     quantity(dec,'arcsec'),
 				     parser_args['pol'],

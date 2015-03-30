@@ -53,7 +53,7 @@ def build_command_line_options_parser():
   parser.add_argument('--cell_l', help='Size of a pixel in l (arcsecond)', type=float, default=1)
   parser.add_argument('--cell_m', help='Size of a pixel in m (arcsecond)', type=float, default=1)
   parser.add_argument('--pol', help='Specify image polarization', choices=pol_options.keys(), default="XX")
-  parser.add_argument('--conv', help='Specify gridding convolution function type', choices=['sinc'], default='sinc')
+  parser.add_argument('--conv', help='Specify gridding convolution function type', choices=['sinc','kb','hamming'], default='sinc')
   parser.add_argument('--conv_sup', help='Specify gridding convolution function half support area (number of convolution function cells)', type=int, default=5)
   parser.add_argument('--conv_oversamp', help='Specify gridding convolution function oversampling multiplier', type=int, default=63)
   parser.add_argument('--output_format', help='Specify image output format', choices=["fits","png"], default="fits")
