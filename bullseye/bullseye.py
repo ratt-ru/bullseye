@@ -460,7 +460,7 @@ if __name__ == "__main__":
   '''
   if parser_args['stitch_facets']: #we've already checked that there are multiple facets before this line
     print "ATTEMPTING TO MOSAIC FACETS USING MONTAGE (MUST BE IN ENV PATH)"
-    output_mosaic(parser_args['output_prefix'],num_facet_centres)
+    facet_list_parser.output_mosaic(parser_args['output_prefix'],num_facet_centres)
     if parser_args['open_default_viewer']:
 	os.system("xdg-open %s.combined.fits" % parser_args['output_prefix'])
 

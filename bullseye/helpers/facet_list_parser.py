@@ -94,6 +94,8 @@ def output_mosaic(output_prefix,num_facet_centres):
 			 ])
   f_file_list.writelines([" %s\n" % item for item in file_names])
   f_file_list.close()
+  #Closely follow Montage's recipy for creating a background-corrected mosaic
+  #http://montage.ipac.caltech.edu/docs/how.html
   montage_unprojected_img_table = dirname(output_prefix) + '/facets.montage.tbl'
   os.system('mImgtbl -t %s %s %s' % (facet_image_list_filename,
 				     dirname(output_prefix),
@@ -117,15 +119,52 @@ def output_mosaic(output_prefix,num_facet_centres):
 					     montage_stats_file
 					    )
 	   )
-  montage_unprojected_img_table = dirname(output_prefix) + '/facets.montage.proj.tbl'
+  montage_projected_img_table = dirname(output_prefix) + '/facets.montage.proj.tbl'
   os.system('mImgtbl %s %s' % (proj_dir,
-			       montage_unprojected_img_table
+			       montage_projected_img_table
 			      )
 	   )
+  montage_diffs_table = dirname(output_prefix) + '/overlap.tbl'
+  os.system('mOverlaps -e %s %s' % (montage_projected_img_table,
+				 montage_diffs_table
+				)
+	   )
+  diffs_dir = dirname(output_prefix) + '/overlaps'
+  if exists(diffs_dir):
+    shutil.rmtree(diffs_dir)
+  os.makedirs(diffs_dir)
+  os.system('mDiffExec -p %s %s %s %s' % (proj_dir,
+					  montage_diffs_table,
+					  montage_proj_template_hdr,
+					  diffs_dir
+					 )
+	   )
+  montage_fit_table = dirname(output_prefix) + '/fit.tbl'
+  os.system('mFitExec %s %s %s' % (montage_diffs_table,
+				   montage_fit_table,
+				   diffs_dir,
+				   )
+	   )
+  montage_corrections_table = dirname(output_prefix) + '/combine.tbl'
+  os.system('mBgModel %s %s %s' % (montage_projected_img_table,
+				   montage_fit_table,
+				   montage_corrections_table
+				  )
+	   )
+  corrections_dir = dirname(output_prefix) + '/corrections'
+  if exists(corrections_dir):
+    shutil.rmtree(corrections_dir)
+  os.makedirs(corrections_dir)
+  os.system('mBgExec -p %s %s %s %s' % (proj_dir,
+					montage_projected_img_table,
+					montage_corrections_table,
+					corrections_dir
+				       )
+	   )
   montage_combined_img = output_prefix + '.combined.fits'
-  os.system('mAdd -p %s %s %s %s' % (proj_dir,
-				     montage_unprojected_img_table,
-				     montage_proj_template_hdr,
-				     montage_combined_img
-				    )
+  os.system('mAdd -a mean -p %s %s %s %s' % (corrections_dir,
+					     montage_projected_img_table,
+					     montage_proj_template_hdr,
+					     montage_combined_img
+					    )
 	   )
