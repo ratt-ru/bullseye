@@ -67,10 +67,10 @@ class convolution_filter(object):
     return np.ones(len(x))
   
   def kb(self,x,W,oversample):
-    beta = (7.43 - 2.39) / (5.0-2.0) * W/2.0 - 0.366833
+    beta = (7.43 - 2.39) / (5.0-2.0) * W - 0.366833
     sqrt_inner = 1 - (x/float(W))**2
-    normFactor = oversample * sp.i0(beta)
-    return 1.0 / W * sp.i0(beta * np.sqrt(sqrt_inner))
+    normFactor = oversample * sp.i0(W)
+    return sp.i0(W * np.sqrt(sqrt_inner)) * normFactor
   
   def hamming(self,x,W,oversample):
     return np.hamming(W*oversample)

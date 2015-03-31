@@ -50,6 +50,7 @@ import ctypes
 import helpers.channel_indexer as channel_indexer
 import helpers.command_line_options as command_line_options
 import helpers.facet_list_parser as facet_list_parser
+import helpers.stokes as stokes
 import bullseye_mo.library_loader as library_loader
 from helpers import timer
 from helpers import png_export
@@ -133,11 +134,11 @@ if __name__ == "__main__":
     if (parser_args['do_jones_corrections'] and
 	data._polarization_correlations.tolist() not in [
 							 #4 circular correlation products:
-							 [pol_options['RR'],pol_options['RL'],pol_options['LR'],pol_options['LL']],
+							 [stokes.pol_options['RR'],stokes.pol_options['RL'],stokes.pol_options['LR'],stokes.pol_options['LL']],
 							 #4 linear correlation products:
-							 [pol_options['XX'],pol_options['XY'],pol_options['YX'],pol_options['YY']],
+							 [stokes.pol_options['XX'],stokes.pol_options['XY'],stokes.pol_options['YX'],stokes.pol_options['YY']],
 							 #4 stokes terms:
-							 [pol_options['I'],pol_options['Q'],pol_options['U'],pol_options['V']]
+							 [stokes.pol_options['I'],stokes.pol_options['Q'],stokes.pol_options['U'],stokes.pol_options['V']]
 							]
       ):
       raise argparse.ArgumentTypeError("Applying jones corrective terms require a measurement set with 4 linear or 4 circular or 4 stokes terms")
@@ -206,8 +207,10 @@ if __name__ == "__main__":
     '''
     Work out to which grid each sampling function (per channel) should be gridded.
     '''
+    sampling_function_channel_grid_index = None
+    sampling_function_channel_count = 0
     if parser_args['output_psf'] or (parser_args['sample_weighting'] == 'uniform'):
-      sampling_function_channel_grid_index = channel_indexer.compute_sampling_function_grid_indicies(data,channels_to_image)
+      sampling_function_channel_grid_index,sampling_function_channel_count = channel_indexer.compute_sampling_function_grid_indicies(data,channels_to_image,enabled_channels)
 
     '''
     allocate enough memory to compute image and or facets (only before gridding the first MS)
@@ -306,7 +309,8 @@ if __name__ == "__main__":
       arr_description_col_cpy = data._description_col #gridding will operate on deep copied memory
       params.spw_index_array = arr_description_col_cpy.ctypes.data_as(ctypes.c_void_p)
       params.row_count = ctypes.c_size_t(chunk_linecount)
-      params.no_timestamps_read = ctypes.c_size_t(data._no_timestamps_read)
+      if parser_args['do_jones_corrections']: #do faceting with jones corrections
+	params.no_timestamps_read = ctypes.c_size_t(data._no_timestamps_read)
       params.is_final_data_chunk = ctypes.c_bool(chunk_index == no_chunks - 1)
       arr_antenna_1_cpy = data._arr_antenna_1 #gridding will operate with deep copied data
       params.antenna_1_ids = arr_antenna_1_cpy.ctypes.data_as(ctypes.c_void_p)
@@ -472,3 +476,4 @@ if __name__ == "__main__":
   print "\tFourier inversion time: %f secs" % libimaging.get_inversion_walltime()
   print "\tTotal runtime: %f secs" % total_run_time.elapsed()
   libimaging.releaseLibrary()
+  exit(0)

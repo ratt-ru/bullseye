@@ -142,7 +142,7 @@ def compute_vis_grid_indicies(should_average_spw_channels,should_average_all,dat
     cube_chan_dim_size = 1
   return (channel_grid_index,cube_chan_dim_size)
 
-def compute_sampling_function_grid_indicies(data,channels_to_image):
+def compute_sampling_function_grid_indicies(data,channels_to_image,enabled_channels):
   sampling_function_channel_grid_index = np.zeros([data._no_spw*data._no_channels],dtype=np.intp)
   sampling_function_channel_count = len(channels_to_image)
   current_grid = 0
@@ -150,4 +150,4 @@ def compute_sampling_function_grid_indicies(data,channels_to_image):
     sampling_function_channel_grid_index[c] = current_grid
     if enabled_channels[c]:
       current_grid += 1
-  return sampling_function_channel_grid_index
+  return (sampling_function_channel_grid_index,sampling_function_channel_count)

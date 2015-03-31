@@ -359,7 +359,8 @@ extern "C" {
 		tmp_ant_1[rearanged_index] = params.antenna_1_ids[r];
 		tmp_ant_2[rearanged_index] = params.antenna_2_ids[r];
 		tmp_field[rearanged_index] = params.field_array[r];
-		tmp_time[rearanged_index] = params.timestamp_ids[r];
+		if (params.should_invert_jones_terms)
+		  tmp_time[rearanged_index] = params.timestamp_ids[r];
 	  }
 	  //copy back to python variables
 	  memcpy((void*)(params.uvw_coords),
@@ -389,9 +390,10 @@ extern "C" {
 	  memcpy((void*)(params.field_array),
 		 (void*)(&tmp_field[0]),
 		 params.row_count * sizeof(unsigned int));
-	  memcpy((void*)(params.timestamp_ids),
-		 (void*)(&tmp_time[0]),
-		 params.row_count * sizeof(size_t));
+	  if (params.should_invert_jones_terms)
+	    memcpy((void*)(params.timestamp_ids),
+		   (void*)(&tmp_time[0]),
+		   params.row_count * sizeof(size_t));
 	}
     }
     

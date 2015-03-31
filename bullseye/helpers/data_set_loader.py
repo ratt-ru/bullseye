@@ -176,19 +176,27 @@ class data_set_loader(object):
     '''
     def read_data(self,start_row=0,no_rows=-1,data_column = "DATA",do_romein_baseline_ordering = False):
 	print "READING UVW VALUES, DATA, WEIGHTS AND FLAGS"
-        casa_ms_table = table(self._MSName,ack=False,readonly=True)
+        casa_ms_table = table(self._MSName,ack=False,readonly=True)        
         time_ordered_ms_table = None
-        with data_set_loader.time_to_load_chunks:
-	  try:
-	    chopped_ms_table = taql("SELECT UVW,"+data_column+",WEIGHT_SPECTRUM,FLAG,FLAG_ROW,DATA_DESC_ID,ANTENNA1,ANTENNA2,FIELD_ID,TIME FROM $casa_ms_table LIMIT $no_rows OFFSET $start_row")
-	    time_ordered_ms_table = taql("SELECT UVW,"+data_column+",WEIGHT_SPECTRUM,FLAG,FLAG_ROW,DATA_DESC_ID,ANTENNA1,ANTENNA2,FIELD_ID,TIME FROM $chopped_ms_table ORDERBY TIME")
-	    c = time_ordered_ms_table.getcol("WEIGHT_SPECTRUM")
-	    chopped_ms_table.close()
-	  except:
-	    chopped_ms_table = taql("SELECT UVW,"+data_column+",WEIGHT,FLAG,FLAG_ROW,DATA_DESC_ID,ANTENNA1,ANTENNA2,FIELD_ID,TIME FROM $casa_ms_table LIMIT $no_rows OFFSET $start_row")
-	    time_ordered_ms_table = taql("SELECT UVW,"+data_column+",WEIGHT,FLAG,FLAG_ROW,DATA_DESC_ID,ANTENNA1,ANTENNA2,FIELD_ID,TIME FROM $chopped_ms_table ORDERBY TIME")
-	    chopped_ms_table.close()
-        no_rows = casa_ms_table.nrows() if no_rows==-1 else no_rows
+        if self._should_read_jones_terms:
+	  with data_set_loader.time_to_load_chunks:
+	    try:
+	      chopped_ms_table = taql("SELECT UVW,"+data_column+",WEIGHT_SPECTRUM,FLAG,FLAG_ROW,DATA_DESC_ID,ANTENNA1,ANTENNA2,FIELD_ID,TIME FROM $casa_ms_table LIMIT $no_rows OFFSET $start_row")
+	      time_ordered_ms_table = taql("SELECT UVW,"+data_column+",WEIGHT_SPECTRUM,FLAG,FLAG_ROW,DATA_DESC_ID,ANTENNA1,ANTENNA2,FIELD_ID,TIME FROM $chopped_ms_table ORDERBY TIME")
+	      c = time_ordered_ms_table.getcol("WEIGHT_SPECTRUM")
+	      chopped_ms_table.close()
+	    except:
+	      chopped_ms_table = taql("SELECT UVW,"+data_column+",WEIGHT,FLAG,FLAG_ROW,DATA_DESC_ID,ANTENNA1,ANTENNA2,FIELD_ID,TIME FROM $casa_ms_table LIMIT $no_rows OFFSET $start_row")
+	      time_ordered_ms_table = taql("SELECT UVW,"+data_column+",WEIGHT,FLAG,FLAG_ROW,DATA_DESC_ID,ANTENNA1,ANTENNA2,FIELD_ID,TIME FROM $chopped_ms_table ORDERBY TIME")
+	      chopped_ms_table.close()
+	else: #since we're not doing jones corrections let's leave the table unordered (shaves a lot of time off the data loading)
+	  with data_set_loader.time_to_load_chunks:
+	    try:
+	      time_ordered_ms_table = taql("SELECT UVW,"+data_column+",WEIGHT_SPECTRUM,FLAG,FLAG_ROW,DATA_DESC_ID,ANTENNA1,ANTENNA2,FIELD_ID,TIME FROM $casa_ms_table LIMIT $no_rows OFFSET $start_row")
+	      c = time_ordered_ms_table.getcol("WEIGHT_SPECTRUM")
+	    except:
+	      time_ordered_ms_table = taql("SELECT UVW,"+data_column+",WEIGHT,FLAG,FLAG_ROW,DATA_DESC_ID,ANTENNA1,ANTENNA2,FIELD_ID,TIME FROM $casa_ms_table LIMIT $no_rows OFFSET $start_row")
+	no_rows = casa_ms_table.nrows() if no_rows==-1 else no_rows
         assert(no_rows > 0) #table is the empty set
         '''
         Grab the uvw coordinates (these are not yet measured in terms of wavelength!)
@@ -278,30 +286,31 @@ class data_set_loader(object):
 	'''
 	  Compute a timestep index array from the given integration centres:
 	'''
-	timestamp_index = 0 #this index always refers to the index numbers of the timesteps in the current data slice
-	try:
-	  self._last_timestamp_time
-	  self._last_starting_point
-	  if time_window_centre[0] == self._last_timestamp_time: 
-	    print "PREVIOUS SLICE DID NOT READ TIMESTAMP COMPLETELY, CONTINUEING FROM PREVIOUS TIMESTAMP... "
-	except:
-	  self._last_timestamp_time = time_window_centre[0] #first slice being read, set equal to the first window centre
-	  self._last_starting_point = 0
+	if self._should_read_jones_terms:
+	  timestamp_index = 0 #this index always refers to the index numbers of the timesteps in the current data slice
+	  try:
+	    self._last_timestamp_time
+	    self._last_starting_point
+	    if time_window_centre[0] == self._last_timestamp_time: 
+	      print "PREVIOUS SLICE DID NOT READ TIMESTAMP COMPLETELY, CONTINUEING FROM PREVIOUS TIMESTAMP... "
+	  except:
+	    self._last_timestamp_time = time_window_centre[0] #first slice being read, set equal to the first window centre
+	    self._last_starting_point = 0
 	  
-	'''
-        Now generate timestamp index array
-        '''  
-	with data_set_loader.time_to_load_chunks:
-	  for r in range(0,no_rows):
-	    current_time = time_window_centre[r]
+	  '''
+	  Now generate timestamp index array
+	  '''
+	  with data_set_loader.time_to_load_chunks:
 	    epsilon = 0.00000001
-	    if current_time - self._last_timestamp_time > epsilon:
-	      timestamp_index+=1
-	      self._last_timestamp_time = current_time
-	    #else is not possible because we've explicitly sorted the measurement set with the TAQL statement above
+	    for r in range(0,no_rows):
+	      current_time = time_window_centre[r]
+	      if current_time - self._last_timestamp_time > epsilon:
+		timestamp_index+=1
+		self._last_timestamp_time = current_time
+	      #else is not possible because we've explicitly sorted the measurement set with the TAQL statement above (when jones inversion is enabled)
 	   
-	    self._time_indicies[r] = timestamp_index
-	  self._no_timestamps_read = timestamp_index + 1  #the last timestamp may be partially read depending on memory constraints
+	      self._time_indicies[r] = timestamp_index
+	    self._no_timestamps_read = timestamp_index + 1  #the last timestamp may be partially read depending on memory constraints
 	
 	'''
 	Read set of jones matricies from disk
@@ -317,5 +326,5 @@ class data_set_loader(object):
 	  except:
 	    print "WARNING: MEASUREMENT SET DOES NOT CONTAIN OPTIONAL SUBTABLE 'DDE_CALIBRATION'"
 	    print traceback.format_exc()
-	self._last_starting_point += timestamp_index #finally set the last timestamp read, this will be the starting point in the DDE_CALIBRATION table
+	  self._last_starting_point += timestamp_index #finally set the last timestamp read, this will be the starting point in the DDE_CALIBRATION table
       
