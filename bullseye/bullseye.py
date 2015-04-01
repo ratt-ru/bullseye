@@ -167,7 +167,11 @@ if __name__ == "__main__":
 
     if parser_args['do_jones_corrections'] and num_facet_centres != data._cal_no_dirs:
       raise argparse.ArgumentTypeError("Number of calibrated directions does not correspond to number of directions being faceted")
-
+    '''
+    check that the convolution kernel size is not greater than the grid size
+    '''
+    if (parser_args['conv_sup']*2 + 1) >= min(parser_args['npix_l'],parser_args['npix_m']):
+      raise argparse.ArgumentTypeError("Full convolution support must be smaller than the grid size")
     '''
     populate the channels to be imaged:
     '''
