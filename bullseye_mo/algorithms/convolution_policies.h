@@ -69,8 +69,9 @@ namespace imaging {
      Must return the total accumulated weight (accross all (2N+1)**2 filter taps)
      */
     inline convolution_base_type convolve(const uvw_coord<uvw_base_type> & __restrict__ uvw,
-			 const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__ vis,
-			 std::size_t no_grids_to_offset) const __restrict__ {
+					  const typename gridding_policy_type::trait_type::pol_vis_type & __restrict__ vis,
+					  std::size_t no_grids_to_offset,
+					  size_t facet_id) const __restrict__{
       throw std::runtime_error("Undefined behaviour");
     }
   };
@@ -168,7 +169,7 @@ namespace imaging {
                 for (std::size_t sup_u = 0; sup_u < _convolution_support; ++sup_u) {
                     std::size_t convolved_grid_u = disc_grid_u + sup_u;
 		    uvw_base_type conv_u = (uvw_base_type)sup_u -_conv_centre_offset + frac_u;
-                    std::size_t grid_flat_index = convolved_grid_v*_ny + convolved_grid_u;
+                    std::size_t grid_flat_index = convolved_grid_v*_nx + convolved_grid_u;
 
                     convolution_base_type conv_weight = convolve(conv_v) * convolve(conv_u);
                     _active_gridding_policy.grid_polarization_terms(chan_offset + grid_flat_index, 
@@ -235,7 +236,7 @@ namespace imaging {
 	  disc_grid_v >= _ny || disc_grid_u >= _nx) return 0;
 	convolution_base_type accum = 0;
         std::size_t conv_v = (frac_v + 1) * _oversampling_factor;
-	std::size_t  convolved_grid_v = (disc_grid_v + 1)*_ny;
+	std::size_t  convolved_grid_v = (disc_grid_v + 1)*_nx;
         for (std::size_t  sup_v = 1; sup_v <= _convolution_support; ++sup_v) { //remember we have a +/- frac at both ends of the filter
 	  convolution_base_type conv_v_weight = _conv[conv_v];
 	  std::size_t conv_u = (frac_u + 1) * _oversampling_factor;
@@ -251,7 +252,7 @@ namespace imaging {
 	    conv_u += _oversampling_factor;
 	  }
 	  conv_v += _oversampling_factor;
-	  convolved_grid_v += _ny;
+	  convolved_grid_v += _nx;
         }
         return accum;
     }
@@ -283,7 +284,7 @@ namespace imaging {
      polarization_index: index of the polarization correlation term currently being gridded
     */
     convolution_policy(std::size_t nx, std::size_t ny, std::size_t no_polarizations, std::size_t convolution_support, std::size_t oversampling_factor, 
-		       const convolution_base_type * conv, gridding_policy_type & active_gridding_policy, size_t facet_id):
+		       const convolution_base_type * conv, gridding_policy_type & active_gridding_policy):
 			_nx(nx), _ny(ny), _grid_size_in_pixels(nx*ny), _grid_u_centre(nx / 2), _grid_v_centre(ny / 2),
 			_convolution_support(convolution_support*2 + 1), _oversampling_factor(oversampling_factor), 
 			_conv(conv), _conv_dim_size(_convolution_support * _oversampling_factor),
@@ -308,7 +309,7 @@ namespace imaging {
 	if (disc_grid_v + _convolution_support  >= _ny || disc_grid_u + _convolution_support  >= _nx ||
 	  disc_grid_v >= _ny || disc_grid_u >= _nx) return 0;
 	
-	std::size_t grid_flat_index = disc_grid_v*_ny + disc_grid_u;
+	std::size_t grid_flat_index = disc_grid_v*_nx + disc_grid_u;
 	_active_gridding_policy.grid_polarization_terms(chan_offset + grid_flat_index, vis, 1);
 	return 1;
     }
