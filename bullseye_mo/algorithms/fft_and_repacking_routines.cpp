@@ -45,7 +45,7 @@ typedef fftw_plan fftw_plan_type;
 #endif
 namespace imaging{
   ifft_machine::ifft_machine(gridding_parameters & params){
-    int dims[] = {(int)params.nx,(int)params.ny};
+    int dims[] = {(int)params.ny,(int)params.nx};
       fft_plan = (void*) new fftw_plan_type;
       fft_psf_plan = (void*) new fftw_plan_type;
       #ifdef SHOULD_DO_32_BIT_FFT
