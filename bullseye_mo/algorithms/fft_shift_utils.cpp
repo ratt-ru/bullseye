@@ -43,31 +43,36 @@ namespace utils{
               std::size_t no_slices) {
     for (std::size_t slice = 0; slice < no_slices; ++slice) {
         std::size_t slice_offset = slice * nx * ny;
-        std::size_t quad_size_x = ceil((nx) / 2.0);
-        std::size_t quad_size_y = ceil((ny) / 2.0);
-        std::size_t ubound = quad_size_x * quad_size_y;
-        for (std::size_t i = 0; i < ubound; ++i) {
-            std::size_t y_1 = i / quad_size_x;
-            std::size_t x_1 = i - y_1 * quad_size_x;
-            std::size_t y_3 = ny - (quad_size_y - y_1);
-            std::size_t x_3 = nx - (quad_size_x - x_1);
-            std::size_t x_2 = x_3;
-            std::size_t y_2 = y_1;
-            std::size_t x_4 = x_1;
-            std::size_t y_4 = y_3;
-
-            //swap quadrant 1 with quadrant 3 and swap quadrant 2 with quadrant 4:
-            std::size_t quad_1_flat_index = y_1*nx + x_1 + slice_offset;
-            std::size_t quad_3_flat_index = y_3*nx + x_3 + slice_offset;
-            std::size_t quad_2_flat_index = y_2*nx + x_2 + slice_offset;
-            std::size_t quad_4_flat_index = y_4*nx + x_4 + slice_offset;
-            std::complex<grid_base_type> swap_1 = grid[quad_1_flat_index];
-            std::complex<grid_base_type> swap_2 = grid[quad_2_flat_index];
-            grid[quad_1_flat_index] = grid[quad_3_flat_index];
-            grid[quad_2_flat_index] = grid[quad_4_flat_index];
-            grid[quad_3_flat_index] = swap_1;
-            grid[quad_4_flat_index] = swap_2;
-        }
+        std::complex<grid_base_type> * offset_grid = grid + slice_offset;
+	
+	std::size_t half_x = nx / 2;
+	std::size_t half_y = ny / 2;
+	std::size_t odd_offset_x = (nx % 2 != 0) ? 1 : 0;
+	//rotate all the rows right
+	for (std::size_t iy =0; iy < ny; ++iy){
+	    std::complex<grid_base_type> swap_mid = offset_grid[iy*nx + half_x];
+	    for (std::size_t ix = 0; ix < half_x; ++ix){
+		std::complex<grid_base_type> swap = offset_grid[iy*nx+ix]; //in case this dimension is even
+		offset_grid[iy*nx+ix] = offset_grid[iy*nx + half_x + ix + odd_offset_x];
+		offset_grid[iy*nx + half_x + ix] = swap;
+	    }
+	    if (nx % 2 != 0){
+		offset_grid[iy*nx + nx - 1] = swap_mid;
+	    }
+	}
+	std::size_t odd_offset_y = (ny % 2 != 0) ? 1 : 0;
+	//rotate all the columns down
+	for (std::size_t ix = 0; ix < nx; ++ix){
+	    std::complex<grid_base_type> swap_mid = offset_grid[half_y*nx+ix];
+	    for (std::size_t iy = 0; iy < half_y; ++iy){
+		std::complex<grid_base_type> swap = offset_grid[iy*nx+ix]; //in case this dimension is even
+		offset_grid[iy*nx+ix] = offset_grid[(iy + half_y + odd_offset_y)*nx + ix];
+		offset_grid[(half_y + iy)*nx+ix] = swap;
+	    }
+	    if (ny % 2 != 0){
+		offset_grid[(ny-1)*nx + ix] = swap_mid;
+	    }
+	}
     }
   }
   void ifftshift(std::complex<grid_base_type> * __restrict__ grid,
@@ -75,32 +80,34 @@ namespace utils{
                std::size_t no_slices) {
     for (std::size_t slice = 0; slice < no_slices; ++slice) {
         std::size_t slice_offset = slice * nx * ny;
-        std::size_t quad_size_x = (nx) / 2;
-        std::size_t quad_size_y = (ny) / 2;
-        std::size_t ubound = quad_size_x * quad_size_y;
-        for (std::size_t i = 0; i < ubound; ++i) {
-            std::size_t y_1 = i / quad_size_x;
-            std::size_t x_1 = i - y_1 * quad_size_x;
-            std::size_t y_3 = ny - (quad_size_y - y_1);
-            std::size_t x_3 = nx - (quad_size_x - x_1);
-	    
-            std::size_t x_2 = x_3;
-            std::size_t y_2 = y_1;
-            std::size_t x_4 = x_1;
-            std::size_t y_4 = y_3;
-
-            //swap quadrant 1 with quadrant 3 and swap quadrant 2 with quadrant 4:
-            std::size_t quad_1_flat_index = y_1*nx + x_1 + slice_offset;
-            std::size_t quad_3_flat_index = y_3*nx + x_3 + slice_offset;
-            std::size_t quad_2_flat_index = y_2*nx + x_2 + slice_offset;
-            std::size_t quad_4_flat_index = y_4*nx + x_4 + slice_offset;
-            std::complex<grid_base_type> swap_1 = grid[quad_1_flat_index];
-            std::complex<grid_base_type> swap_2 = grid[quad_2_flat_index];
-            grid[quad_1_flat_index] = grid[quad_3_flat_index];
-            grid[quad_2_flat_index] = grid[quad_4_flat_index];
-            grid[quad_3_flat_index] = swap_1;
-            grid[quad_4_flat_index] = swap_2;
-        }
+        std::complex<grid_base_type> * offset_grid = grid + slice_offset;
+	std::size_t half_x = nx / 2;
+	std::size_t half_y = ny / 2;
+	std::size_t odd_offset_x = (nx % 2 != 0) ? 1 : 0;
+	//rotate all the rows right
+	for (std::size_t iy =0; iy < ny; ++iy){
+	    std::complex<grid_base_type> swap_mid = offset_grid[iy*nx + half_x];
+	    for (std::size_t ix = 0; ix < half_x; ++ix){
+		std::size_t ix_reverse = half_x - 1 - ix;
+		
+		std::complex<grid_base_type> swap_x = offset_grid[iy*nx + half_x + ix_reverse + odd_offset_x];
+		offset_grid[iy*nx + half_x + ix_reverse + odd_offset_x] = offset_grid[iy*nx + ix_reverse];
+		offset_grid[iy*nx + ix_reverse + odd_offset_x] = swap_x;
+	    }
+	    offset_grid[iy*nx] = swap_mid; //doesn't matter for the even case
+	}  
+	std::size_t odd_offset_y = (ny % 2 != 0) ? 1 : 0;
+	//rotate all the columns down
+	for (std::size_t ix = 0; ix < nx; ++ix){
+	    std::complex<grid_base_type> swap_mid = offset_grid[half_y*nx + ix];
+	    for (std::size_t iy = 0; iy < half_y; ++iy){
+		std::size_t iy_reverse = half_y - 1 - iy;
+		std::complex<grid_base_type> swap_y = offset_grid[(half_y + iy_reverse + odd_offset_y)*nx + ix];
+		offset_grid[(half_y + iy_reverse + odd_offset_y)*nx + ix] = offset_grid[iy_reverse*nx+ix];
+		offset_grid[(iy_reverse+odd_offset_y)*nx + ix] = swap_y;
+	    }
+	    offset_grid[ix] = swap_mid; //doesn't matter for the even case
+	}
     }
   }
 }
