@@ -76,8 +76,8 @@ namespace imaging {
 		uvw_base_type v_scale=-(params.ny*params.cell_size_y * ARCSEC_TO_RAD);
 		
 		uvw_base_type conv_offset = (padded_conv_full_support) / 2.0; 
-		uvw_base_type grid_centre_offset_x = params.nx/2.0 - conv_offset + my_conv_u;
-		uvw_base_type grid_centre_offset_y = params.ny/2.0 - conv_offset + my_conv_v;
+		uvw_base_type grid_centre_offset_x = params.nx/2 - conv_offset + my_conv_u;
+		uvw_base_type grid_centre_offset_y = params.ny/2 - conv_offset + my_conv_v;
 		size_t grid_size_in_floats = params.nx * params.ny << 1;
 		grid_base_type* facet_output_buffer;
 		active_correlation_gridding_policy::compute_facet_grid_ptr(params,my_facet_id,grid_size_in_floats,&facet_output_buffer);
