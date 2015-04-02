@@ -2,11 +2,58 @@
 <!-- Generated with glade 3.16.1 -->
 <interface>
   <requires lib="gtk+" version="3.0"/>
-  <object class="GtkImage" id="imgExportIcon">
-    <property name="visible">True</property>
+  <object class="GtkAboutDialog" id="dlgAbout">
     <property name="can_focus">False</property>
-    <property name="stock">gtk-floppy</property>
-    <property name="use_fallback">True</property>
+    <property name="icon">icon.png</property>
+    <property name="type_hint">dialog</property>
+    <property name="program_name">Bullseye Demonstration GUI</property>
+    <property name="version">Version 1.0</property>
+    <property name="copyright" translatable="yes">© 2014- 2015
+Rhodes Centre for Radio Astronomy Techniques and Technologies
+Department of Physics and Electronics
+Rhodes University
+Artillery Road P O Box 94
+Grahamstown, 6140, Eastern Cape, South Africa
+
+Department of Computer Science
+University of Cape Town
+18 University Avenue
+University of Cape Town
+Rondebosch,Cape Town, South Africa</property>
+    <property name="comments" translatable="yes">An accelerated targeted facet imager for widefield
+image synthesis in radio astronomy</property>
+    <property name="website">https://www.github.com/ratt-ru/bullseye</property>
+    <property name="website_label" translatable="yes">Visit us on Github</property>
+    <property name="authors">Benjamin Hugo (Developer)
+Oleg Smirnov
+James Gain
+Cyril Tasse</property>
+    <property name="artists">Logo obtained from www.iconfinder.com</property>
+    <property name="logo">icon.png</property>
+    <property name="logo_icon_name"/>
+    <property name="license_type">gpl-2-0</property>
+    <child internal-child="vbox">
+      <object class="GtkBox" id="aboutdialog-vbox1">
+        <property name="can_focus">False</property>
+        <property name="orientation">vertical</property>
+        <property name="spacing">2</property>
+        <child internal-child="action_area">
+          <object class="GtkButtonBox" id="aboutdialog-action_area1">
+            <property name="can_focus">False</property>
+            <property name="layout_style">end</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="pack_type">end</property>
+            <property name="position">0</property>
+          </packing>
+        </child>
+        <child>
+          <placeholder/>
+        </child>
+      </object>
+    </child>
   </object>
   <object class="GtkListStore" id="lstFacetingProperties">
     <columns>
@@ -89,6 +136,7 @@
     <property name="title" translatable="yes">Bullseye Prototype</property>
     <property name="default_width">800</property>
     <property name="default_height">600</property>
+    <property name="icon">icon.png</property>
     <child>
       <object class="GtkVBox" id="lyoMain">
         <property name="visible">True</property>
@@ -120,17 +168,6 @@
                       </object>
                     </child>
                     <child>
-                      <object class="GtkImageMenuItem" id="mitExport">
-                        <property name="label" translatable="yes">Export</property>
-                        <property name="use_action_appearance">False</property>
-                        <property name="visible">True</property>
-                        <property name="can_focus">False</property>
-                        <property name="image">imgExportIcon</property>
-                        <property name="use_stock">False</property>
-                        <signal name="activate" handler="on_mitExport_click" swapped="no"/>
-                      </object>
-                    </child>
-                    <child>
                       <object class="GtkSeparatorMenuItem" id="mitFileMenuSeparator">
                         <property name="use_action_appearance">False</property>
                         <property name="visible">True</property>
@@ -148,21 +185,6 @@
                         <signal name="activate" handler="on_mitExit_click" swapped="no"/>
                       </object>
                     </child>
-                  </object>
-                </child>
-              </object>
-            </child>
-            <child>
-              <object class="GtkMenuItem" id="menuitem2">
-                <property name="use_action_appearance">False</property>
-                <property name="visible">True</property>
-                <property name="can_focus">False</property>
-                <property name="label" translatable="yes">_View</property>
-                <property name="use_underline">True</property>
-                <child type="submenu">
-                  <object class="GtkMenu" id="mnuView">
-                    <property name="visible">True</property>
-                    <property name="can_focus">False</property>
                   </object>
                 </child>
               </object>
@@ -186,6 +208,7 @@
                         <property name="can_focus">False</property>
                         <property name="use_underline">True</property>
                         <property name="use_stock">True</property>
+                        <signal name="activate" handler="on_mitAbout_click" swapped="no"/>
                       </object>
                     </child>
                   </object>
@@ -292,7 +315,7 @@
                   <object class="GtkLabel" id="lblFaceting">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
-                    <property name="label" translatable="yes">Targetted Faceting</property>
+                    <property name="label" translatable="yes">Targeted Faceting</property>
                     <property name="justify">right</property>
                     <property name="wrap">True</property>
                   </object>

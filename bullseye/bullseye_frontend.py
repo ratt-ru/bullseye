@@ -1,3 +1,4 @@
+#!/usr/bin/python
 '''
 Bullseye:
 An accelerated targeted facet imager
@@ -37,11 +38,14 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 '''
 
-#!/usr/bin/python
-
-from gi.repository import Gtk
+from gi.repository import Gtk,Gdk, GLib
 from viewcontrollers import frmMain
+import threading
 
 if __name__ == "__main__":
   wnd = frmMain.frmMain()
+  GLib.threads_init()
+  #Gdk.threads_init()
+  #Gdk.threads_enter()
   Gtk.main()
+  #Gdk.threads_leave()
