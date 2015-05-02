@@ -42,6 +42,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "gridding_parameters.h"
 #include "baseline_transform_policies.h"
 #include "phase_transform_policies.h"
+#include "baseline_transform_traits.h"
 
 namespace imaging {
 	/*
@@ -82,7 +83,7 @@ namespace imaging {
 		grid_base_type* facet_output_buffer;
 		active_correlation_gridding_policy::compute_facet_grid_ptr(params,my_facet_id,grid_size_in_floats,&facet_output_buffer);
 		//Compute the transformation necessary to distort the baseline and phase according to the new facet delay centre (Cornwell & Perley, 1991)
-		baseline_rotation_mat baseline_transformation;
+		typename active_baseline_transformation_policy::baseline_transform_type baseline_transformation;
 		lmn_coord phase_offset;
 		uvw_base_type new_delay_ra;
 		uvw_base_type new_delay_dec;
@@ -102,8 +103,6 @@ namespace imaging {
 		}
 		__syncthreads(); //wait for the first thread to put the entire filter into shared memory
 		
-// 		size_t channel_loop_ubound = params.channel_count >> 1;
-// 		size_t channel_loop_rem_lbound = channel_loop_ubound << 1;
 		//we must keep seperate accumulators per channel, so we need to bring these loops outward (contrary to Romein's paper)
 		{
 		    typename active_correlation_gridding_policy::active_trait::accumulator_type my_grid_accum;
