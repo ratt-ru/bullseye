@@ -1,4 +1,6 @@
 recursive-include bullseye_mo/cbuild/algorithms/single lib*
 recursive-include bullseye_mo/cbuild/algorithms/double lib*
+recursive-include bullseye_mo/cbuild/new_multithreaded_approach/single lib*
+recursive-include bullseye_mo/cbuild/new_multithreaded_approach/double lib*
 recursive-include bullseye_mo/cbuild/gpu_algorithm/single lib*
 recursive-include bullseye_mo/cbuild/gpu_algorithm/double lib*
