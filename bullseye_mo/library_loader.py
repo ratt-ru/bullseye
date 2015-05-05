@@ -48,9 +48,9 @@ def load_library(architecture,precision):
   libimaging = None
   if architecture == 'CPU':
     if precision == 'single':
-      libimaging = ctypes.pydll.LoadLibrary("%s/cbuild/new_multithreaded_approach/single/libalt_imaging32.so" % mod_path)
+      libimaging = ctypes.pydll.LoadLibrary("%s/cbuild/cpu_algorithm/single/libcpu_imaging32.so" % mod_path)
     else:
-      libimaging = ctypes.pydll.LoadLibrary("%s/cbuild/new_multithreaded_approach/double/libalt_imaging64.so" % mod_path)
+      libimaging = ctypes.pydll.LoadLibrary("%s/cbuild/cpu_algorithm/double/libcpu_imaging64.so" % mod_path)
   elif architecture == 'GPU':
     if precision == 'single':
       libimaging = ctypes.pydll.LoadLibrary("%s/cbuild/gpu_algorithm/single/libgpu_imaging32.so" % mod_path)

@@ -74,8 +74,7 @@ namespace imaging {
 					    typename active_trait::accumulator_type & accumulator
 					   );
     __device__ static void store_normalization_term(gridding_parameters & params,std::size_t channel_grid_index,std::size_t facet_id, 
-						    typename active_trait::normalization_accumulator_type normalization_weight, 
-						    typename active_trait::vis_weight_type gridding_weight);
+						    typename active_trait::normalization_accumulator_type normalization_weight);
   };
   template <>
   class correlation_gridding_policy<grid_single_correlation> {
@@ -89,7 +88,7 @@ namespace imaging {
 						  typename active_trait::vis_flag_type & flag,
 						  typename active_trait::vis_weight_type & weight
 						 ){
-      size_t vis_index = row_index * params.channel_count + c;
+      size_t vis_index = (row_index * params.channel_count + c) * params.number_of_polarization_terms + params.polarization_index;
       flag = params.flags[vis_index];
       weight = params.visibility_weights[vis_index];
       vis = ((active_trait::vis_type *)params.visibilities)[vis_index];
@@ -101,6 +100,9 @@ namespace imaging {
     }
     __device__ static void read_and_apply_antenna_jones_terms(const gridding_parameters & params,
 							      size_t row_index,
+							      size_t direction_id,
+							      size_t spw_id,
+							      size_t channel_id,
 							      typename active_trait::vis_type & vis){}
     __device__ static void compute_facet_grid_ptr(const gridding_parameters & params,
 						  size_t facet_id,
@@ -125,10 +127,9 @@ namespace imaging {
       grid_flat_index[1] += accumulator._x._imag;
     }
     __device__ static void store_normalization_term(gridding_parameters & params,std::size_t channel_grid_index,std::size_t facet_id, 
-						    typename active_trait::normalization_accumulator_type normalization_weight, 
-						    typename active_trait::vis_weight_type gridding_weight){
+						    typename active_trait::normalization_accumulator_type normalization_weight){
       std::size_t channel_norm_term_flat_index = facet_id * params.cube_channel_dim_size + channel_grid_index;
-      params.normalization_terms[channel_norm_term_flat_index] += normalization_weight._x*gridding_weight._x;
+      params.normalization_terms[channel_norm_term_flat_index] += normalization_weight._x;
     }
   };
   template <>
@@ -154,6 +155,9 @@ namespace imaging {
     }
     __device__ static void read_and_apply_antenna_jones_terms(const gridding_parameters & params,
 							      size_t row_index,
+							      size_t direction_id,
+							      size_t spw_id,
+							      size_t channel_id,
 							      typename active_trait::vis_type & vis){}
     __device__ static void compute_facet_grid_ptr(const gridding_parameters & params,
 						  size_t facet_id,
@@ -178,10 +182,8 @@ namespace imaging {
       grid_flat_index[1]+=accumulator._x._imag;
     }
     __device__ static void store_normalization_term(gridding_parameters & params,std::size_t channel_grid_index,std::size_t facet_id, 
-						    typename active_trait::normalization_accumulator_type normalization_weight, 
-						    typename active_trait::vis_weight_type gridding_weight){
-      std::size_t channel_norm_term_flat_index = channel_grid_index;
-      params.normalization_terms[channel_norm_term_flat_index] += normalization_weight._x*gridding_weight._x;
+						    typename active_trait::normalization_accumulator_type normalization_weight){
+      //No need to store the normalization term: centre of PSF should always be 1+0i
     }
   };
   template <>
@@ -196,10 +198,12 @@ namespace imaging {
 						  typename active_trait::vis_flag_type & flag,
 						  typename active_trait::vis_weight_type & weight
 						 ){
-      size_t vis_index = (row_index * params.channel_count + c); //this assumes the data is stripped of excess correlations before transferred to GPU
+      size_t vis_index = (row_index * params.channel_count + c) * params.number_of_polarization_terms;
       flag = ((active_trait::vis_flag_type *)params.flags)[vis_index];
-      weight = ((active_trait::vis_weight_type *)params.visibility_weights)[vis_index];
-      vis = ((active_trait::vis_type *)params.visibilities)[vis_index];
+      weight._x = (params.visibility_weights)[vis_index + params.polarization_index];
+      weight._y = (params.visibility_weights)[vis_index + params.second_polarization_index];
+      vis._x = ((basic_complex<visibility_base_type>*)params.visibilities)[vis_index + params.polarization_index];
+      vis._y = ((basic_complex<visibility_base_type>*)params.visibilities)[vis_index + params.second_polarization_index];
     }
     __device__ static void read_channel_grid_index(const gridding_parameters & params,
 						   size_t spw_channel_flat_index,
@@ -208,6 +212,9 @@ namespace imaging {
     }
     __device__ static void read_and_apply_antenna_jones_terms(const gridding_parameters & params,
 							      size_t row_index,
+							      size_t direction_id,
+							      size_t spw_id,
+							      size_t channel_id,
 							      typename active_trait::vis_type & vis){}
     __device__ static void compute_facet_grid_ptr(const gridding_parameters & params,
 						  size_t facet_id,
@@ -236,11 +243,10 @@ namespace imaging {
       grid_flat_index_corr2[1] += accumulator._y._imag;
     }
     __device__ static void store_normalization_term(gridding_parameters & params,std::size_t channel_grid_index,std::size_t facet_id, 
-						    typename active_trait::normalization_accumulator_type normalization_weight, 
-						    typename active_trait::vis_weight_type gridding_weight){
-      size_t channel_norm_term_flat_index = (channel_grid_index) << 1;
-      params.normalization_terms[channel_norm_term_flat_index] += normalization_weight._x*gridding_weight._x;
-      params.normalization_terms[channel_norm_term_flat_index + 1] += normalization_weight._y*gridding_weight._y;
+						    typename active_trait::normalization_accumulator_type normalization_weight){
+      std::size_t channel_norm_term_flat_index = (facet_id * params.cube_channel_dim_size + channel_grid_index) << 1;
+      params.normalization_terms[channel_norm_term_flat_index] += normalization_weight._x;
+      params.normalization_terms[channel_norm_term_flat_index + 1] += normalization_weight._y;
     }
   };
   template <>
@@ -268,6 +274,9 @@ namespace imaging {
     }
     __device__ static void read_and_apply_antenna_jones_terms(const gridding_parameters & params,
 							      size_t row_index,
+							      size_t direction_id,
+							      size_t spw_id,
+							      size_t channel_id,
 							      typename active_trait::vis_type & vis){}
     __device__ static void compute_facet_grid_ptr(const gridding_parameters & params,
 						  size_t facet_id,
@@ -302,26 +311,16 @@ namespace imaging {
       grid_flat_index_corr4[1]+=accumulator._w._imag;
     }
     __device__ static void store_normalization_term(gridding_parameters & params,std::size_t channel_grid_index,std::size_t facet_id, 
-						    typename active_trait::normalization_accumulator_type normalization_weight, 
-						    typename active_trait::vis_weight_type gridding_weight){
-      size_t channel_norm_term_flat_index = (channel_grid_index) << 2;
-      params.normalization_terms[channel_norm_term_flat_index] += normalization_weight._x*gridding_weight._x;
-      params.normalization_terms[channel_norm_term_flat_index + 1] += normalization_weight._y*gridding_weight._y;
-      params.normalization_terms[channel_norm_term_flat_index + 2] += normalization_weight._z*gridding_weight._z;
-      params.normalization_terms[channel_norm_term_flat_index + 3] += normalization_weight._w*gridding_weight._w;
+						    typename active_trait::normalization_accumulator_type normalization_weight){
+      std::size_t channel_norm_term_flat_index = (facet_id * params.cube_channel_dim_size + channel_grid_index) << 2;
+      params.normalization_terms[channel_norm_term_flat_index] += normalization_weight._x;
+      params.normalization_terms[channel_norm_term_flat_index + 1] += normalization_weight._y;
+      params.normalization_terms[channel_norm_term_flat_index + 2] += normalization_weight._z;
+      params.normalization_terms[channel_norm_term_flat_index + 3] += normalization_weight._w;
     }
   };
   template <>
   class correlation_gridding_policy<grid_4_correlation_with_jones_corrections> {
-  private:
-    __device__ static size_t find_jones_index(size_t * antenna_jones_matricies,size_t count, size_t match_id){
-	for (size_t i = 0; i < count; ++i){
-	  size_t time_index_of_i = antenna_jones_matricies[i];
-	  if (time_index_of_i == match_id)
-	    return i;
-	}
-	return 2 << 31;
-    }
   public:
     typedef correlation_gridding_traits<grid_4_correlation_with_jones_corrections> active_trait;
     __device__ static void read_corralation_data (gridding_parameters & params,
@@ -342,32 +341,23 @@ namespace imaging {
     }
     __device__ static void read_and_apply_antenna_jones_terms(const gridding_parameters & params,
 							      size_t row_index,
+							      size_t direction_id,
+							      size_t spw_id,
+							      size_t channel_id,
 							      typename active_trait::vis_type & vis){
-	size_t correlator_timestamp_id = params.timestamp_ids[row_index]; //this may / may not correspond to the time loop (depending on how many timestamps are missing per baseline
+	size_t correlator_timestamp_id = params.timestamp_ids[row_index]; //this may / may not correspond to the time loop (depending on how many timestamps are missing per baseline)
 	size_t antenna_1_id = params.antenna_1_ids[row_index];
 	size_t antenna_2_id = params.antenna_2_ids[row_index]; //necessary to make sure we apply the matricies in the right order
-	/* Since we've had to compact the Jones matrix arrays to dimensions: #antenna . time(antenna_id) . #spw . #channel . 4 correlations
-	 * and the second term varies per antenna we need an array to check where each antenna's jones matricies start, as well
-	 * as an array with the correlator timestamp index for every set (spw . channel . 4) of jones matricies on a per antenna basis
-	 * We can now find the correct jones term based on its correlator timestamp index (remember some timestamps may be missing)
-	 */
-	size_t starting_jones_index_antenna_1 = params.antenna_jones_starting_indexes[antenna_1_id];
-	size_t starting_jones_index_antenna_2 = params.antenna_jones_starting_indexes[antenna_2_id];
-	size_t number_of_jones_terms_for_antenna_1 = params.antenna_jones_starting_indexes[antenna_1_id + 1] - 
-						     starting_jones_index_antenna_1; //there are N+1 terms in this prefix scan
-	size_t number_of_jones_terms_for_antenna_2 = params.antenna_jones_starting_indexes[antenna_2_id + 1] - 
-						     starting_jones_index_antenna_2; //there are N+1 terms in this prefix scan
-	size_t jones_collection_size = params.antenna_count * params.spw_count * params.channel_count;
 	
-	size_t jones_term_index_id_antenna_1 = find_jones_index(params.jones_time_indicies_per_antenna + starting_jones_index_antenna_1,
-								number_of_jones_terms_for_antenna_1,correlator_timestamp_id);
-	size_t jones_term_index_id_antenna_2 = find_jones_index(params.jones_time_indicies_per_antenna + starting_jones_index_antenna_2,
-								number_of_jones_terms_for_antenna_2,correlator_timestamp_id);
-	jones_2x2<visibility_base_type> * antenna_1_jones_matricies = (jones_2x2<visibility_base_type> *) params.jones_terms + 
-								      (starting_jones_index_antenna_1 * jones_collection_size);
-	jones_2x2<visibility_base_type> * antenna_2_jones_matricies = (jones_2x2<visibility_base_type> *) params.jones_terms + 
-								      (starting_jones_index_antenna_2 * jones_collection_size);
-	vis = (antenna_1_jones_matricies[jones_term_index_id_antenna_1] * (vis * antenna_2_jones_matricies[jones_term_index_id_antenna_2])); //remember matricies don't commute!
+	size_t antenna_1_jones_terms_flat_index = (((correlator_timestamp_id*params.antenna_count + antenna_1_id)*params.num_facet_centres + 
+						    direction_id)*params.spw_count + spw_id)*params.channel_count + channel_id;
+	size_t antenna_2_jones_terms_flat_index = (((correlator_timestamp_id*params.antenna_count + antenna_2_id)*params.num_facet_centres + 
+						    direction_id)*params.spw_count + spw_id)*params.channel_count + channel_id;
+	//these should be inverted prior to gridding
+	jones_2x2<visibility_base_type> p_inv = ((jones_2x2<visibility_base_type> *) params.jones_terms)[antenna_1_jones_terms_flat_index];
+	jones_2x2<visibility_base_type> q_inv = ((jones_2x2<visibility_base_type> *) params.jones_terms)[antenna_2_jones_terms_flat_index];
+	imaging::do_hermitian_transpose(q_inv); // we can either invert and then take the hermitian transpose or take the hermitian transpose and then invert
+	vis = p_inv * (vis * q_inv); //remember matricies don't commute!
     }
     __device__ static void compute_facet_grid_ptr(const gridding_parameters & params,
 						  size_t facet_id,
@@ -390,10 +380,9 @@ namespace imaging {
 										  pos_u,pos_v,accumulator);
     }
     __device__ static void store_normalization_term(gridding_parameters & params,std::size_t channel_grid_index,std::size_t facet_id, 
-						    typename active_trait::normalization_accumulator_type normalization_weight, 
-						    typename active_trait::vis_weight_type gridding_weight){
+						    typename active_trait::normalization_accumulator_type normalization_weight){
       imaging::correlation_gridding_policy<grid_4_correlation>::store_normalization_term(params,channel_grid_index,facet_id,
-											 normalization_weight,gridding_weight);
+											 normalization_weight);
     }
   };
 }

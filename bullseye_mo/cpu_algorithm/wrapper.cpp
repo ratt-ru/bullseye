@@ -159,22 +159,6 @@ extern "C" {
 	    gridding_timer.start();
             {
 	      printf("Gridding single correlation on the CPU...\n");    
-	      //copy everything that changed to the gpu
-	      {
-		//pack the visibilities (it doesn't matter if we mod the array here it is not being used again afterwards)
-		size_t ubound = params.row_count*params.channel_count;
-		
-		//Do not parallelize this:
-		for (std::size_t i = 0; i < ubound; ++i){
-		    size_t r = i / params.channel_count;
-		    size_t c = i - r * params.channel_count;
-		    size_t compact_index = r*params.channel_count + c;
-		    size_t strided_index = (compact_index)*params.number_of_polarization_terms + params.polarization_index;
-		    params.visibilities[compact_index] = params.visibilities[strided_index];
-		    params.visibility_weights[compact_index] = params.visibility_weights[strided_index];
-		    params.flags[compact_index] = params.flags[strided_index];
-		}
-	      }
 	      //invoke computation
 	      {
 		typedef imaging::correlation_gridding_policy<imaging::grid_single_correlation> correlation_gridding_policy;
@@ -192,22 +176,6 @@ extern "C" {
 	    gridding_timer.start();
 	    {
 	      printf("Faceting single correlation on the CPU...\n");    
-	      //copy everything that changed to the gpu
-	      {
-		//pack the visibilities (it doesn't matter if we mod the array here it is not being used again afterwards)
-		size_t ubound = params.row_count*params.channel_count;
-		
-		//Do not parallelize this:
-		for (std::size_t i = 0; i < ubound; ++i){
-		    size_t r = i / params.channel_count;
-		    size_t c = i - r * params.channel_count;
-		    size_t compact_index = r*params.channel_count + c;
-		    size_t strided_index = (compact_index)*params.number_of_polarization_terms + params.polarization_index;
-		    params.visibilities[compact_index] = params.visibilities[strided_index];
-		    params.visibility_weights[compact_index] = params.visibility_weights[strided_index];
-		    params.flags[compact_index] = params.flags[strided_index];
-		}
-	      }
 	      //invoke computation
 	      {
 		typedef imaging::correlation_gridding_policy<imaging::grid_single_correlation> correlation_gridding_policy;
@@ -223,7 +191,12 @@ extern "C" {
     void grid_duel_pol(gridding_parameters & params) {
         gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
-            
+	    printf("Gridding duel correlation on the CPU...\n");  
+            typedef imaging::correlation_gridding_policy<imaging::grid_duel_correlation> correlation_gridding_policy;
+	    typedef imaging::baseline_transform_policy<imaging::transform_disable_facet_rotation > baseline_transform_policy;
+	    typedef imaging::phase_transform_policy<imaging::disable_faceting_phase_shift > phase_transform_policy;
+	    typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_AA_1D_precomputed> convolution_policy;
+	    imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
 	    gridding_timer.stop();
         });
     }
@@ -231,28 +204,53 @@ extern "C" {
     void facet_duel_pol(gridding_parameters & params) {
         gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
-            
+	    printf("Faceting duel correlation on the CPU...\n");  
+            typedef imaging::correlation_gridding_policy<imaging::grid_duel_correlation> correlation_gridding_policy;
+	    typedef imaging::baseline_transform_policy<imaging::transform_planar_approx_with_w > baseline_transform_policy;
+	    typedef imaging::phase_transform_policy<imaging::enable_faceting_phase_shift > phase_transform_policy;
+	    typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_AA_1D_precomputed> convolution_policy;
+	    imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
             gridding_timer.stop();
         });
     }
     void grid_4_cor(gridding_parameters & params) {
         gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
-            
+	    printf("Gridding quad correlation on the CPU...\n");  
+            typedef imaging::correlation_gridding_policy<imaging::grid_4_correlation> correlation_gridding_policy;
+	    typedef imaging::baseline_transform_policy<imaging::transform_disable_facet_rotation > baseline_transform_policy;
+	    typedef imaging::phase_transform_policy<imaging::disable_faceting_phase_shift > phase_transform_policy;
+	    typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_AA_1D_precomputed> convolution_policy;
+	    imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
 	    gridding_timer.stop();
         });
     }
     void facet_4_cor(gridding_parameters & params) {
         gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
-            
+            printf("Faceting quad correlation on the CPU...\n");  
+	    typedef imaging::correlation_gridding_policy<imaging::grid_4_correlation> correlation_gridding_policy;
+	    typedef imaging::baseline_transform_policy<imaging::transform_planar_approx_with_w > baseline_transform_policy;
+	    typedef imaging::phase_transform_policy<imaging::enable_faceting_phase_shift > phase_transform_policy;
+	    typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_AA_1D_precomputed> convolution_policy;
+	    imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
             gridding_timer.stop();
         });
     }
     void facet_4_cor_corrections(gridding_parameters & params) {
         gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
-            
+	    printf("Faceting with jones corrections on the CPU...\n");
+	    std::size_t no_terms_to_invert = params.no_timestamps_read*params.antenna_count*
+						   params.num_facet_centres*params.spw_count*
+						   params.channel_count;
+	    printf("---Inverting %lu jones matricies before gridding operation...\n",no_terms_to_invert);
+	    imaging::invert_all((imaging::jones_2x2<visibility_base_type> *)params.jones_terms,no_terms_to_invert);
+            typedef imaging::correlation_gridding_policy<imaging::grid_4_correlation_with_jones_corrections> correlation_gridding_policy;
+	    typedef imaging::baseline_transform_policy<imaging::transform_planar_approx_with_w > baseline_transform_policy;
+	    typedef imaging::phase_transform_policy<imaging::enable_faceting_phase_shift > phase_transform_policy;
+	    typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_AA_1D_precomputed> convolution_policy;
+	    imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
             gridding_timer.stop();
         });
     }
@@ -260,7 +258,12 @@ extern "C" {
     void grid_sampling_function(gridding_parameters & params) {
         gridding_future = std::async(std::launch::async, [&params] () {
 	    sampling_function_gridding_timer.start();
-            
+            printf("Faceting sampling function on the CPU...\n");  
+            typedef imaging::correlation_gridding_policy<imaging::grid_sampling_function> correlation_gridding_policy;
+	    typedef imaging::baseline_transform_policy<imaging::transform_disable_facet_rotation > baseline_transform_policy;
+	    typedef imaging::phase_transform_policy<imaging::disable_faceting_phase_shift > phase_transform_policy;
+	    typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_AA_1D_precomputed> convolution_policy;
+	    imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
 	    sampling_function_gridding_timer.stop();
         });
     }
@@ -268,7 +271,12 @@ extern "C" {
     void facet_sampling_function(gridding_parameters & params) {
         gridding_future = std::async(std::launch::async, [&params] () {
 	    sampling_function_gridding_timer.start();
-            
+            printf("Faceting sampling function on the CPU...\n");
+	    typedef imaging::correlation_gridding_policy<imaging::grid_sampling_function> correlation_gridding_policy;
+	    typedef imaging::baseline_transform_policy<imaging::transform_planar_approx_with_w > baseline_transform_policy;
+	    typedef imaging::phase_transform_policy<imaging::enable_faceting_phase_shift > phase_transform_policy;
+	    typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_AA_1D_precomputed> convolution_policy;
+	    imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
             sampling_function_gridding_timer.stop();
         });
     }

@@ -15,9 +15,7 @@ namespace imaging {
 		  typename active_phase_transformation,
 		  typename active_convolution_policy>
 	__global__ void templated_gridder(gridding_parameters & params){
-// 		std::fesetround(FE_TONEAREST);
-		std::fesetround(FE_DOWNWARD);
-	  
+		active_convolution_policy::set_required_rounding_operation();
 		size_t conv_full_support = (params.conv_support << 1) + 1;
 		size_t conv_full_support_sq = conv_full_support * conv_full_support;
 		size_t padded_conv_full_support = conv_full_support + 2; //remember we need to reserve some of the support for +/- frac on both sides
@@ -67,7 +65,7 @@ namespace imaging {
 			    /*read and apply the two corrected jones terms if in faceting mode ( Jp^-1 . X . Jq^H^-1 ) --- either DIE or DDE 
 			      assuming small fields of view. Weighting is a scalar and can be apply in any order, so lets just first 
 			      apply the corrections*/
-			    active_correlation_gridding_policy::read_and_apply_antenna_jones_terms(params,row,vis);
+			    active_correlation_gridding_policy::read_and_apply_antenna_jones_terms(params,row,my_facet_id,spw,c,vis);
 			    //compute the weighted visibility and promote the flags to integers so that we don't have unnecessary branch diversion here
 			    typename active_correlation_gridding_policy::active_trait::vis_flag_type vis_flagged = !(visibility_flagged || row_flagged) && 
 														     channel_enabled && row_is_in_field_being_imaged;
@@ -88,8 +86,9 @@ namespace imaging {
 			    active_convolution_policy::convolve(params,grid_centre_offset_x,grid_centre_offset_y,
 								facet_output_buffer,channel_grid_index,grid_size_in_floats,
 								conv_full_support,padded_conv_full_support,uvw,vis,normalization_term);
+			    normalization_term = vector_promotion<visibility_weights_base_type,normalization_base_type>(combined_vis_weight * normalization_term._x);
 			    active_correlation_gridding_policy::store_normalization_term(params,channel_grid_index,my_facet_id,
-											 normalization_term,combined_vis_weight);
+											 normalization_term);
 			}//channel
 		  }//row
 		}//facet
