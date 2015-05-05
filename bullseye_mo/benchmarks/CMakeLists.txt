@@ -14,6 +14,6 @@ include_directories(/usr/include/casacore/ /usr/local/include/casacore)
 add_executable(benchmark benchmark.cpp)
 target_link_libraries(benchmark casa_casa)
 
-target_link_libraries(benchmark imaging32)
+target_link_libraries(benchmark cpu_imaging32)
 # target_link_libraries(benchmark gpu_imaging)
 

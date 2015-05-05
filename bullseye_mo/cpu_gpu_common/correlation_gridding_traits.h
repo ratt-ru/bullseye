@@ -38,7 +38,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 ********************************************************************************************/
 #pragma once
 #include "cu_common.h"
-#include "gpu_wrapper.h"
 #include "cu_vec.h"
 #include "cu_basic_complex.h"
 #include "jones_2x2.h"

@@ -71,7 +71,22 @@ namespace imaging {
     __device__ __host__ static void compute_transformation_matrix(uvw_base_type old_phase_centre_ra, uvw_base_type old_phase_centre_dec,
 							   uvw_base_type new_phase_centre_ra, uvw_base_type new_phase_centre_dec,
 							   baseline_transform_type & result){
-      //see baseline_transform_policy.h in cpu algorithm directory for more details
+        /*
+                Compute the following 3x3 coordinate transformation matrix:
+                Z_rot(facet_new_rotation) * T(new_phase_centre_ra,new_phase_centre_dec) * \\
+                        transpose(T(old_phase_centre_ra,old_phase_centre_dec)) * transpose(Z_rot(facet_old_rotation))
+
+                where:
+                                 |      cRA             -sRA            0       |
+                T (RA,D) =       |      -sDsRA          -sDcRA          cD      |
+                                 |      cDsRA           cDcRA           sD      |
+
+                This is the similar to the one in Thompson, A. R.; Moran, J. M.; and Swenson,
+                G. W., Jr. Interferometry and Synthesis in Radio Astronomy, New York: Wiley, ch. 4, but in a left handed system
+
+                We're not transforming between a coordinate system with w pointing towards the pole and one with
+                w pointing towards the reference centre here, so the last rotation matrix is ignored!
+        */
       //this transformation will let the facet be tangent to the celestial sphere at the new delay centre
       uvw_base_type d_ra = (new_phase_centre_ra - old_phase_centre_ra) * ARCSEC_TO_RAD,
 		    n_dec = new_phase_centre_dec * ARCSEC_TO_RAD,

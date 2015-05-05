@@ -2,12 +2,12 @@
 
 #include <cfenv>
 #include "gridding_parameters.h"
-#include "../gpu_algorithm/baseline_transform_policies.h"
-#include "../gpu_algorithm/phase_transform_policies.h"
-#include "../gpu_algorithm/baseline_transform_traits.h"
+#include "baseline_transform_policies.h"
+#include "phase_transform_policies.h"
+#include "baseline_transform_traits.h"
 #include "correlation_gridding_policies.h"
 #include "convolution_policies.h"
-#include "../gpu_algorithm/correlation_gridding_traits.h"
+#include "correlation_gridding_traits.h"
 
 namespace imaging {
 	template <typename active_correlation_gridding_policy,

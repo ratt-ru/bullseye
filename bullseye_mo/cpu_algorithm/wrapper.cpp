@@ -48,7 +48,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "omp.h"
 
 #include "wrapper.h"
-#include "../algorithms/timer.h"
+#include "timer.h"
 #include "uvw_coord.h"
 #include "templated_gridder.h"
 #include "fft_and_repacking_routines.h"
