@@ -199,7 +199,8 @@ namespace imaging {
 						  typename active_trait::vis_weight_type & weight
 						 ){
       size_t vis_index = (row_index * params.channel_count + c) * params.number_of_polarization_terms;
-      flag = ((active_trait::vis_flag_type *)params.flags)[vis_index];
+      flag._x = params.flags[vis_index + params.polarization_index];
+      flag._y = params.flags[vis_index + params.second_polarization_index];
       weight._x = (params.visibility_weights)[vis_index + params.polarization_index];
       weight._y = (params.visibility_weights)[vis_index + params.second_polarization_index];
       vis._x = ((basic_complex<visibility_base_type>*)params.visibilities)[vis_index + params.polarization_index];
