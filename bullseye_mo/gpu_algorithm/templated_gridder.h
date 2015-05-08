@@ -126,6 +126,8 @@ namespace imaging {
 				imaging::uvw_coord<uvw_base_type> uvw = params.uvw_coords[row];
 				bool row_flagged = params.flagged_rows[row];
 				bool row_is_in_field_being_imaged = (params.field_array[row] == params.imaging_field);
+				//either all threads in the filter take this branch or not, its better than doing uneccesary accesses to global memory
+				if (channel_enabled || row_is_in_field_being_imaged || row_is_in_current_spw || row_flagged) continue;
 				typename active_correlation_gridding_policy::active_trait::vis_type vis;
 				typename active_correlation_gridding_policy::active_trait::vis_weight_type vis_weight;
 				typename active_correlation_gridding_policy::active_trait::vis_flag_type visibility_flagged;
@@ -134,10 +136,9 @@ namespace imaging {
 				  assuming small fields of view. Weighting is a scalar and can be apply in any order, so lets just first 
 				  apply the corrections*/
 				active_correlation_gridding_policy::read_and_apply_antenna_jones_terms(params,row,vis);
-				//compute the weighted visibility and promote the flags to integers so that we don't have unnecessary branch diversion here
-				typename active_correlation_gridding_policy::active_trait::vis_flag_type vis_flagged = !(visibility_flagged || row_flagged) && 
-														       channel_enabled && row_is_in_field_being_imaged &&
-														       row_is_in_current_spw;
+				//compute the weighted visibility and promote the flags to integers so that we don't have unnecessary complex logic to deal with gridding
+				//all or some of the correlations here
+				typename active_correlation_gridding_policy::active_trait::vis_flag_type vis_flagged = !(visibility_flagged);
  				typename active_correlation_gridding_policy::active_trait::vis_weight_type combined_vis_weight = 
 					 vis_weight * vector_promotion<int,visibility_base_type>(vector_promotion<bool,int>(vis_flagged));
 				uvw._u *= ref_wavelength;
