@@ -127,7 +127,7 @@ namespace imaging {
 				bool row_flagged = params.flagged_rows[row];
 				bool row_is_in_field_being_imaged = (params.field_array[row] == params.imaging_field);
 				//either all threads in the filter take this branch or not, its better than doing uneccesary accesses to global memory
-				if (channel_enabled || row_is_in_field_being_imaged || row_is_in_current_spw || row_flagged) continue;
+				if (!(channel_enabled && row_is_in_field_being_imaged && row_is_in_current_spw) || row_flagged) continue;
 				typename active_correlation_gridding_policy::active_trait::vis_type vis;
 				typename active_correlation_gridding_policy::active_trait::vis_weight_type vis_weight;
 				typename active_correlation_gridding_policy::active_trait::vis_flag_type visibility_flagged;
