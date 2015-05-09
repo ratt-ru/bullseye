@@ -92,6 +92,12 @@ class data_set_loader(object):
             name = casa_ms_table.getcell("NAME", i)
             position = casa_ms_table.getcell("POSITION", i)
             print "\t %s has position [%f , %f , %f]" % (name,position[0],position[1],position[2])
+        self._antennas = casa_ms_table.getcol("POSITION")
+        self._maximum_baseline_length = -1
+        for p in range(0,self._no_antennae):
+	  for q in range(p,self._no_antennae):
+	    b = self._antennas[p,:] - self._antennas[q,:]
+	    self._maximum_baseline_length = max(np.linalg.norm(b),self._maximum_baseline_length)
         casa_ms_table.close()
         print "%d UNIQUE BASELINES" % (self._no_baselines)
         casa_ms_table = table(self._MSName+"::POLARIZATION",ack=False,readonly=True)

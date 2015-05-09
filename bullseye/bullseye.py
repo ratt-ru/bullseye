@@ -73,15 +73,7 @@ if __name__ == "__main__":
   from helpers import data_set_loader
   from bullseye_mo import convolution_filter
   from bullseye_mo import gridding_parameters
-
-  '''
-  Create convolution filter
-  '''
-  filter_creation_timer = timer.timer()
-  with filter_creation_timer:
-    conv = convolution_filter.convolution_filter(parser_args['conv_sup'],
-						 parser_args['conv_oversamp'],parser_args['conv'])
-
+ 
   '''
   initially the output grids must be set to NONE. Memory will only be allocated before the first MS is read.
   '''
@@ -116,11 +108,28 @@ if __name__ == "__main__":
     print "NOW IMAGING %s" % ms
     data = data_set_loader.data_set_loader(ms,read_jones_terms=parser_args['do_jones_corrections'])
     data.read_head()
+    
+    '''
+    Create convolution filter
+    '''
+    filter_creation_timer = timer.timer()
+    lambda_min = np.min(data._chan_wavelengths)
+    #as per Synthesis Imaging II, pg 24. w is maximum at low elevations and when baseline and source vectors have same azimuth (ie. parallel):
+    w_max = data._maximum_baseline_length / lambda_min
+    print "The maximum w (measured in wavelengths) is estimated to be", w_max  
+    with filter_creation_timer:
+      conv = convolution_filter.convolution_filter(parser_args['conv_sup'],
+						   parser_args['conv_oversamp'],parser_args['conv'],
+						   parser_args['wplanes'] > 1,parser_args['wplanes'],
+						   parser_args['npix_l'],parser_args['npix_m'],
+						   parser_args['cell_l'],parser_args['cell_m'],
+						   w_max)
+    
     no_chunks = parser_args['no_chunks']
     if no_chunks < 1:
       raise Exception("Cannot read less than one chunk from measurement set!")
     chunk_size = int(np.ceil(data._no_rows / float(no_chunks)))
-
+    
     '''
     check that the measurement set contains the correlation terms necessary to create the requested pollarization / Stokes term:
     '''
