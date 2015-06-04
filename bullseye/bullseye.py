@@ -286,6 +286,9 @@ if __name__ == "__main__":
 	params.second_polarization_index = ctypes.c_size_t(pol_index_2) #stays constant between strides
     else:#the user want to apply corrective terms
 	pass
+    #pass in the necessary parameters for w-projection
+    params.wplanes = ctypes.c_size_t(parser_args['wplanes'])
+    params.wmax_est = base_types.uvw_ctypes_convert_type(w_max)
     libimaging.initLibrary(ctypes.byref(params))
 
     '''

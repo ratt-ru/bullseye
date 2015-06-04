@@ -40,6 +40,7 @@ import numpy as np
 import bullseye_mo.base_types as base_types
 import matplotlib.pyplot as plt
 from scipy import special as sp
+from scipy import signal as sig
 from pyrap.quanta import quantity
 
 class convolution_filter(object):
@@ -87,61 +88,71 @@ class convolution_filter(object):
     - the output now will be a stack of inseperable 2D complex filters with the AA filter already incorporated
   '''
   def __init__(self, convolution_fir_support, oversampling_factor, function_to_use="sinc", use_w_projection = False, 
-	       wplanes = 1, npix_l=1,npix_m=1,celll=1,celllm=1,w_max=1):
+	       wplanes = 1, npix_l=1,npix_m=1,celll=1,cellm=1,w_max=1,ra_0=0,dec_0=0):
     convolution_func = { "sinc" : self.unity, "kb" : self.kb, "hamming" : self.hamming }
 
     print("CREATING CONVOLUTION FILTERS... ")
     convolution_full_support = convolution_fir_support * 2 + 1 + 2 #see convolution_policies.h for more details
-    convolution_size = (convolution_full_support) * oversampling_factor
-    convolution_centre = convolution_size / 2
-    AA = np.empty([convolution_size],dtype=base_types.fir_type)
-    for x in range(0,convolution_size):
-      AA[x] = self.sinc((x - convolution_centre)/float(oversampling_factor))
-    x = ((np.arange(0, convolution_size) - convolution_centre))/float(oversampling_factor)
-    AA *= convolution_func[function_to_use](x,convolution_full_support,oversampling_factor)
-    AA /= np.sum(AA) #normalize to unity
+    #oversampling number of jumps in between each major tap (including the 2 padding taps)
+    convolution_size = convolution_full_support + ((convolution_full_support - 1) * (oversampling_factor - 1))
+    convolution_centre = convolution_size // 2
     
+    x = np.arange(0, convolution_centre+1)/float(oversampling_factor)
+    x = np.hstack((-x[::-1],x[1:]))
+    AA = np.sinc(x).astype(dtype=base_types.w_fir_type)
+    #AA *= convolution_func[function_to_use](x,convolution_full_support,oversampling_factor)
+    #AA /= np.norm(AA) #normalize to unity
+    self._conv_FIR = np.outer(AA,AA).astype(base_types.w_fir_type)
     if not use_w_projection:
-      self._conv_FIR = AA
+      #self._conv_FIR = AA
+      AA_2D = np.outer(AA,AA) #the outer product is probably the fastest way to generate the 2D anti-aliasing filter from our 1D version
+      W_kernels = np.empty([wplanes,
+                      convolution_size,
+                      convolution_size],dtype=base_types.w_fir_type)
+      for w in range(0,wplanes):
+	W_kernels[w,:,:] = AA_2D.astype(base_types.w_fir_type)
+      self._conv_FIR = W_kernels
+      print "WARNING: DISABLING W-PROJECTION"
     else:
       AA_2D = np.outer(AA,AA) #the outer product is probably the fastest way to generate the 2D anti-aliasing filter from our 1D version
-      F_AA_2D = np.fft.fftshift(np.fft.fft(np.fft.ifftshift(AA_2D)))
+      F_AA_2D = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(AA_2D))) / (convolution_size**2)
       '''
       image parameters
       '''
       celll = quantity(celll,"arcsec").get_value("rad")
-      cellm = quantity(celll,"arcsec").get_value("rad")
-      theta_max = npix_l * celll
-      phi_max = npix_m * cellm
-      image_diam = np.sqrt(theta_max**2 + phi_max**2)
+      cellm = quantity(cellm,"arcsec").get_value("rad")
+      ra_max = npix_l * celll
+      dec_max = npix_m * cellm
+      dec_0 = quantity(dec_0,"arcsec").get_value("rad")
+      ra_0 = quantity(ra_0,"arcsec").get_value("rad")
+      image_diam = np.sqrt(ra_max**2 + dec_max**2)
       #Recommended support as per Tasse (Applying full polarization A-projection to very wide field of view instruments: an imager for LOFAR)
       recommended_half_support = int(np.ceil(((4 * np.pi * w_max * image_diam**2) / np.sqrt(2 - image_diam**2)) * 0.5))
       print "The recommended half support region for the convolution kernel is", recommended_half_support
       '''
-      generate the filter over theta and phi where
-      l = cos(theta)*cos(phi)
-      m = sin(theta)*sin(phi)
+      generate the filter over theta and phi where (AIPS MEMO 27)
+      l = cos(dec)sin(delta_ra)
+      m = sin(dec)cos(dec_0) - cos(dec) * sin(dec_0) * cos(delta_ra)
       n = sqrt(1-l**2-m**2)
-      l and m are the direction cosines relative to the phase centre (let the image touch the celestial sphere at this point)
       '''
-      theta = np.linspace(0,theta_max,convolution_size) - theta_max * 0.5
-      phi = np.linspace(0,phi_max,convolution_size) - phi_max * 0.5
-      thetag,phig = np.meshgrid(theta,phi)
-      n = np.sqrt(1-(np.cos(thetag)*np.cos(phig))**2-(np.sin(thetag)*np.sin(phig))**2)
+      dec = x / float(convolution_full_support*0.5) * dec_max 
+      ra = x / float(convolution_full_support*0.5) * ra_max
+      decg,rag = np.meshgrid(dec,ra)
+      l = np.sin(decg)
+      m = np.sin(rag)
+      n = np.sqrt(1-l**2-m**2)
       '''
       The W term in the ME is exp(2*pi*1.0j*w*(n-1))
       Therefore we'll get the cos and sine fringes, which we can then fourier transform
       '''
-      W_kernel = (np.exp(2*np.pi*1.0j*(n-1)).astype(base_types.w_fir_type))
-      W_kernels = np.empty([wplanes,
-                      convolution_size,
-                      convolution_size],dtype=base_types.w_fir_type)
-      '''
-      We want w*(n-1), so raise to the power of w. 
-      Then by convolution theorem multiply in F_AA_2D so that we end up convolving with AA_2D 
-      '''
-      plane_step = w_max / float(wplanes)
-      for w in range(0,wplanes):
-	W_kernels[w,:,:] = (W_kernel ** ((w+1)*plane_step)) * F_AA_2D
-      self._conv_FIR = W_kernels
-    print " CONVOLUTION FILTERS CREATED"
+      W_bar_kernels = np.zeros([wplanes,
+				convolution_size,
+				convolution_size],dtype=base_types.w_fir_type)
+      #plane_step = w_max * (wplanes-1) * quantity(max(celll,cellm),"arcsec").get_value("rad") / (float(wplanes - 1))
+      plane_step = w_max / float(wplanes - 1)
+      for w in range(0,wplanes):  
+	  W_kernel = F_AA_2D * np.exp(-2*np.pi*1.0j*(n-1)* (w*plane_step)) / n
+	  W_bar_kernels[w,:,:] = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(W_kernel))) / (convolution_size**2)
+	    
+      self._conv_FIR = W_bar_kernels.astype(base_types.w_fir_type)
+    print "CONVOLUTION FILTERS CREATED"

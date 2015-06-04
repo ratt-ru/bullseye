@@ -112,6 +112,25 @@ namespace imaging {
 				   basic_complex<T>(visibilities._w._real*scalars._w,visibilities._w._imag*scalars._w));
   }
   /**
+   * Define conjugates for the different correlations
+   */
+  template <typename T>
+  __device__ __host__ void conj(vec1< basic_complex<T> > & visibilities){
+    visibilities._x._imag *= -1;
+  }
+  template <typename T>
+  __device__ __host__ void conj(vec2< basic_complex<T> > & visibilities){
+    visibilities._x._imag *= -1;
+    visibilities._y._imag *= -1;
+  }
+  template <typename T>
+  __device__ __host__ void conj(vec4< basic_complex<T> > & visibilities){
+    visibilities._x._imag *= -1;
+    visibilities._y._imag *= -1;
+    visibilities._z._imag *= -1;
+    visibilities._w._imag *= -1;
+  }
+  /**
    * Multiply jones_2x2 matrix with vec4< basic_complex < T > >
    * Be careful to ensure commutivity: group your operators when doing a string of matrix multiplies!
    */

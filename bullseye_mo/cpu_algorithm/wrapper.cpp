@@ -158,13 +158,13 @@ extern "C" {
         gridding_future = std::async(std::launch::async, [&params] () {
 	    gridding_timer.start();
             {
-	      printf("Gridding single correlation on the CPU...\n");    
+	      printf("Gridding single correlation on the CPU...\n");
 	      //invoke computation
 	      {
 		typedef imaging::correlation_gridding_policy<imaging::grid_single_correlation> correlation_gridding_policy;
 		typedef imaging::baseline_transform_policy<imaging::transform_disable_facet_rotation > baseline_transform_policy;
 		typedef imaging::phase_transform_policy<imaging::disable_faceting_phase_shift > phase_transform_policy;
-		typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_AA_1D_precomputed> convolution_policy;
+		typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_w_projection_precomputed> convolution_policy;
 		imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
 	      }
 	    }

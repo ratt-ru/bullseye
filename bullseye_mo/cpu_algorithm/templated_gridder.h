@@ -23,7 +23,7 @@ namespace imaging {
 		//Scale the IFFT by the simularity theorem to the correct FOV
 		uvw_base_type u_scale=params.nx*params.cell_size_x * ARCSEC_TO_RAD;
 		uvw_base_type v_scale=-(params.ny*params.cell_size_y * ARCSEC_TO_RAD);
-		
+		uvw_base_type w_scale=1.0;//(params.wplanes-1)*fmax(params.cell_size_x,params.cell_size_y)*ARCSEC_TO_RAD;
 		uvw_base_type conv_offset = (padded_conv_full_support) / 2.0; 
 		uvw_base_type grid_centre_offset_x = params.nx/2 - conv_offset;
 		uvw_base_type grid_centre_offset_y = params.ny/2 - conv_offset;
@@ -45,6 +45,10 @@ namespace imaging {
 								 new_delay_ra,new_delay_dec,phase_offset);
 		  
 		  for (size_t row = 0; row < params.row_count; ++row){
+			//read all the data we need for gridding
+			imaging::uvw_coord<uvw_base_type> uvw = params.uvw_coords[row];
+			bool row_flagged = params.flagged_rows[row];
+			bool row_is_in_field_being_imaged = (params.field_array[row] == params.imaging_field);
 			size_t spw = params.spw_index_array[row];
 			for (size_t c = 0; c < params.channel_count; ++c){	
 			    //read all the stuff that is only dependent on the current spw and channel    
@@ -54,14 +58,20 @@ namespace imaging {
 			    active_correlation_gridding_policy::read_channel_grid_index(params,flat_indexed_spw_channel,channel_grid_index);
 			    reference_wavelengths_base_type ref_wavelength = 1 / params.reference_wavelengths[flat_indexed_spw_channel];
 			    
-			    //read all the data we need for gridding
-			    imaging::uvw_coord<uvw_base_type> uvw = params.uvw_coords[row];
-			    bool row_flagged = params.flagged_rows[row];
-			    bool row_is_in_field_being_imaged = (params.field_array[row] == params.imaging_field);
 			    typename active_correlation_gridding_policy::active_trait::vis_type vis;
 			    typename active_correlation_gridding_policy::active_trait::vis_weight_type vis_weight;
 			    typename active_correlation_gridding_policy::active_trait::vis_flag_type visibility_flagged;
 			    active_correlation_gridding_policy::read_corralation_data(params,row,spw,c,vis,visibility_flagged,vis_weight);
+			    /**
+			     * We don't need to compute wplanes for negative w
+			     * Here we simply grid the conjugate of the visibility
+			     */
+			    uvw_coord< uvw_base_type > uvw_lambda = uvw;
+			    {
+			      uvw_lambda._u *= ref_wavelength;
+			      uvw_lambda._v *= ref_wavelength;
+			      uvw_lambda._w *= ref_wavelength;
+			    }
 			    /*read and apply the two corrected jones terms if in faceting mode ( Jp^-1 . X . Jq^H^-1 ) --- either DIE or DDE 
 			      assuming small fields of view. Weighting is a scalar and can be apply in any order, so lets just first 
 			      apply the corrections*/
@@ -72,20 +82,19 @@ namespace imaging {
 			    typename active_correlation_gridding_policy::active_trait::vis_weight_type combined_vis_weight = vis_weight * 
 												       vector_promotion<int,visibility_base_type>(vector_promotion<bool,int>(vis_flagged));
 			    vis = vis * combined_vis_weight;
-			    uvw._u *= ref_wavelength;
-			    uvw._v *= ref_wavelength;
-			    uvw._w *= ref_wavelength;
+			    
 			    //Do phase rotation in accordance with Cornwell & Perley (1992)
-			    active_phase_transformation::apply_phase_transform(phase_offset,uvw,vis);
+			    active_phase_transformation::apply_phase_transform(phase_offset,uvw_lambda,vis);
 			    //DO baseline rotation in accordance with Cornwell & Perley (1992) / Greisen 2009 --- latter results in coplanar facets
-			    active_baseline_transformation_policy::apply_transformation(uvw,baseline_transformation);
+			    active_baseline_transformation_policy::apply_transformation(uvw_lambda,baseline_transformation);
 			    //scale the uv coordinates (measured in wavelengths) to the correct FOV by the fourier simularity theorem (pg 146-148 Synthesis Imaging in Radio Astronomy II)
-			    uvw._u *= u_scale; 
-			    uvw._v *= v_scale;
+			    uvw_lambda._u *= u_scale; 
+			    uvw_lambda._v *= v_scale;
+			    uvw_lambda._w *= w_scale;
 			    typename active_correlation_gridding_policy::active_trait::normalization_accumulator_type normalization_term = 0;
 			    active_convolution_policy::convolve(params,grid_centre_offset_x,grid_centre_offset_y,
 								facet_output_buffer,channel_grid_index,grid_size_in_floats,
-								conv_full_support,padded_conv_full_support,uvw,vis,normalization_term);
+								conv_full_support,padded_conv_full_support,uvw_lambda,vis,normalization_term);
 			    normalization_term = vector_promotion<visibility_weights_base_type,normalization_base_type>(combined_vis_weight * normalization_term._x);
 			    active_correlation_gridding_policy::store_normalization_term(params,channel_grid_index,my_facet_id,
 											 normalization_term);
