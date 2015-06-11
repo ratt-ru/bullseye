@@ -98,7 +98,7 @@ class convolution_filter(object):
     convolution_size = convolution_full_support + ((convolution_full_support - 1) * (oversampling_factor - 1)) #filter array dimension size
     convolution_centre = convolution_size // 2
     oversample_image_space = (oversampling_factor / (float(convolution_centre)))**-1
-    sup_image_space = convolution_fir_support / float(oversample_image_space)
+    sup_image_space_scale = convolution_fir_support / float(oversample_image_space)
     
     x = np.arange(0, convolution_centre+1)
     x = np.hstack((-x[::-1],x[1:]))
@@ -106,6 +106,20 @@ class convolution_filter(object):
     #AA *= convolution_func[function_to_use](x,convolution_full_support,oversampling_factor)
     #AA /= np.norm(AA) #normalize to unity
     self._conv_FIR = np.outer(AA,AA).astype(base_types.w_fir_type)
+    
+    #compute number of facets required if no w-projection is applied
+    phase_error_threshold = 0.5 # this should be much less than 1 for the 2D FFT to be valid
+    celll = quantity(celll,"arcsec").get_value("rad")
+    cellm = quantity(cellm,"arcsec").get_value("rad")
+    ra_max = npix_l * celll
+    dec_max = npix_m * cellm
+    dec_0 = quantity(dec_0,"arcsec").get_value("rad")
+    ra_0 = quantity(ra_0,"arcsec").get_value("rad")
+    epsilon_max = abs(np.sin(dec_max*0.5 + dec_0)*np.sin(dec_0) + 
+		      np.cos(dec_max*0.5 + dec_0)*np.cos(dec_0)*np.cos(ra_max*0.5) - 
+		      (phase_error_threshold)/(2*np.pi*w_max)) # same as n - ni for small angles
+    num_facets_needed = np.ceil(np.sqrt(max(celll*npix_l,cellm*npix_m) / (2*np.arccos(epsilon_max)))*2)
+    print "The recommended number of facets (using no w-projection) along each direction of the image is approximately", num_facets_needed
     if not use_w_projection:
       #self._conv_FIR = AA
       AA_2D = np.outer(AA,AA) #the outer product is probably the fastest way to generate the 2D anti-aliasing filter from our 1D version
@@ -119,29 +133,24 @@ class convolution_filter(object):
     else:
       AA_2D = np.outer(AA,AA) #the outer product is probably the fastest way to generate the 2D anti-aliasing filter from our 1D version
       F_AA_2D = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(AA_2D))) / (convolution_size**2)
-      '''
-      image parameters
-      '''
-      celll = quantity(celll,"arcsec").get_value("rad")
-      cellm = quantity(cellm,"arcsec").get_value("rad")
-      ra_max = npix_l * celll
-      dec_max = npix_m * cellm
-      dec_0 = quantity(dec_0,"arcsec").get_value("rad")
-      ra_0 = quantity(ra_0,"arcsec").get_value("rad")
       image_diam = np.sqrt(ra_max**2 + dec_max**2)
       #Recommended support as per Tasse (Applying full polarization A-projection to very wide field of view instruments: an imager for LOFAR)
       recommended_half_support_image = int(np.ceil(((4 * np.pi * w_max * image_diam**2) / np.sqrt(2 - image_diam**2)) * 0.5))
-      recommended_half_support = recommended_half_support_image * (oversample_image_space/float(oversampling_factor))
-      print "The recommended half support region for the convolution kernel in image space is", recommended_half_support_image
-      print "The recommended half support region for the convolution kernel in fourier space is (recommended input to imager)", recommended_half_support
+      recommended_half_support = int(np.ceil(1 / float(oversampling_factor) * recommended_half_support_image))
+      print "The recommended half support region for the convolution kernel in image space is (Nyquest):", recommended_half_support_image
+      print "The recommended half support region for the convolution kernel in fourier space at specified oversampling rate is (recommended input to imager):", recommended_half_support
+      epsilon_max = abs(np.sin(dec_max*0.5 + dec_0) * np.sin(dec_0) + np.cos(dec_max*0.5 + dec_0)*np.cos(dec_0)*np.cos(ra_max*0.5) - 1) # same as n - 1
+      recommended_nplanes = int(np.ceil(2*np.pi*w_max*epsilon_max/phase_error_threshold)) #this is half the number of planes required... the other half need not be calculated because we grid the conjugate vis
+      print "The recommended number of w-planes (using no faceting) are", recommended_nplanes, "to obtain a maximum seperation of", phase_error_threshold, "between planes"
+      exit(1)
       '''
       generate the filter over theta and phi where
       l = cos(dec)*sin(ra-ra0)
       m = sin(dec)*cos(dec0)-cos(dec)*sin(dec0)*cos(ra-ra0)
       n = sqrt(1-l**2-m**2)
       '''
-      dec = x / float(oversample_image_space) / float(sup_image_space) * (dec_max * 0.5) 
-      ra = x / float(oversample_image_space) / float(sup_image_space) * (ra_max * 0.5) 
+      dec = x / float(oversample_image_space) / float(sup_image_space_scale) * (dec_max * 0.5) 
+      ra = x / float(oversample_image_space) / float(sup_image_space_scale) * (ra_max * 0.5) 
 
       decg,rag = np.meshgrid(dec,ra,indexing='ij')
 
@@ -156,7 +165,6 @@ class convolution_filter(object):
       W_bar_kernels = np.zeros([wplanes,
 				convolution_size,
 				convolution_size],dtype=base_types.w_fir_type)
-      #plane_step = w_max * (wplanes-1) * quantity(max(celll,cellm),"arcsec").get_value("rad") / (float(wplanes - 1))
       plane_step = w_max / float(wplanes - 1)
       for w in range(0,wplanes):  
 	  W_kernel = F_AA_2D * np.exp(-2*np.pi*1.0j*(n-1)* (w*plane_step)) / n
