@@ -123,7 +123,7 @@ if __name__ == "__main__":
 						   parser_args['wplanes'] > 1,parser_args['wplanes'],
 						   parser_args['npix_l'],parser_args['npix_m'],
 						   parser_args['cell_l'],parser_args['cell_m'],
-						   w_max)
+						   w_max,data._field_centres[parser_args['field_id'],0,0],data._field_centres[parser_args['field_id'],0,1])
     
     no_chunks = parser_args['no_chunks']
     if no_chunks < 1:
