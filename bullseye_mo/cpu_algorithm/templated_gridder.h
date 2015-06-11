@@ -23,7 +23,6 @@ namespace imaging {
 		//Scale the IFFT by the simularity theorem to the correct FOV
 		uvw_base_type u_scale=params.nx*params.cell_size_x * ARCSEC_TO_RAD;
 		uvw_base_type v_scale=-(params.ny*params.cell_size_y * ARCSEC_TO_RAD);
-		uvw_base_type w_scale=1.0;//(params.wplanes-1)*fmax(params.cell_size_x,params.cell_size_y)*ARCSEC_TO_RAD;
 		uvw_base_type conv_offset = (padded_conv_full_support) / 2.0; 
 		uvw_base_type grid_centre_offset_x = params.nx/2 - conv_offset;
 		uvw_base_type grid_centre_offset_y = params.ny/2 - conv_offset;
@@ -90,7 +89,6 @@ namespace imaging {
 			    //scale the uv coordinates (measured in wavelengths) to the correct FOV by the fourier simularity theorem (pg 146-148 Synthesis Imaging in Radio Astronomy II)
 			    uvw_lambda._u *= u_scale; 
 			    uvw_lambda._v *= v_scale;
-			    uvw_lambda._w *= w_scale;
 			    typename active_correlation_gridding_policy::active_trait::normalization_accumulator_type normalization_term = 0;
 			    active_convolution_policy::convolve(params,grid_centre_offset_x,grid_centre_offset_y,
 								facet_output_buffer,channel_grid_index,grid_size_in_floats,

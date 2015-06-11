@@ -159,8 +159,8 @@ public:
                 disc_grid_v >= params.ny || disc_grid_u >= params.nx || best_fit_w_plane >= params.wplanes) return;
 	for (std::size_t sup_v = 0; sup_v < conv_full_support; ++sup_v){
 	  for (std::size_t sup_u = 0; sup_u < conv_full_support; ++sup_u){
-	      std::size_t conv_u = std::size_t(((uvw_base_type) sup_u + 1) * params.conv_oversample) + std::size_t(frac_u * params.conv_oversample);
-	      std::size_t conv_v = std::size_t(((uvw_base_type) sup_v + 1) * params.conv_oversample) + std::size_t(frac_v * params.conv_oversample);
+	      std::size_t conv_u = std::size_t((uvw_base_type)(sup_u + 1) * params.conv_oversample + std::lrint(frac_u * params.conv_oversample));
+	      std::size_t conv_v = std::size_t((uvw_base_type)(sup_v + 1) * params.conv_oversample + std::lrint(frac_v * params.conv_oversample));
 	      std::size_t conv_flat_index = filter_offset + conv_v * conv_dim_size + conv_u;
 	      basic_complex<convolution_base_type> conv_weight = ((basic_complex<convolution_base_type>*)params.conv)[conv_flat_index];
 	      typename active_correlation_gridding_policy::active_trait::vis_type convolved_vis = vis * conv_weight;
