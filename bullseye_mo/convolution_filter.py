@@ -142,7 +142,6 @@ class convolution_filter(object):
       epsilon_max = abs(np.sin(dec_max*0.5 + dec_0) * np.sin(dec_0) + np.cos(dec_max*0.5 + dec_0)*np.cos(dec_0)*np.cos(ra_max*0.5) - 1) # same as n - 1
       recommended_nplanes = int(np.ceil(2*np.pi*w_max*epsilon_max/phase_error_threshold)) #this is half the number of planes required... the other half need not be calculated because we grid the conjugate vis
       print "The recommended number of w-planes (using no faceting) are", recommended_nplanes, "to obtain a maximum seperation of", phase_error_threshold, "between planes"
-      exit(1)
       '''
       generate the filter over theta and phi where
       l = cos(dec)*sin(ra-ra0)
