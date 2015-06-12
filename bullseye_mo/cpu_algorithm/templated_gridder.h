@@ -23,9 +23,8 @@ namespace imaging {
 		//Scale the IFFT by the simularity theorem to the correct FOV
 		uvw_base_type u_scale=params.nx*params.cell_size_x * ARCSEC_TO_RAD;
 		uvw_base_type v_scale=-(params.ny*params.cell_size_y * ARCSEC_TO_RAD);
-		uvw_base_type conv_offset = (padded_conv_full_support) / 2.0; 
-		uvw_base_type grid_centre_offset_x = params.nx/2 - conv_offset;
-		uvw_base_type grid_centre_offset_y = params.ny/2 - conv_offset;
+		uvw_base_type grid_centre_offset_x = params.nx/2 - params.conv_support;
+		uvw_base_type grid_centre_offset_y = params.ny/2 - params.conv_support;
 		size_t grid_size_in_floats = params.nx * params.ny << 1;
 		
 		#pragma omp parallel for

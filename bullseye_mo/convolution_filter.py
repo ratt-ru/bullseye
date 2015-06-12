@@ -73,7 +73,7 @@ class convolution_filter(object):
     return sp.i0(W * np.sqrt(sqrt_inner)) * normFactor
   
   def hamming(self,x,W,oversample):
-    return np.hamming(W*oversample)
+    return np.hamming(W + (W-1)*(oversample-1))
   
   '''
   Constructor
@@ -102,10 +102,9 @@ class convolution_filter(object):
     
     x = np.arange(0, convolution_centre+1)
     x = np.hstack((-x[::-1],x[1:]))
-    AA = np.sinc(x/float(oversampling_factor)).astype(dtype=base_types.w_fir_type)
-    #AA *= convolution_func[function_to_use](x,convolution_full_support,oversampling_factor)
-    #AA /= np.norm(AA) #normalize to unity
-    self._conv_FIR = np.outer(AA,AA).astype(base_types.w_fir_type)
+    AA = np.sinc(x/float(oversampling_factor))
+    AA *= convolution_func[function_to_use](x/float(oversampling_factor),convolution_full_support,oversampling_factor)
+    AA /= np.sum(AA) #normalize to unity
     
     #compute number of facets required if no w-projection is applied
     phase_error_threshold = 0.5 # this should be much less than 1 for the 2D FFT to be valid
@@ -121,14 +120,7 @@ class convolution_filter(object):
     num_facets_needed = np.ceil(np.sqrt(max(celll*npix_l,cellm*npix_m) / (2*np.arccos(epsilon_max)))*2)
     print "The recommended number of facets (using no w-projection) along each direction of the image is approximately", num_facets_needed
     if not use_w_projection:
-      #self._conv_FIR = AA
-      AA_2D = np.outer(AA,AA) #the outer product is probably the fastest way to generate the 2D anti-aliasing filter from our 1D version
-      W_kernels = np.empty([wplanes,
-                      convolution_size,
-                      convolution_size],dtype=base_types.w_fir_type)
-      for w in range(0,wplanes):
-	W_kernels[w,:,:] = AA_2D.astype(base_types.w_fir_type)
-      self._conv_FIR = W_kernels
+      self._conv_FIR = AA.astype(dtype=base_types.fir_type) #Seperable 1D AA filter (correct policy must be called in the gridder code
       print "WARNING: DISABLING W-PROJECTION"
     else:
       AA_2D = np.outer(AA,AA) #the outer product is probably the fastest way to generate the 2D anti-aliasing filter from our 1D version

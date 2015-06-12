@@ -92,10 +92,10 @@ public:
 
         std::size_t conv_v = (frac_v + 1) * params.conv_oversample;
         std::size_t  convolved_grid_v = (disc_grid_v + 1)*params.nx;
-        for (std::size_t  sup_v = 1; sup_v <= conv_full_support; ++sup_v) { //remember we have a +/- frac at both ends of the filter
+        for (std::size_t  sup_v = 0; sup_v < conv_full_support; ++sup_v) { //remember we have a +/- frac at both ends of the filter
             convolution_base_type conv_v_weight = params.conv[conv_v];
             std::size_t conv_u = (frac_u + 1) * params.conv_oversample;
-            for (std::size_t sup_u = 1; sup_u <= conv_full_support; ++sup_u) { //remember we have a +/- frac at both ends of the filter
+            for (std::size_t sup_u = 0; sup_u < conv_full_support; ++sup_u) { //remember we have a +/- frac at both ends of the filter
                 std::size_t convolved_grid_u = disc_grid_u + sup_u;
                 convolution_base_type conv_u_weight = params.conv[conv_u];
                 std::size_t grid_flat_index = convolved_grid_v + convolved_grid_u;
@@ -142,8 +142,8 @@ public:
 	  conj<visibility_base_type>(vis);  
 	}
 	//account for interpolation error (we select the closest sample from the oversampled convolution filter)
-        uvw_base_type translated_grid_u = uvw._u + params.nx/2 - ((uvw_base_type) params.conv_support);
-        uvw_base_type translated_grid_v = uvw._v + params.ny/2 - ((uvw_base_type) params.conv_support);
+        uvw_base_type translated_grid_u = uvw._u + grid_centre_offset_x;
+        uvw_base_type translated_grid_v = uvw._v + grid_centre_offset_y;
         std::size_t  disc_grid_u = std::lrint(translated_grid_u);
         std::size_t  disc_grid_v = std::lrint(translated_grid_v);
         //to reduce the interpolation error we need to take the offset from the grid centre into account when choosing a convolution weight
@@ -158,9 +158,9 @@ public:
         if (disc_grid_v + padded_conv_full_support >= params.ny || disc_grid_u + padded_conv_full_support >= params.nx ||
                 disc_grid_v >= params.ny || disc_grid_u >= params.nx || best_fit_w_plane >= params.wplanes) return;
 	for (std::size_t sup_v = 0; sup_v < conv_full_support; ++sup_v){
+	  std::size_t conv_v = std::size_t((uvw_base_type)(sup_v + 1) * params.conv_oversample + std::lrint(frac_v * params.conv_oversample));
 	  for (std::size_t sup_u = 0; sup_u < conv_full_support; ++sup_u){
 	      std::size_t conv_u = std::size_t((uvw_base_type)(sup_u + 1) * params.conv_oversample + std::lrint(frac_u * params.conv_oversample));
-	      std::size_t conv_v = std::size_t((uvw_base_type)(sup_v + 1) * params.conv_oversample + std::lrint(frac_v * params.conv_oversample));
 	      std::size_t conv_flat_index = filter_offset + conv_v * conv_dim_size + conv_u;
 	      basic_complex<convolution_base_type> conv_weight = ((basic_complex<convolution_base_type>*)params.conv)[conv_flat_index];
 	      typename active_correlation_gridding_policy::active_trait::vis_type convolved_vis = vis * conv_weight;
@@ -172,9 +172,9 @@ public:
 								  disc_grid_u + sup_u,
 								  disc_grid_v + sup_v,
 								  convolved_vis);
+	      normalization_term += 1;//sqrt(conv_weight._real * conv_weight._real);
 	  }
 	}
-	normalization_term += 1.0;
 // 	{
 // 	//setup the iterators
 // 	std::size_t conv_dim_size = padded_conv_full_support * params.conv_oversample;
