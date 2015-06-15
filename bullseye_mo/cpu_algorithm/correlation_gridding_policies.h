@@ -73,6 +73,15 @@ namespace imaging {
 					    size_t pos_v,
 					    typename active_trait::accumulator_type & accumulator
 					   );
+    __device__ static void grid_visibility (grid_base_type* grid,
+					    size_t slice_size,
+					    size_t nx,
+					    size_t grid_channel_id,
+					    size_t no_polarizations_being_gridded,
+					    size_t pos_u,
+					    size_t pos_v,
+					    typename active_trait::accumulator_type accumulator[4]
+					   );
     __device__ static void store_normalization_term(gridding_parameters & params,std::size_t channel_grid_index,std::size_t facet_id, 
 						    typename active_trait::normalization_accumulator_type normalization_weight);
   };
@@ -125,6 +134,27 @@ namespace imaging {
 					((pos_v * nx + pos_u) << 1);
       grid_flat_index[0] += accumulator._x._real;
       grid_flat_index[1] += accumulator._x._imag;
+    }
+    __device__ static void grid_visibility (grid_base_type* grid,
+					    size_t slice_size,
+					    size_t nx,
+					    size_t grid_channel_id,
+					    size_t no_polarizations_being_gridded,
+					    size_t pos_u,
+					    size_t pos_v,
+					    typename active_trait::accumulator_type accumulator[4]
+					   ){
+      grid_base_type* grid_flat_index = grid + 
+					(grid_channel_id * slice_size) + 
+					((pos_v * nx + pos_u) << 1);
+      grid_flat_index[0] += accumulator[0]._x._real;
+      grid_flat_index[1] += accumulator[0]._x._imag;
+      grid_flat_index[0 + 2] += accumulator[1]._x._real;
+      grid_flat_index[1 + 2] += accumulator[1]._x._imag;
+      grid_flat_index[0 + 4] += accumulator[2]._x._real;
+      grid_flat_index[1 + 4] += accumulator[2]._x._imag;
+      grid_flat_index[0 + 6] += accumulator[3]._x._real;
+      grid_flat_index[1 + 6] += accumulator[3]._x._imag;
     }
     __device__ static void store_normalization_term(gridding_parameters & params,std::size_t channel_grid_index,std::size_t facet_id, 
 						    typename active_trait::normalization_accumulator_type normalization_weight){
