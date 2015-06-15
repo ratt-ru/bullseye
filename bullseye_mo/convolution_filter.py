@@ -93,15 +93,14 @@ class convolution_filter(object):
 
     print("CREATING CONVOLUTION FILTERS... ")
     full_support = convolution_fir_support * 2 + 1
-    convolution_full_support = full_support + 2 #padding by oversample number of samples at both ends
+    convolution_full_support = full_support + 2 #padding by 1 units at both ends
     #oversampling number of jumps in between each major tap (including the 2 padding taps)
-    convolution_size = convolution_full_support + ((convolution_full_support - 1) * (oversampling_factor - 1)) #filter array dimension size
-    convolution_centre = convolution_size // 2
+    convolution_size = (convolution_full_support) + (convolution_full_support - 1) * (oversampling_factor - 1) #filter array dimension size
+    convolution_centre = (convolution_size) // 2
     oversample_image_space = (oversampling_factor / (float(convolution_centre)))**-1
     sup_image_space_scale = convolution_fir_support / float(oversample_image_space)
     
-    x = np.arange(0, convolution_centre+1)
-    x = np.hstack((-x[::-1],x[1:]))
+    x = np.arange(-convolution_centre,convolution_centre + 1)
     AA = np.sinc(x/float(oversampling_factor))
     AA *= convolution_func[function_to_use](x/float(oversampling_factor),convolution_full_support,oversampling_factor)
     AA /= np.sum(AA) #normalize to unity
@@ -120,7 +119,7 @@ class convolution_filter(object):
     num_facets_needed = np.ceil(np.sqrt(max(celll*npix_l,cellm*npix_m) / (2*np.arccos(epsilon_max)))*2)
     print "The recommended number of facets (using no w-projection) along each direction of the image is approximately", num_facets_needed
     if not use_w_projection:
-      self._conv_FIR = AA.astype(dtype=base_types.fir_type) #Seperable 1D AA filter (correct policy must be called in the gridder code
+      self._conv_FIR = AA.astype(base_types.fir_type) #Seperable 1D AA filter (correct policy must be called in the gridder code
       print "WARNING: DISABLING W-PROJECTION"
     else:
       AA_2D = np.outer(AA,AA) #the outer product is probably the fastest way to generate the 2D anti-aliasing filter from our 1D version
@@ -159,10 +158,7 @@ class convolution_filter(object):
       plane_step = w_max / float(wplanes - 1)
       for w in range(0,wplanes):  
 	  W_kernel = F_AA_2D * np.exp(-2*np.pi*1.0j*(n-1)* (w*plane_step)) / n
-	  W_bar_kernels[w,:,:] = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(W_kernel))) / (convolution_size**2)
-	  #plt.figure()
-	  #plt.plot(np.real(W_bar_kernels[w,W_bar_kernels.shape[1]//2,:]))
-	  #plt.show()
-      #exit(1)
+	  W_bar_kernel = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(W_kernel))) / (convolution_size**2)
+	  W_bar_kernels[w,:,:] = W_bar_kernel
       self._conv_FIR = W_bar_kernels.astype(base_types.w_fir_type)
     print "CONVOLUTION FILTERS CREATED"
