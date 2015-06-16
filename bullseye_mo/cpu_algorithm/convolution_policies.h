@@ -1,4 +1,5 @@
 #pragma once
+#include <x86intrin.h>
 #include "uvw_coord.h"
 #include "gridding_parameters.h"
 #include <cmath>
@@ -149,26 +150,28 @@ public:
         
 	std::size_t conv_v = 1*params.conv_oversample + frac_v_offset;
         for (std::size_t  sup_v = 0; sup_v < conv_full_support; ++sup_v) { //remember we have a +/- frac at both ends of the filter
-            convolution_base_type conv_v_weight = params.conv[conv_v];
+            convolution_base_type conv_v_weight __attribute__((aligned(16))) = params.conv[conv_v];
             for (std::size_t sup_u = 0; sup_u < conv_full_support/4; ++sup_u) { //remember we have a +/- frac at both ends of the filter
 	      {
 		std::size_t conv_u_first = (sup_u * 4 + 1)*params.conv_oversample + frac_u_offset;
-		std::size_t conv_u[4] = {conv_u_first,
-					 conv_u_first + params.conv_oversample * 1,
-					 conv_u_first + params.conv_oversample * 2,
-					 conv_u_first + params.conv_oversample * 3};
-                convolution_base_type conv_u_weight[4] = {params.conv[conv_u[0]],
-							  params.conv[conv_u[1]],
-							  params.conv[conv_u[2]],
-							  params.conv[conv_u[3]]};
-                convolution_base_type conv_weight[4] = {conv_u_weight[0] * conv_v_weight,
-							conv_u_weight[1] * conv_v_weight,
-							conv_u_weight[2] * conv_v_weight,
-							conv_u_weight[3] * conv_v_weight};
-                typename active_correlation_gridding_policy::active_trait::vis_type convolved_vis[4] = {vis * conv_weight[0],
-													vis * conv_weight[1],
-													vis * conv_weight[2],
-													vis * conv_weight[3]};
+		std::size_t conv_u[4] __attribute__((aligned(16)))= {conv_u_first,
+								     conv_u_first + params.conv_oversample * 1,
+								     conv_u_first + params.conv_oversample * 2,
+								     conv_u_first + params.conv_oversample * 3};		
+		convolution_base_type conv_u_weight[4]  __attribute__((aligned(16))) = {params.conv[conv_u[0]],
+											params.conv[conv_u[1]],
+											params.conv[conv_u[2]],
+											params.conv[conv_u[3]]};
+                convolution_base_type conv_weight[4] __attribute__((aligned(16))) = {conv_u_weight[0] * conv_v_weight,
+										     conv_u_weight[1] * conv_v_weight,
+										     conv_u_weight[2] * conv_v_weight,
+										     conv_u_weight[3] * conv_v_weight};
+//		Using avx2 gather this may be able to beat out the instructions above
+// 		_mm_store_ps(conv_weight,
+// 			     _mm_mul_ps(_mm_set_ps(params.conv[conv_u[3]],params.conv[conv_u[2]],params.conv[conv_u[1]],params.conv[conv_u[0]]),
+// 					_mm_set_ps1(conv_v_weight)));
+		typename active_correlation_gridding_policy::active_trait::vis_type convolved_vis[4] __attribute__((aligned(16)));
+                mul_vis_with_scalars(vis,conv_weight,convolved_vis);
                 active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
                         grid_size_in_floats,
                         params.nx,

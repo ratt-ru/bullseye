@@ -37,6 +37,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 ********************************************************************************************/
 #pragma once
+#include <x86intrin.h>
 #include "cu_common.h"
 #include "cu_vec.h"
 #include "cu_basic_complex.h"
@@ -157,5 +158,17 @@ namespace imaging {
     out.correlations[2] = lhs.correlations[2]*jones.correlations[0] + lhs.correlations[3]*jones.correlations[2];
     out.correlations[3] = lhs.correlations[2]*jones.correlations[1] + lhs.correlations[3]*jones.correlations[3];
     return *((vec4<basic_complex<T> >*)&out);
+  }
+  
+  __host__ inline void mul_vis_with_scalars(const vec1< basic_complex<float> > & vis_in, 
+				     convolution_base_type conv_weight[4], 
+				     vec1< basic_complex<visibility_base_type> > visses_out[4]){
+    __m128 vis_2 = _mm_set_ps(vis_in._x._imag,vis_in._x._real,vis_in._x._imag,vis_in._x._real);
+    _mm_store_ps((float*)(&visses_out[0]),
+		 _mm_mul_ps(vis_2,
+			    _mm_set_ps(conv_weight[1],conv_weight[1],conv_weight[0],conv_weight[0])));
+    _mm_store_ps((float*)(&visses_out[2]),
+		 _mm_mul_ps(vis_2,
+			    _mm_set_ps(conv_weight[3],conv_weight[3],conv_weight[2],conv_weight[2])));
   }
 };
