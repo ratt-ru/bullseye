@@ -95,17 +95,17 @@ const uvw_coord<uvw_base_type> antenna_coords[] = {{-1601710.017000f , -5042006.
 };
 
 int main (int argc, char ** argv) {
-    if (argc != 13)
-        throw runtime_error("Expected args num_threads,dataset_(int)_size_in_MiB,nx,ny,num_chans,num_pols,conv_half_support_size,conv_times_oversample,num_wplanes,observation_length_in_hours,ra_0,dec_0");
+    if (argc != 12)
+        throw runtime_error("Expected args num_threads,dataset_(int)_size_in_MiB,nx,ny,num_chans,conv_half_support_size,conv_times_oversample,num_wplanes,observation_length_in_hours,ra_0,dec_0");
     size_t no_threads = atol(argv[1]);
     size_t dataset_size = atol(argv[2]);
     size_t nx = atol(argv[3]);
     size_t ny = atol(argv[4]);
     size_t chan_no = atol(argv[5]);
-    size_t pol_count = atol(argv[6]);
-    size_t conv_support = atol(argv[7]);
-    size_t conv_oversample = atol(argv[8]);
-    size_t num_wplanes = atol(argv[9]);
+    size_t pol_count = 1;
+    size_t conv_support = atol(argv[6]);
+    size_t conv_oversample = atol(argv[7]);
+    size_t num_wplanes = atol(argv[8]);
     size_t conv_full_support = conv_support * 2 + 1;
     size_t conv_padded_full_support = conv_full_support + 2;
     size_t convolution_size_dim = conv_padded_full_support + (conv_padded_full_support - 1) * (conv_oversample - 1);
@@ -113,6 +113,7 @@ int main (int argc, char ** argv) {
     size_t convolution_cube_size = convolution_slice_size * num_wplanes;
     printf("------------------------------------\nGRIDDER BENCHMARK\n(USING %ld THREADS)\n------------------------------------\n",no_threads);
     omp_set_num_threads((int)no_threads);
+    gridding_parameters params;
     size_t row_size = sizeof(bool)*chan_no*pol_count+
 		      sizeof(visibility_weights_base_type)*chan_no*pol_count+
 		      sizeof(complex<visibility_base_type>)*chan_no*pol_count+
@@ -122,10 +123,10 @@ int main (int argc, char ** argv) {
 		      sizeof(unsigned int);
     size_t no_timestamps = (dataset_size * 1024 * 1024) / (row_size * NO_BASELINES);
     size_t row_count = no_timestamps * NO_BASELINES;
-    float hrs = atof(argv[10]);
+    float hrs = atof(argv[9]);
     float time_step = (hrs / 24.0 * 2 * M_PI) / no_timestamps; //time step in radians
-    float ra = atof(argv[11]) * M_PI / 180;
-    float declination = atof(argv[12]) * M_PI / 180;
+    float ra = atof(argv[10]) * M_PI / 180;
+    float declination = atof(argv[11]) * M_PI / 180;
 
     reference_wavelengths_base_type ref_wavelength = 0.245;
     float cell_size_l = 2;
@@ -193,25 +194,6 @@ int main (int argc, char ** argv) {
     });
     printf("ALLOCATING MEMORY FOR %ld x %ld COMPLEX GRID (%f GiB)\n",nx,ny,nx*ny*sizeof(grid_base_type)*TO_GIB);
     std::unique_ptr<complex<grid_base_type> > output_buffer(new complex<grid_base_type>[nx*ny]);
-    printf("ALLOCATING MEMORY FOR %ld CONVOLUTION KERNELS WITH %ld CELL SUPPORT, OVERSAMPLED BY FACTOR OF %ld (%f GiB)\n",
-           num_wplanes,conv_support,conv_oversample,convolution_cube_size*sizeof(std::complex<convolution_base_type>)*TO_GIB);
-    std::unique_ptr<std::complex<convolution_base_type> > conv(new std::complex<convolution_base_type>[convolution_cube_size]);
-    #pragma omp parallel for
-    for (size_t w = 0; w < num_wplanes; ++w){
-      size_t w_offset = w * convolution_slice_size;
-      for (size_t cv = 0; cv < conv_full_support; ++cv){
-	double PI_X = M_PI * (cv / (convolution_base_type)(conv_oversample)) - ((convolution_base_type) conv_support);
-	convolution_base_type sinc_v = (PI_X != 0) ? sin(PI_X) / PI_X : 1.0;
-	for (size_t cu = 0; cu < conv_full_support; ++cu){
-	  double PI_X = M_PI * (cu / (convolution_base_type)(conv_oversample)) - ((convolution_base_type) conv_support);
-	  convolution_base_type sinc_u = (PI_X != 0) ? sin(PI_X) / PI_X : 1.0;
-	  conv.get()[w_offset + cv * convolution_size_dim + cu] = std::complex<convolution_base_type>(sinc_u * sinc_v,0);
-	}
-      }
-    }
-    
-    gridding_parameters params;
-   
     params.antenna_count = NO_ANTENNAE;
     params.baseline_count = NO_BASELINES;
     params.cell_size_x = cell_size_l;
@@ -219,7 +201,6 @@ int main (int argc, char ** argv) {
     params.channel_count = chan_no;
     params.channel_grid_indicies = chan_grid_indicies.get();
     params.cube_channel_dim_size = 1;
-    params.conv = (convolution_base_type *)(conv.get());
     params.conv_oversample = conv_oversample;
     params.conv_support = conv_support;
     params.cube_channel_dim_size = 1;
@@ -248,10 +229,47 @@ int main (int argc, char ** argv) {
     params.visibility_weights = visibility_weights.get();
     params.wplanes = num_wplanes;
     params.wmax_est = 6500;
-    initLibrary(params);
-    grid_single_pol(params);  
-    releaseLibrary();
     
+    if (num_wplanes > 1){
+      printf("ALLOCATING MEMORY FOR %ld CONVOLUTION KERNELS WITH %ld CELL SUPPORT, OVERSAMPLED BY FACTOR OF %ld (%f GiB)\n",
+	    num_wplanes,conv_support,conv_oversample,convolution_cube_size*sizeof(std::complex<convolution_base_type>)*TO_GIB);
+      std::unique_ptr<std::complex<convolution_base_type> > conv(new std::complex<convolution_base_type>[convolution_cube_size]);
+      #pragma omp parallel for
+      for (size_t w = 0; w < num_wplanes; ++w){
+	size_t w_offset = w * convolution_slice_size;
+	for (size_t cv = 0; cv < conv_full_support; ++cv){
+	  double PI_X = M_PI * (cv / (convolution_base_type)(conv_oversample)) - ((convolution_base_type) conv_support);
+	  convolution_base_type sinc_v = (PI_X != 0) ? sin(PI_X) / PI_X : 1.0;
+	  for (size_t cu = 0; cu < conv_full_support; ++cu){
+	    double PI_X = M_PI * (cu / (convolution_base_type)(conv_oversample)) - ((convolution_base_type) conv_support);
+	    convolution_base_type sinc_u = (PI_X != 0) ? sin(PI_X) / PI_X : 1.0;
+	    conv.get()[w_offset + cv * convolution_size_dim + cu] = std::complex<convolution_base_type>(sinc_u * sinc_v,0);
+	  }
+	}
+      }
+      params.conv = (convolution_base_type *)(conv.get());
+      initLibrary(params);
+      grid_single_pol(params);  
+      releaseLibrary();
+    } else {
+      printf("ALLOCATING MEMORY FOR %ld CONVOLUTION KERNELS WITH %ld CELL SUPPORT, OVERSAMPLED BY FACTOR OF %ld (%f GiB)\n",
+	    num_wplanes,conv_support,conv_oversample,convolution_cube_size/convolution_size_dim*sizeof(convolution_base_type)*TO_GIB);
+      std::unique_ptr<convolution_base_type> conv(new convolution_base_type[convolution_cube_size/convolution_size_dim]);
+      #pragma omp parallel for
+      for (size_t w = 0; w < num_wplanes; ++w){
+	size_t w_offset = w * convolution_slice_size;
+	for (size_t x = 0; x < conv_full_support; ++x){
+	  double PI_X = M_PI * (x / (convolution_base_type)(conv_oversample)) - ((convolution_base_type) conv_support);
+	  convolution_base_type sinc = (PI_X != 0) ? sin(PI_X) / PI_X : 1.0;
+	  conv.get()[w_offset + x] = sinc;
+	}
+      }
+      params.conv = (convolution_base_type *)(conv.get());
+      initLibrary(params);
+      grid_single_pol(params);  
+      releaseLibrary();
+    }
+        
     printf("COMPUTE COMPLETED IN %f SECONDS\n",get_gridding_walltime());
     printf("BENCHMARK TERMINATED SUCCESSFULLY\n");
     return 0;
