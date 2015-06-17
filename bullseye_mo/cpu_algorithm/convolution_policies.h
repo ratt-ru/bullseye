@@ -122,6 +122,16 @@ public:
  */
 template <typename active_correlation_gridding_policy>
 class convolution_policy <active_correlation_gridding_policy,convolution_AA_1D_vectorized_precomputed> {
+private:
+   inline static void mul_vis_with_scalars(const vec1< basic_complex<float> > & vis_in, 
+					   convolution_base_type conv_weight[4], 
+					   __m256 visses_out[1]){
+    __m256 vis_4 = _mm256_set_ps(vis_in._x._imag,vis_in._x._real,vis_in._x._imag,vis_in._x._real,
+				 vis_in._x._imag,vis_in._x._real,vis_in._x._imag,vis_in._x._real);
+    visses_out[0] = _mm256_mul_ps(vis_4,
+			       _mm256_set_ps(conv_weight[3],conv_weight[3],conv_weight[2],conv_weight[2],
+					     conv_weight[1],conv_weight[1],conv_weight[0],conv_weight[0]));
+  }
 public:
     inline static void set_required_rounding_operation(){
       std::fesetround(FE_DOWNWARD); // this is the same strategy followed in the casacore gridder and produces very similar looking images
@@ -149,9 +159,11 @@ public:
                 disc_grid_v >= params.ny || disc_grid_u >= params.nx) return;
         
 	std::size_t conv_v = 1*params.conv_oversample + frac_v_offset;
+	std::size_t unrolled_ul = conv_full_support/4;
+	std::size_t rem_loop_ll = (conv_full_support / 4) * 4;
         for (std::size_t  sup_v = 0; sup_v < conv_full_support; ++sup_v) { //remember we have a +/- frac at both ends of the filter
             convolution_base_type conv_v_weight __attribute__((aligned(16))) = params.conv[conv_v];
-            for (std::size_t sup_u = 0; sup_u < conv_full_support/4; ++sup_u) { //remember we have a +/- frac at both ends of the filter
+            for (std::size_t sup_u = 0; sup_u < unrolled_ul; ++sup_u) { //remember we have a +/- frac at both ends of the filter
 	      {
 		std::size_t conv_u_first = (sup_u * 4 + 1)*params.conv_oversample + frac_u_offset;
 		std::size_t conv_u[4] __attribute__((aligned(16)))= {conv_u_first,
@@ -166,11 +178,8 @@ public:
 										     conv_u_weight[1] * conv_v_weight,
 										     conv_u_weight[2] * conv_v_weight,
 										     conv_u_weight[3] * conv_v_weight};
-//		Using avx2 gather this may be able to beat out the instructions above
-// 		_mm_store_ps(conv_weight,
-// 			     _mm_mul_ps(_mm_set_ps(params.conv[conv_u[3]],params.conv[conv_u[2]],params.conv[conv_u[1]],params.conv[conv_u[0]]),
-// 					_mm_set_ps1(conv_v_weight)));
-		typename active_correlation_gridding_policy::active_trait::vis_type convolved_vis[4] __attribute__((aligned(16)));
+		//typename active_correlation_gridding_policy::active_trait::vis_type convolved_vis[4] __attribute__((aligned(16)));
+		__m256 convolved_vis[1];
                 mul_vis_with_scalars(vis,conv_weight,convolved_vis);
                 active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
                         grid_size_in_floats,
@@ -180,10 +189,10 @@ public:
                         disc_grid_u + sup_u * 4,
                         disc_grid_v + sup_v,
                         convolved_vis);
-                normalization_term += conv_weight[0] + conv_weight[1] + conv_weight[2] + conv_weight[3];
+                normalization_term += conv_weight[3] + conv_weight[2] + conv_weight[1] + conv_weight[0];
 	      }
             } //conv_u
-            for (std::size_t sup_u = (conv_full_support / 4) * 4; sup_u < conv_full_support; ++sup_u) { //remember we have a +/- frac at both ends of the filter	      
+            for (std::size_t sup_u = rem_loop_ll; sup_u < conv_full_support; ++sup_u) { //remember we have a +/- frac at both ends of the filter	      
 	      std::size_t conv_u = (sup_u + 1)*params.conv_oversample + frac_u_offset;
 	      convolution_base_type conv_u_weight = params.conv[conv_u];
 	      convolution_base_type conv_weight = conv_u_weight * conv_v_weight;

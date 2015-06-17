@@ -120,7 +120,7 @@ namespace imaging {
       *facet_grid_starting_ptr = (grid_base_type*)params.output_buffer + grid_size_in_floats * 
 				params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * facet_id;
     }
-    static void grid_visibility (grid_base_type* grid,
+    static inline void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
 					    size_t grid_channel_id,
@@ -135,36 +135,21 @@ namespace imaging {
       grid_flat_index[0] += accumulator._x._real;
       grid_flat_index[1] += accumulator._x._imag;
     }
-    static void grid_visibility (grid_base_type* grid,
+    static inline void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
 					    size_t grid_channel_id,
 					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
-					    typename active_trait::accumulator_type accumulator[4]
+					    __m256 accumulator[1]
 					   ){
       grid_base_type* grid_flat_index = grid + 
 					(grid_channel_id * slice_size) + 
 					((pos_v * nx + pos_u) << 1);
-//       _mm256_storeu_ps(&grid_flat_index[0],
-// 		       _mm256_add_ps(_mm256_loadu_ps(&grid_flat_index[0]),
-// 				     _mm256_load_ps((float*)(&accumulator[0]))));
-      _mm_storeu_ps(&grid_flat_index[0],
-		    _mm_add_ps(_mm_loadu_ps(&grid_flat_index[0]),
-			       _mm_load_ps((float*)(&accumulator[0]))));
-      _mm_storeu_ps(&grid_flat_index[4 + 0],
-		    _mm_add_ps(_mm_loadu_ps(&grid_flat_index[4 + 0]),
-			       _mm_load_ps((float*)(&accumulator[2]))));
-
-//       grid_flat_index[0] += accumulator[0]._x._real;
-//       grid_flat_index[1] += accumulator[0]._x._imag;
-//       grid_flat_index[0 + 2] += accumulator[1]._x._real;
-//       grid_flat_index[1 + 2] += accumulator[1]._x._imag;
-//       grid_flat_index[0 + 4] += accumulator[2]._x._real;
-//       grid_flat_index[1 + 4] += accumulator[2]._x._imag;
-//       grid_flat_index[0 + 6] += accumulator[3]._x._real;
-//       grid_flat_index[1 + 6] += accumulator[3]._x._imag;
+	 _mm256_storeu_ps(&grid_flat_index[0],
+			  _mm256_add_ps(_mm256_loadu_ps(&grid_flat_index[0]),
+					accumulator[0]));
     }
     static void store_normalization_term(gridding_parameters & params,std::size_t channel_grid_index,std::size_t facet_id, 
 						    typename active_trait::normalization_accumulator_type normalization_weight){
