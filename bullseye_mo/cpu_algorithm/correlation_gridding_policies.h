@@ -73,6 +73,7 @@ namespace imaging {
 					    size_t pos_v,
 					    typename active_trait::accumulator_type & accumulator
 					   );
+    typedef struct avx_vis_type {} avx_vis_type;
     static void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
@@ -80,11 +81,14 @@ namespace imaging {
 					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
-					    typename active_trait::accumulator_type accumulator[4]
+					    avx_vis_type accumulator
 					   );
     static void store_normalization_term(gridding_parameters & params,std::size_t channel_grid_index,std::size_t facet_id, 
 						    typename active_trait::normalization_accumulator_type normalization_weight);
   };
+  /**
+   * Gridding a single correlation on the CPU
+   */
   template <>
   class correlation_gridding_policy<grid_single_correlation> {
   public:
@@ -135,6 +139,9 @@ namespace imaging {
       grid_flat_index[0] += accumulator._x._real;
       grid_flat_index[1] += accumulator._x._imag;
     }
+#ifdef __AVX__
+#ifdef BULLSEYE_SINGLE
+    typedef __m256 avx_vis_type[1]  __attribute__((aligned(16)));
     static inline void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
@@ -142,7 +149,7 @@ namespace imaging {
 					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
-					    __m256 accumulator[1]
+					    avx_vis_type accumulator
 					   ){
       grid_base_type* grid_flat_index = grid + 
 					(grid_channel_id * slice_size) + 
@@ -151,12 +158,39 @@ namespace imaging {
 			  _mm256_add_ps(_mm256_loadu_ps(&grid_flat_index[0]),
 					accumulator[0]));
     }
+#endif
+#ifdef BULLSEYE_DOUBLE
+    typedef __m256d avx_vis_type[2]  __attribute__((aligned(16)));
+    static inline void grid_visibility (grid_base_type* grid,
+					    size_t slice_size,
+					    size_t nx,
+					    size_t grid_channel_id,
+					    size_t no_polarizations_being_gridded,
+					    size_t pos_u,
+					    size_t pos_v,
+					    avx_vis_type accumulator
+					   ){
+      grid_base_type* grid_flat_index = grid + 
+					(grid_channel_id * slice_size) + 
+					((pos_v * nx + pos_u) << 1);
+	 _mm256_storeu_pd(&grid_flat_index[0],
+			  _mm256_add_pd(_mm256_loadu_pd(&grid_flat_index[0]),
+					accumulator[0]));
+	 _mm256_storeu_pd(&grid_flat_index[4],
+			  _mm256_add_pd(_mm256_loadu_pd(&grid_flat_index[4]),
+					accumulator[1]));
+    }
+#endif
+#endif
     static void store_normalization_term(gridding_parameters & params,std::size_t channel_grid_index,std::size_t facet_id, 
 						    typename active_trait::normalization_accumulator_type normalization_weight){
       std::size_t channel_norm_term_flat_index = facet_id * params.cube_channel_dim_size + channel_grid_index;
       params.normalization_terms[channel_norm_term_flat_index] += normalization_weight._x;
     }
   };
+  /**
+   * Gridding sampling function on the CPU
+   */
   template <>
   class correlation_gridding_policy<grid_sampling_function>{
   public:
@@ -211,6 +245,9 @@ namespace imaging {
       //No need to store the normalization term: centre of PSF should always be 1+0i
     }
   };
+  /**
+   * Gridding duel correlation on the CPU
+   */
   template <>
   class correlation_gridding_policy<grid_duel_correlation> {
   public:

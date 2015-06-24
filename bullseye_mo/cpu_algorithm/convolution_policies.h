@@ -27,7 +27,9 @@ public:
                                 typename active_correlation_gridding_policy::active_trait::vis_type & vis,
                                 typename active_correlation_gridding_policy::active_trait::normalization_accumulator_type & normalization_term);
 };
-
+/**
+ * Simple Nearest Neighbour convolution strategy
+ */
 template <typename active_correlation_gridding_policy>
 class convolution_policy <active_correlation_gridding_policy,convolution_NN>{
 public:
@@ -171,176 +173,6 @@ public:
     }
 };
 /**
- * This is a simple 2D w-projection kernel
- */
-template <typename active_correlation_gridding_policy>
-class convolution_policy <active_correlation_gridding_policy,convolution_w_projection_precomputed> {
-public:
-    inline static void set_required_rounding_operation(){
-      std::fesetround(FE_TONEAREST); 
-    }
-    inline static void convolve(gridding_parameters & params, uvw_base_type grid_centre_offset_x,
-                                uvw_base_type grid_centre_offset_y,
-                                grid_base_type * __restrict__ facet_output_buffer,
-				std::size_t channel_grid_index,
-                                std::size_t grid_size_in_floats,
-				size_t conv_full_support,
-				size_t padded_conv_full_support,
-				uvw_coord< uvw_base_type > & uvw,
-                                typename active_correlation_gridding_policy::active_trait::vis_type & vis,
-                                typename active_correlation_gridding_policy::active_trait::normalization_accumulator_type & normalization_term) {
-        //W should be positive (either we grid the visibility or its conjugate baseline):	
-	if (uvw._w < 0){
-	  conj<visibility_base_type>(vis);
-	  uvw._u *= -1;
-	  uvw._v *= -1;
-	  uvw._w *= -1;
-	}
-	//account for interpolation error (we select the closest sample from the oversampled convolution filter)
-        uvw_base_type translated_grid_u = uvw._u + grid_centre_offset_x;
-        uvw_base_type translated_grid_v = uvw._v + grid_centre_offset_y;
-        std::size_t  disc_grid_u = std::lrint(translated_grid_u);
-        std::size_t  disc_grid_v = std::lrint(translated_grid_v);
-        //to reduce the interpolation error we need to take the offset from the grid centre into account when choosing a convolution weight
-        long frac_u_offset = std::lrint((-uvw._u + std::lrint(uvw._u)) * params.conv_oversample);
-        long frac_v_offset = std::lrint((-uvw._v + std::lrint(uvw._v)) * params.conv_oversample);
-        
-	std::size_t conv_dim_size = padded_conv_full_support + (padded_conv_full_support - 1) * (params.conv_oversample - 1);
-	std::size_t best_fit_w_plane = std::lrint(abs(uvw._w)/(float)params.wmax_est*(params.wplanes-1));
-	std::size_t filter_offset = best_fit_w_plane * conv_dim_size * conv_dim_size;
-	
-	//Don't you dare go over the boundary
-        if (disc_grid_v + padded_conv_full_support >= params.ny || disc_grid_u + padded_conv_full_support >= params.nx ||
-                disc_grid_v >= params.ny || disc_grid_u >= params.nx || best_fit_w_plane >= params.wplanes) return;
-	std::size_t conv_v = 1 * params.conv_oversample + frac_v_offset;
-	for (std::size_t sup_v = 0; sup_v < conv_full_support; ++sup_v){
-	  std::size_t conv_u = 1 * params.conv_oversample + frac_u_offset;
-	  for (std::size_t sup_u = 0; sup_u < conv_full_support; ++sup_u){
-	      std::size_t conv_flat_index = filter_offset + conv_v * conv_dim_size + conv_u;
-	      basic_complex<convolution_base_type> conv_weight = ((basic_complex<convolution_base_type>*)params.conv)[conv_flat_index];
-	      typename active_correlation_gridding_policy::active_trait::vis_type convolved_vis = vis * conv_weight;
-	      active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
-								  grid_size_in_floats,
-								  params.nx,
-								  channel_grid_index,
-								  params.number_of_polarization_terms_being_gridded,
-								  disc_grid_u + sup_u,
-								  disc_grid_v + sup_v,
-								  convolved_vis);
-	      normalization_term += conv_weight._real; // real and imaginary components roughly similar
-	      conv_u += params.conv_oversample;
-	  }
-	  conv_v += params.conv_oversample;
-	}
-    }
-};
-/**
- * This is a AVX-vectorized 2D w-projection kernel
- */
-template <typename active_correlation_gridding_policy>
-class convolution_policy <active_correlation_gridding_policy,convolution_w_projection_precomputed_vectorized> {
-   inline static void mul_vis_with_conv_weights(const vec1< basic_complex<float> > & vis_in, 
-						basic_complex<convolution_base_type> conv_weight[4], 
-						__m256 visses_out[1]){
-    //Do 4 complex multiplications using intrinsics
-    convolution_base_type min_vis_i = -vis_in._x._imag;
-    __m256 vis_ri_4 = _mm256_set_ps(vis_in._x._imag,vis_in._x._real,vis_in._x._imag,vis_in._x._real,
-				    vis_in._x._imag,vis_in._x._real,vis_in._x._imag,vis_in._x._real);
-    __m256 vis_mir_4 = _mm256_set_ps(vis_in._x._real,min_vis_i,vis_in._x._real,min_vis_i,
-				     vis_in._x._real,min_vis_i,vis_in._x._real,min_vis_i);
-    visses_out[0] = _mm256_add_ps(_mm256_mul_ps(vis_ri_4,
-						_mm256_set_ps(conv_weight[3]._real,conv_weight[3]._real,
-							      conv_weight[2]._real,conv_weight[2]._real,
-							      conv_weight[1]._real,conv_weight[1]._real,
-							      conv_weight[0]._real,conv_weight[0]._real)),
-				  _mm256_mul_ps(vis_mir_4,
-						_mm256_set_ps(conv_weight[3]._imag,conv_weight[3]._imag,
-							      conv_weight[2]._imag,conv_weight[2]._imag,
-							      conv_weight[1]._imag,conv_weight[1]._imag,
-							      conv_weight[0]._imag,conv_weight[0]._imag)));
-  }
-public:
-    inline static void set_required_rounding_operation(){
-      std::fesetround(FE_TONEAREST); 
-    }
-    inline static void convolve(gridding_parameters & params, uvw_base_type grid_centre_offset_x,
-                                uvw_base_type grid_centre_offset_y,
-                                grid_base_type * __restrict__ facet_output_buffer,
-				std::size_t channel_grid_index,
-                                std::size_t grid_size_in_floats,
-				size_t conv_full_support,
-				size_t padded_conv_full_support,
-				uvw_coord< uvw_base_type > & uvw,
-                                typename active_correlation_gridding_policy::active_trait::vis_type & vis,
-                                typename active_correlation_gridding_policy::active_trait::normalization_accumulator_type & normalization_term) {
-        //W should be positive (either we grid the visibility or its conjugate baseline):	
-	if (uvw._w < 0){
-	  conj<visibility_base_type>(vis);
-	  uvw._u *= -1;
-	  uvw._v *= -1;
-	  uvw._w *= -1;
-	}
-	//account for interpolation error (we select the closest sample from the oversampled convolution filter)
-        uvw_base_type translated_grid_u = uvw._u + grid_centre_offset_x;
-        uvw_base_type translated_grid_v = uvw._v + grid_centre_offset_y;
-        std::size_t  disc_grid_u = std::lrint(translated_grid_u);
-        std::size_t  disc_grid_v = std::lrint(translated_grid_v);
-        //to reduce the interpolation error we need to take the offset from the grid centre into account when choosing a convolution weight
-        long frac_u_offset = std::lrint((-uvw._u + std::lrint(uvw._u)) * params.conv_oversample);
-        long frac_v_offset = std::lrint((-uvw._v + std::lrint(uvw._v)) * params.conv_oversample);
-        
-	std::size_t conv_dim_size = padded_conv_full_support + (padded_conv_full_support - 1) * (params.conv_oversample - 1);
-	std::size_t best_fit_w_plane = std::lrint(abs(uvw._w)/(float)params.wmax_est*(params.wplanes-1));
-	std::size_t filter_offset = best_fit_w_plane * conv_dim_size * conv_dim_size;
-	
-	//Don't you dare go over the boundary
-        if (disc_grid_v + padded_conv_full_support >= params.ny || disc_grid_u + padded_conv_full_support >= params.nx ||
-                disc_grid_v >= params.ny || disc_grid_u >= params.nx || best_fit_w_plane >= params.wplanes) return;
-	std::size_t conv_v = 1 * params.conv_oversample + frac_v_offset;
-	std::size_t unrolled_ul = conv_full_support/4;
-	std::size_t rem_loop_ll = (conv_full_support / 4) * 4;
-	for (std::size_t sup_v = 0; sup_v < conv_full_support; ++sup_v){
-	  for (std::size_t sup_u = 0; sup_u < unrolled_ul; ++sup_u){
-	      std::size_t first_conv_u = (1 + sup_u * 4) * params.conv_oversample + frac_u_offset;
-	      std::size_t first_conv_flat_index = filter_offset + conv_v * conv_dim_size + first_conv_u;
-	      basic_complex<convolution_base_type> conv_weight[4] = {((basic_complex<convolution_base_type>*)params.conv)[first_conv_flat_index],
-								     ((basic_complex<convolution_base_type>*)params.conv)[first_conv_flat_index + params.conv_oversample],
-								     ((basic_complex<convolution_base_type>*)params.conv)[first_conv_flat_index + params.conv_oversample * 2],
-								     ((basic_complex<convolution_base_type>*)params.conv)[first_conv_flat_index + params.conv_oversample * 3]};
-	      __m256 convolved_vis[1];
-	      mul_vis_with_conv_weights(vis,conv_weight,convolved_vis);
-	      {
-		active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
-								    grid_size_in_floats,
-								    params.nx,
-								    channel_grid_index,
-								    params.number_of_polarization_terms_being_gridded,
-								    disc_grid_u + sup_u*4,
-								    disc_grid_v + sup_v,
-								    convolved_vis);
-	      }
-	      normalization_term += conv_weight[0]._real + conv_weight[1]._real + conv_weight[2]._real + conv_weight[3]._real; // real and imaginary components roughly similar
-	  }
-	  for (std::size_t sup_u = rem_loop_ll; sup_u < conv_full_support; ++sup_u){
-	      std::size_t conv_u = (1 + sup_u) * params.conv_oversample + frac_u_offset;
-	      std::size_t conv_flat_index = filter_offset + conv_v * conv_dim_size + conv_u;
-	      basic_complex<convolution_base_type> conv_weight = ((basic_complex<convolution_base_type>*)params.conv)[conv_flat_index];
-	      typename active_correlation_gridding_policy::active_trait::vis_type convolved_vis = vis * conv_weight;
-	      active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
-								  grid_size_in_floats,
-								  params.nx,
-								  channel_grid_index,
-								  params.number_of_polarization_terms_being_gridded,
-								  disc_grid_u + sup_u,
-								  disc_grid_v + sup_v,
-								  convolved_vis);
-	      normalization_term += conv_weight._real; // real and imaginary components roughly similar
-	  }
-	  conv_v += params.conv_oversample;
-	}
-    }
-};
-/**
  * This is a simple analytic convolution policy
  * Note that this assumes that FE_TONEAREST is set as the default rounding operation - there is a noticable phase error if not!!!
  */
@@ -398,4 +230,198 @@ public:
 	}
     }
 };
+/**
+ * This is a simple 2D w-projection kernel
+ */
+template <typename active_correlation_gridding_policy>
+class convolution_policy <active_correlation_gridding_policy,convolution_w_projection_precomputed> {
+public:
+    inline static void set_required_rounding_operation(){
+      std::fesetround(FE_TONEAREST); 
+    }
+    inline static void convolve(gridding_parameters & params, uvw_base_type grid_centre_offset_x,
+                                uvw_base_type grid_centre_offset_y,
+                                grid_base_type * __restrict__ facet_output_buffer,
+				std::size_t channel_grid_index,
+                                std::size_t grid_size_in_floats,
+				size_t conv_full_support,
+				size_t padded_conv_full_support,
+				uvw_coord< uvw_base_type > & uvw,
+                                typename active_correlation_gridding_policy::active_trait::vis_type & vis,
+                                typename active_correlation_gridding_policy::active_trait::normalization_accumulator_type & normalization_term) {
+        //W should be positive (either we grid the visibility or its conjugate baseline):	
+	if (uvw._w < 0){
+	  conj<visibility_base_type>(vis);
+	  uvw._u *= -1;
+	  uvw._v *= -1;
+	  uvw._w *= -1;
+	}
+	//account for interpolation error (we select the closest sample from the oversampled convolution filter)
+        uvw_base_type translated_grid_u = uvw._u + grid_centre_offset_x;
+        uvw_base_type translated_grid_v = uvw._v + grid_centre_offset_y;
+        std::size_t  disc_grid_u = std::lrint(translated_grid_u);
+        std::size_t  disc_grid_v = std::lrint(translated_grid_v);
+        //to reduce the interpolation error we need to take the offset from the grid centre into account when choosing a convolution weight
+        long frac_u_offset = std::lrint((-uvw._u + std::lrint(uvw._u)) * params.conv_oversample);
+        long frac_v_offset = std::lrint((-uvw._v + std::lrint(uvw._v)) * params.conv_oversample);
+        
+	std::size_t conv_dim_size = padded_conv_full_support + (padded_conv_full_support - 1) * (params.conv_oversample - 1);
+	std::size_t best_fit_w_plane = std::lrint(abs(uvw._w)/(float)params.wmax_est*(params.wplanes-1));
+	std::size_t filter_offset = best_fit_w_plane * conv_dim_size * conv_dim_size;
+	
+	//Don't you dare go over the boundary
+        if (disc_grid_v + padded_conv_full_support >= params.ny || disc_grid_u + padded_conv_full_support >= params.nx ||
+                disc_grid_v >= params.ny || disc_grid_u >= params.nx || best_fit_w_plane >= params.wplanes) return;
+	std::size_t conv_v = filter_offset + (1 * params.conv_oversample + frac_v_offset) * conv_dim_size;
+	for (std::size_t sup_v = 0; sup_v < conv_full_support; ++sup_v){
+	  std::size_t conv_u = 1 * params.conv_oversample + frac_u_offset;
+	  for (std::size_t sup_u = 0; sup_u < conv_full_support; ++sup_u){
+	      std::size_t conv_flat_index = conv_v + conv_u;
+	      basic_complex<convolution_base_type> conv_weight = ((basic_complex<convolution_base_type>*)params.conv)[conv_flat_index];
+	      typename active_correlation_gridding_policy::active_trait::vis_type convolved_vis = vis * conv_weight;
+	      active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
+								  grid_size_in_floats,
+								  params.nx,
+								  channel_grid_index,
+								  params.number_of_polarization_terms_being_gridded,
+								  disc_grid_u + sup_u,
+								  disc_grid_v + sup_v,
+								  convolved_vis);
+	      normalization_term += conv_weight._real; // real and imaginary components roughly similar
+	      conv_u += params.conv_oversample;
+	  }
+	  conv_v += params.conv_oversample * conv_dim_size;
+	}
+    }
+};
+
+/**
+ * This is an AVX-vectorized 2D w-projection kernel
+ */
+#ifdef __AVX__
+template <typename active_correlation_gridding_policy>
+class convolution_policy <active_correlation_gridding_policy,convolution_w_projection_precomputed_vectorized> {
+private:
+   inline static void mul_vis_with_conv_weights(const vec1< basic_complex<float> > & vis_in, 
+						basic_complex<convolution_base_type> conv_weight[4], 
+						typename active_correlation_gridding_policy::avx_vis_type visses_out){
+    //Do 4 complex multiplications using intrinsics
+    convolution_base_type min_vis_i = -vis_in._x._imag;
+    __m256 vis_ri_4 = _mm256_set_ps(vis_in._x._imag,vis_in._x._real,vis_in._x._imag,vis_in._x._real,
+				    vis_in._x._imag,vis_in._x._real,vis_in._x._imag,vis_in._x._real);
+    __m256 vis_mir_4 = _mm256_set_ps(vis_in._x._real,min_vis_i,vis_in._x._real,min_vis_i,
+				    vis_in._x._real,min_vis_i,vis_in._x._real,min_vis_i);
+    visses_out[0] = _mm256_add_ps(_mm256_mul_ps(vis_ri_4,
+						_mm256_set_ps(conv_weight[3]._real,conv_weight[3]._real,
+							      conv_weight[2]._real,conv_weight[2]._real,
+							      conv_weight[1]._real,conv_weight[1]._real,
+							      conv_weight[0]._real,conv_weight[0]._real)),
+				   _mm256_mul_ps(vis_mir_4,
+						_mm256_set_ps(conv_weight[3]._imag,conv_weight[3]._imag,
+							      conv_weight[2]._imag,conv_weight[2]._imag,
+							      conv_weight[1]._imag,conv_weight[1]._imag,
+							      conv_weight[0]._imag,conv_weight[0]._imag)));
+  }
+   inline static void mul_vis_with_conv_weights(const vec1< basic_complex<double> > & vis_in, 
+						basic_complex<convolution_base_type> conv_weight[4], 
+						typename active_correlation_gridding_policy::avx_vis_type visses_out){
+    //Do 4 complex multiplications using intrinsics
+    convolution_base_type min_vis_i = -vis_in._x._imag;
+    __m256d vis_ri_2 = _mm256_set_pd(vis_in._x._imag,vis_in._x._real,vis_in._x._imag,vis_in._x._real);
+    __m256d vis_mir_2 = _mm256_set_pd(vis_in._x._real,min_vis_i,vis_in._x._real,min_vis_i);
+    visses_out[0] = _mm256_add_pd(_mm256_mul_pd(vis_ri_2,
+						_mm256_set_pd(conv_weight[1]._real,conv_weight[1]._real,
+							      conv_weight[0]._real,conv_weight[0]._real)),
+				  _mm256_mul_pd(vis_mir_2,
+						_mm256_set_pd(conv_weight[1]._imag,conv_weight[1]._imag,
+							      conv_weight[0]._imag,conv_weight[0]._imag)));
+    visses_out[1] = _mm256_add_pd(_mm256_mul_pd(vis_ri_2,
+						_mm256_set_pd(conv_weight[3]._real,conv_weight[3]._real,
+							      conv_weight[2]._real,conv_weight[2]._real)),
+				  _mm256_mul_pd(vis_mir_2,
+						_mm256_set_pd(conv_weight[3]._imag,conv_weight[3]._imag,
+							      conv_weight[2]._imag,conv_weight[2]._imag)));
+  }
+public:
+    inline static void set_required_rounding_operation(){
+      std::fesetround(FE_TONEAREST); 
+    }
+    inline static void convolve(gridding_parameters & params, uvw_base_type grid_centre_offset_x,
+                                uvw_base_type grid_centre_offset_y,
+                                grid_base_type * __restrict__ facet_output_buffer,
+				std::size_t channel_grid_index,
+                                std::size_t grid_size_in_floats,
+				size_t conv_full_support,
+				size_t padded_conv_full_support,
+				uvw_coord< uvw_base_type > & uvw,
+                                typename active_correlation_gridding_policy::active_trait::vis_type & vis,
+                                typename active_correlation_gridding_policy::active_trait::normalization_accumulator_type & normalization_term) {
+        //W should be positive (either we grid the visibility or its conjugate baseline):	
+	if (uvw._w < 0){
+	  conj<visibility_base_type>(vis);
+	  uvw._u *= -1;
+	  uvw._v *= -1;
+	  uvw._w *= -1;
+	}
+	//account for interpolation error (we select the closest sample from the oversampled convolution filter)
+        uvw_base_type translated_grid_u = uvw._u + grid_centre_offset_x;
+        uvw_base_type translated_grid_v = uvw._v + grid_centre_offset_y;
+        std::size_t  disc_grid_u = std::lrint(translated_grid_u);
+        std::size_t  disc_grid_v = std::lrint(translated_grid_v);
+        //to reduce the interpolation error we need to take the offset from the grid centre into account when choosing a convolution weight
+        long frac_u_offset = std::lrint((-uvw._u + std::lrint(uvw._u)) * params.conv_oversample);
+        long frac_v_offset = std::lrint((-uvw._v + std::lrint(uvw._v)) * params.conv_oversample);
+        
+	std::size_t conv_dim_size = padded_conv_full_support + (padded_conv_full_support - 1) * (params.conv_oversample - 1);
+	std::size_t best_fit_w_plane = std::lrint(abs(uvw._w)/(float)params.wmax_est*(params.wplanes-1));
+	std::size_t filter_offset = best_fit_w_plane * conv_dim_size * conv_dim_size;
+	
+	//Don't you dare go over the boundary
+        if (disc_grid_v + padded_conv_full_support >= params.ny || disc_grid_u + padded_conv_full_support >= params.nx ||
+                disc_grid_v >= params.ny || disc_grid_u >= params.nx || best_fit_w_plane >= params.wplanes) return;
+	std::size_t conv_v = filter_offset + (1 * params.conv_oversample + frac_v_offset) * conv_dim_size;
+	std::size_t unrolled_ul = conv_full_support / 4;
+	std::size_t rem_loop_ll = (unrolled_ul) * 4;
+	for (std::size_t sup_v = 0; sup_v < conv_full_support; ++sup_v){
+	  for (std::size_t sup_u = 0; sup_u < unrolled_ul; ++sup_u){
+	      std::size_t first_conv_u = (1 + sup_u * 4) * params.conv_oversample + frac_u_offset;
+	      std::size_t first_conv_flat_index = conv_v + first_conv_u;
+	      basic_complex<convolution_base_type> conv_weight[4] = {((basic_complex<convolution_base_type>*)params.conv)[first_conv_flat_index],
+								     ((basic_complex<convolution_base_type>*)params.conv)[first_conv_flat_index + params.conv_oversample],
+								     ((basic_complex<convolution_base_type>*)params.conv)[first_conv_flat_index + params.conv_oversample * 2],
+								     ((basic_complex<convolution_base_type>*)params.conv)[first_conv_flat_index + params.conv_oversample * 3]};
+	      typename active_correlation_gridding_policy::avx_vis_type convolved_vis;
+	      mul_vis_with_conv_weights(vis,conv_weight,convolved_vis);
+	      {
+		active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
+								    grid_size_in_floats,
+								    params.nx,
+								    channel_grid_index,
+								    params.number_of_polarization_terms_being_gridded,
+								    disc_grid_u + sup_u * 4,
+								    disc_grid_v + sup_v,
+								    convolved_vis);
+	      }
+	      normalization_term += conv_weight[0]._real + conv_weight[1]._real + conv_weight[2]._real + conv_weight[3]._real;// real and imaginary components roughly similar
+	  }
+	  for (std::size_t sup_u = rem_loop_ll; sup_u < conv_full_support; ++sup_u){
+	      std::size_t conv_u = (1 + sup_u) * params.conv_oversample + frac_u_offset;
+	      std::size_t conv_flat_index = conv_v + conv_u;
+	      basic_complex<convolution_base_type> conv_weight = ((basic_complex<convolution_base_type>*)params.conv)[conv_flat_index];
+	      typename active_correlation_gridding_policy::active_trait::vis_type convolved_vis = vis * conv_weight;
+	      active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
+								  grid_size_in_floats,
+								  params.nx,
+								  channel_grid_index,
+								  params.number_of_polarization_terms_being_gridded,
+								  disc_grid_u + sup_u,
+								  disc_grid_v + sup_v,
+								  convolved_vis);
+	      normalization_term += conv_weight._real; // real and imaginary components roughly similar
+	  }
+	  conv_v += params.conv_oversample * conv_dim_size;
+	}
+    }
+};
+#endif
 }

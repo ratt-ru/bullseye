@@ -83,6 +83,11 @@ extern "C" {
       #ifdef BULLSEYE_DOUBLE
       printf(" >Double precision mode: enabled \n");
       #endif
+      #ifdef __AVX__
+      printf(" >AVX Vectorization for w-projection modes: enabled\n");
+      #else
+      printf(" >AVX Vectorization for w-projection modes: disabled\n");
+      #endif
       printf(" >Number of cores available: %d\n",omp_get_num_procs());
       printf(" >Number of threads being used: %d\n",omp_get_max_threads());
       printf("-----------------------------------------------\n");
@@ -168,8 +173,13 @@ extern "C" {
 		  typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_AA_1D_precomputed> convolution_policy;
 		  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
 		} else {
+		  #ifdef __AVX__
+		  typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_w_projection_precomputed_vectorized> convolution_policy;
+		  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
+		  #else
 		  typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_w_projection_precomputed> convolution_policy;
 		  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
+		  #endif
 		}
 	      }
 	    }
@@ -183,11 +193,21 @@ extern "C" {
 	      printf("Faceting single correlation on the CPU...\n");    
 	      //invoke computation
 	      {
-// 		typedef imaging::correlation_gridding_policy<imaging::grid_single_correlation> correlation_gridding_policy;
-// 		typedef imaging::baseline_transform_policy<imaging::transform_planar_approx_with_w > baseline_transform_policy;
-// 		typedef imaging::phase_transform_policy<imaging::enable_faceting_phase_shift> phase_transform_policy;
-// 		typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_AA_1D_precomputed> convolution_policy;
-// 		imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
+		typedef imaging::correlation_gridding_policy<imaging::grid_single_correlation> correlation_gridding_policy;
+		typedef imaging::baseline_transform_policy<imaging::transform_planar_approx_with_w > baseline_transform_policy;
+		typedef imaging::phase_transform_policy<imaging::enable_faceting_phase_shift> phase_transform_policy;
+		if (params.wplanes <= 1){
+		  typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_AA_1D_precomputed> convolution_policy;
+		  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
+		} else {
+		  #ifdef __AVX__
+		  typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_w_projection_precomputed_vectorized> convolution_policy;
+		  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
+		  #else
+		  typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_w_projection_precomputed> convolution_policy;
+		  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
+		  #endif
+		}
 	      }
 	    }
             gridding_timer.stop();
@@ -263,12 +283,17 @@ extern "C" {
     void grid_sampling_function(gridding_parameters & params) {
         gridding_future = std::async(std::launch::async, [&params] () {
 	    sampling_function_gridding_timer.start();
-            printf("Faceting sampling function on the CPU...\n");  
-//             typedef imaging::correlation_gridding_policy<imaging::grid_sampling_function> correlation_gridding_policy;
-// 	    typedef imaging::baseline_transform_policy<imaging::transform_disable_facet_rotation > baseline_transform_policy;
-// 	    typedef imaging::phase_transform_policy<imaging::disable_faceting_phase_shift > phase_transform_policy;
-// 	    typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_AA_1D_precomputed> convolution_policy;
-// 	    imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
+            printf("Gridding sampling function on the CPU...\n");  
+            typedef imaging::correlation_gridding_policy<imaging::grid_sampling_function> correlation_gridding_policy;
+	    typedef imaging::baseline_transform_policy<imaging::transform_disable_facet_rotation > baseline_transform_policy;
+	    typedef imaging::phase_transform_policy<imaging::disable_faceting_phase_shift > phase_transform_policy;
+	    if (params.wplanes <= 1){
+	      typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_AA_1D_precomputed> convolution_policy;
+	      imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
+	    } else {
+	      typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_w_projection_precomputed> convolution_policy;
+	      imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
+	    }
 	    sampling_function_gridding_timer.stop();
         });
     }
@@ -277,11 +302,16 @@ extern "C" {
         gridding_future = std::async(std::launch::async, [&params] () {
 	    sampling_function_gridding_timer.start();
             printf("Faceting sampling function on the CPU...\n");
-// 	    typedef imaging::correlation_gridding_policy<imaging::grid_sampling_function> correlation_gridding_policy;
-// 	    typedef imaging::baseline_transform_policy<imaging::transform_planar_approx_with_w > baseline_transform_policy;
-// 	    typedef imaging::phase_transform_policy<imaging::enable_faceting_phase_shift > phase_transform_policy;
-// 	    typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_AA_1D_precomputed> convolution_policy;
-// 	    imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
+	    typedef imaging::correlation_gridding_policy<imaging::grid_sampling_function> correlation_gridding_policy;
+	    typedef imaging::baseline_transform_policy<imaging::transform_planar_approx_with_w > baseline_transform_policy;
+	    typedef imaging::phase_transform_policy<imaging::enable_faceting_phase_shift > phase_transform_policy;
+	    if (params.wplanes <= 1){
+	      typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_AA_1D_precomputed> convolution_policy;
+	      imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
+	    } else {
+	      typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_w_projection_precomputed> convolution_policy;
+	      imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
+	    }
             sampling_function_gridding_timer.stop();
         });
     }
