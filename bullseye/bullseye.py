@@ -420,15 +420,20 @@ if __name__ == "__main__":
 	  png_export.png_export(psf,image_prefix+('.spw%d.ch%d.psf' % (spw_no,chan_no)),None)
 
     else: #export to FITS cube
-      ra = data._field_centres[parser_args['field_id'],0,0] if num_facet_centres == 0 else facet_centres[f,0]
-      dec = data._field_centres[parser_args['field_id'],0,1] if num_facet_centres == 0 else facet_centres[f,1]
+      ra = data._field_centres[parser_args['field_id'],0,0]
+      dec = data._field_centres[parser_args['field_id'],0,1]
+      offset_coord_l = (0 if num_facet_centres == 0 else facet_centres[f,0] - ra) / parser_args['cell_l']
+      centre_coord_l = (parser_args['npix_l'] * 0.5 + 1) + offset_coord_l
+      offset_coord_m = (0 if num_facet_centres == 0 else facet_centres[f,1] - dec) / parser_args['cell_m']
+      centre_coord_m = (parser_args['npix_m'] * 0.5 + 1) - offset_coord_m
       offset = cube_chan_dim_size*len(correlations_to_grid)*parser_args['npix_l']*parser_args['npix_m']*f*np.dtype(np.float32).itemsize
       dirty = np.ctypeslib.as_array(ctypes.cast(gridded_vis.ctypes.data + offset, ctypes.POINTER(ctypes.c_float)),
 				    shape=(cube_chan_dim_size,parser_args['npix_l'],parser_args['npix_m']))
 
       fits_export.save_to_fits_image(image_prefix+'.fits',
-				     parser_args['npix_m'],parser_args['npix_l'],
-				     quantity(parser_args['cell_m'],'arcsec'),quantity(parser_args['cell_l'],'arcsec'),
+				     parser_args['npix_l'],parser_args['npix_m'],
+				     quantity(parser_args['cell_l'],'arcsec'),quantity(parser_args['cell_m'],'arcsec'),
+				     centre_coord_l,centre_coord_m,
 				     quantity(ra,'arcsec'),
 				     quantity(dec,'arcsec'),
 				     parser_args['pol'],
@@ -446,11 +451,16 @@ if __name__ == "__main__":
 	  psf /= np.max(psf)
 	  spw_no = c / data._no_channels
 	  chan_no = c % data._no_channels
-	  ra = data._field_centres[parser_args['field_id'],0,0] if num_facet_centres == 0 else facet_centres[f,0]
-	  dec = data._field_centres[parser_args['field_id'],0,1] if num_facet_centres == 0 else facet_centres[f,1]
+	  ra = data._field_centres[parser_args['field_id'],0,0]
+	  dec = data._field_centres[parser_args['field_id'],0,1]
+	  offset_coord_l = (0 if num_facet_centres == 0 else facet_centres[f,0] - ra) / parser_args['cell_l']
+	  centre_coord_l = (parser_args['npix_l'] * 0.5 + 1) + offset_coord_l
+	  offset_coord_m = (0 if num_facet_centres == 0 else facet_centres[f,1] - dec) / parser_args['cell_m']
+	  centre_coord_m = (parser_args['npix_m'] * 0.5 + 1) - offset_coord_m
 	  fits_export.save_to_fits_image(image_prefix+('.spw%d.ch%d.psf.fits' % (spw_no,chan_no)),
 					 parser_args['npix_l'],parser_args['npix_m'],
 					 quantity(parser_args['cell_l'],'arcsec'),quantity(parser_args['cell_m'],'arcsec'),
+					 centre_coord_l,centre_coord_m,
 					 quantity(ra,'arcsec'),
 					 quantity(dec,'arcsec'),
 					 parser_args['pol'],

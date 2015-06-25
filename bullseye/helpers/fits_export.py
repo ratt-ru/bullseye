@@ -73,6 +73,7 @@ DOI: 10.1051/0004-6361:20021327
 '''
 def save_to_fits_image(name,size_l,size_m,
 		   cell_l,cell_m,
+		   centre_px_l,centre_px_m,
 		   pointing_ra,pointing_dec,
 		   polarization_term,
 		   ref_wavelength,
@@ -85,13 +86,13 @@ def save_to_fits_image(name,size_l,size_m,
     raise Exception("Expected float or double typed data but got %s" % data.dtype)
   fortran_ordered_data = data.astype(data.dtype,order="F",copy=False).reshape(cube_channel_dim_size,1,size_m,size_l)
   pri_hdr = pyfits.PrimaryHDU(fortran_ordered_data,do_not_scale_image_data=True)
-  pri_hdr.header.append(("CRPIX1",size_l/2 + 1,"Pixel coordinate of reference point"))
-  pri_hdr.header.append(("CDELT1",-cell_l.get_value("deg"),"step per l pixel"))
+  pri_hdr.header.append(("CRPIX1",centre_px_l,"Pixel coordinate of reference point"))
+  pri_hdr.header.append(("CDELT1",-cell_m.get_value("deg"),"step per m pixel"))
   pri_hdr.header.append(("CTYPE1","RA---SIN","Orthog projection"))
   pri_hdr.header.append(("CRVAL1",pointing_ra.get_value("deg"),"RA value"))
   pri_hdr.header.append(("CUNIT1","deg","units are always degrees"))
-  pri_hdr.header.append(("CRPIX2",size_m/2 + 1,"Pixel coordinate of reference point"))
-  pri_hdr.header.append(("CDELT2",cell_m.get_value("deg"),"step per m pixel"))
+  pri_hdr.header.append(("CRPIX2",centre_px_m,"Pixel coordinate of reference point"))
+  pri_hdr.header.append(("CDELT2",cell_l.get_value("deg"),"step per l pixel"))
   pri_hdr.header.append(("CTYPE2","DEC--SIN","Orthog projection"))
   pri_hdr.header.append(("CRVAL2",pointing_dec.get_value("deg"),"DEC value"))
   pri_hdr.header.append(("CUNIT2","deg","units are always degrees"))
