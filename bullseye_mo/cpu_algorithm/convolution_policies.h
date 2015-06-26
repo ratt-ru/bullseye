@@ -55,8 +55,6 @@ public:
 	active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
                         grid_size_in_floats,
                         params.nx,
-                        channel_grid_index,
-                        params.number_of_polarization_terms_being_gridded,
                         disc_grid_u,
                         disc_grid_v,
                         vis);
@@ -106,8 +104,6 @@ public:
               active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
                         grid_size_in_floats,
                         params.nx,
-                        channel_grid_index,
-                        params.number_of_polarization_terms_being_gridded,
                         disc_grid_u + sup_u,
                         disc_grid_v + sup_v,
                         convolved_vis);
@@ -160,8 +156,6 @@ public:
 	      active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
 								  grid_size_in_floats,
 								  params.nx,
-								  channel_grid_index,
-								  params.number_of_polarization_terms_being_gridded,
 								  disc_grid_u + sup_u,
 								  disc_grid_v + sup_v,
 								  convolved_vis);
@@ -219,8 +213,6 @@ public:
 		    active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
                         grid_size_in_floats,
                         params.nx,
-                        channel_grid_index,
-                        params.number_of_polarization_terms_being_gridded,
                         disc_grid_u + sup_u,
                         disc_grid_v + sup_v,
                         convolved_vis);
@@ -282,8 +274,6 @@ public:
 	      active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
 								  grid_size_in_floats,
 								  params.nx,
-								  channel_grid_index,
-								  params.number_of_polarization_terms_being_gridded,
 								  disc_grid_u + sup_u,
 								  disc_grid_v + sup_v,
 								  convolved_vis);
@@ -628,8 +618,6 @@ public:
 		active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
 								    grid_size_in_floats,
 								    params.nx,
-								    channel_grid_index,
-								    params.number_of_polarization_terms_being_gridded,
 								    disc_grid_u + sup_u * 4,
 								    disc_grid_v + sup_v,
 								    convolved_vis);
@@ -644,8 +632,6 @@ public:
 	      active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
 								  grid_size_in_floats,
 								  params.nx,
-								  channel_grid_index,
-								  params.number_of_polarization_terms_being_gridded,
 								  disc_grid_u + sup_u,
 								  disc_grid_v + sup_v,
 								  convolved_vis);

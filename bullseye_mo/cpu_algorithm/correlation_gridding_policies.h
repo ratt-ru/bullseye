@@ -77,8 +77,6 @@ namespace imaging {
     static void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
-					    size_t grid_channel_id,
-					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
 					    avx_vis_type accumulator
@@ -127,14 +125,11 @@ namespace imaging {
     static inline void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
-					    size_t grid_channel_id,
-					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
 					    typename active_trait::accumulator_type & accumulator
 					   ){
       grid_base_type* grid_flat_index = grid + 
-					(grid_channel_id * slice_size) + 
 					((pos_v * nx + pos_u) << 1);
       grid_flat_index[0] += accumulator._x._real;
       grid_flat_index[1] += accumulator._x._imag;
@@ -145,14 +140,11 @@ namespace imaging {
     static inline void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
-					    size_t grid_channel_id,
-					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
 					    avx_vis_type accumulator
 					   ){
       grid_base_type* grid_flat_index = grid + 
-					(grid_channel_id * slice_size) + 
 					((pos_v * nx + pos_u) << 1);
 	 _mm256_storeu_ps(&grid_flat_index[0],
 			  _mm256_add_ps(_mm256_loadu_ps(&grid_flat_index[0]),
@@ -163,14 +155,11 @@ namespace imaging {
     static inline void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
-					    size_t grid_channel_id,
-					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
 					    avx_vis_type accumulator
 					   ){
       grid_base_type* grid_flat_index = grid + 
-					(grid_channel_id * slice_size) + 
 					((pos_v * nx + pos_u) << 1);
 	 _mm256_storeu_pd(&grid_flat_index[0],
 			  _mm256_add_pd(_mm256_loadu_pd(&grid_flat_index[0]),
@@ -227,14 +216,11 @@ namespace imaging {
     static void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
-					    size_t grid_channel_id,
-					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
 					    typename active_trait::accumulator_type & accumulator
 					   ){
       grid_base_type* grid_flat_index = grid + 
-					(grid_channel_id * slice_size) + 
 					((pos_v * nx + pos_u) << 1);
       grid_flat_index[0]+=accumulator._x._real;
       grid_flat_index[1]+=accumulator._x._imag;
@@ -288,15 +274,12 @@ namespace imaging {
     static void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
-					    size_t grid_channel_id,
-					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
 					    typename active_trait::accumulator_type & accumulator
 					   ){
       //duel correlation grids (no_facets * no_channel_averaging_grids * no_correlations * ny * nx * 2)
       grid_base_type* grid_flat_index_corr1 = grid + 
-					      ((grid_channel_id * no_polarizations_being_gridded) * slice_size) + 
 					      ((pos_v * nx + pos_u) << 1);
       grid_base_type* grid_flat_index_corr2 = grid_flat_index_corr1 + slice_size;
       grid_flat_index_corr1[0] += accumulator._x._real;
@@ -310,14 +293,11 @@ namespace imaging {
     static inline void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
-					    size_t grid_channel_id,
-					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
 					    avx_vis_type accumulator
 					   ){
 	 grid_base_type* grid_flat_index_corr1 = grid + 
-					      ((grid_channel_id * no_polarizations_being_gridded) * slice_size) + 
 					      ((pos_v * nx + pos_u) << 1);
 	 _mm256_storeu_ps(&grid_flat_index_corr1[0],
 			  _mm256_add_ps(_mm256_loadu_ps(&grid_flat_index_corr1[0]),
@@ -332,14 +312,11 @@ namespace imaging {
     static inline void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
-					    size_t grid_channel_id,
-					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
 					    avx_vis_type accumulator
 					   ){
       grid_base_type* grid_flat_index_corr1 = grid + 
-					      ((grid_channel_id * no_polarizations_being_gridded) * slice_size) + 
 					      ((pos_v * nx + pos_u) << 1);
       _mm256_storeu_pd(&grid_flat_index_corr1[0],
 		      _mm256_add_pd(_mm256_loadu_pd(&grid_flat_index_corr1[0]),
@@ -403,15 +380,12 @@ namespace imaging {
     static void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
-					    size_t grid_channel_id,
-					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
 					    typename active_trait::accumulator_type & accumulator
 					   ){
       //duel correlation grids (no_facets * no_channel_averaging_grids * no_correlations * ny * nx * 2)
       grid_base_type* grid_flat_index_corr1 = grid + 
-					      ((grid_channel_id * no_polarizations_being_gridded) * slice_size) + 
 					      ((pos_v * nx + pos_u) << 1);
       grid_base_type* grid_flat_index_corr2 = grid_flat_index_corr1 + slice_size;
       grid_base_type* grid_flat_index_corr3 = grid_flat_index_corr2 + slice_size;
@@ -431,14 +405,11 @@ namespace imaging {
     static inline void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
-					    size_t grid_channel_id,
-					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
 					    avx_vis_type accumulator
 					   ){
 	 grid_base_type* grid_flat_index_corr1 = grid + 
-					      ((grid_channel_id * no_polarizations_being_gridded) * slice_size) + 
 					      ((pos_v * nx + pos_u) << 1);
 	 grid_base_type* grid_flat_index_corr2 = grid_flat_index_corr1 + slice_size;
 	 grid_base_type* grid_flat_index_corr3 = grid_flat_index_corr2 + slice_size;
@@ -461,14 +432,11 @@ namespace imaging {
     static inline void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
-					    size_t grid_channel_id,
-					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
 					    avx_vis_type accumulator
 					   ){
       grid_base_type* grid_flat_index_corr1 = grid + 
-					  ((grid_channel_id * no_polarizations_being_gridded) * slice_size) + 
 					  ((pos_v * nx + pos_u) << 1);
       grid_base_type* grid_flat_index_corr2 = grid_flat_index_corr1 + slice_size;
       grid_base_type* grid_flat_index_corr3 = grid_flat_index_corr2 + slice_size;
@@ -558,15 +526,11 @@ namespace imaging {
     static void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
-					    size_t grid_channel_id,
-					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
 					    typename active_trait::accumulator_type & accumulator
 					   ){
 	imaging::correlation_gridding_policy<grid_4_correlation>::grid_visibility(grid,slice_size,nx,
-										  grid_channel_id,
-										  no_polarizations_being_gridded,
 										  pos_u,pos_v,accumulator);
     }
 #ifdef __AVX__
@@ -575,14 +539,11 @@ namespace imaging {
     static inline void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
-					    size_t grid_channel_id,
-					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
 					    avx_vis_type accumulator
 					   ){
-	imaging::correlation_gridding_policy<grid_4_correlation>::grid_visibility(grid,slice_size,nx,grid_channel_id,
-										no_polarizations_being_gridded,
+	imaging::correlation_gridding_policy<grid_4_correlation>::grid_visibility(grid,slice_size,nx,
 										pos_u,pos_v,accumulator); 
     }
 #elif BULLSEYE_DOUBLE
@@ -590,14 +551,11 @@ namespace imaging {
     static inline void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
-					    size_t grid_channel_id,
-					    size_t no_polarizations_being_gridded,
 					    size_t pos_u,
 					    size_t pos_v,
 					    avx_vis_type accumulator
 					   ){
-      imaging::correlation_gridding_policy<grid_4_correlation>::grid_visibility(grid,slice_size,nx,grid_channel_id,
-										no_polarizations_being_gridded,
+      imaging::correlation_gridding_policy<grid_4_correlation>::grid_visibility(grid,slice_size,nx,
 										pos_u,pos_v,accumulator);
     }
 #endif
