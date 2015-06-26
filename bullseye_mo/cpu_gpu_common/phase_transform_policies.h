@@ -91,7 +91,14 @@ namespace imaging {
     __device__ __host__ static void compute_delta_lmn(uvw_base_type old_phase_centre_ra, uvw_base_type old_phase_centre_dec,
 						      uvw_base_type new_phase_centre_ra, uvw_base_type new_phase_centre_dec,
 						      lmn_coord & result){
-      //see phase_transform_policies.h in cpu code for explanation
+      /**
+                        Convert ra,dec to l,m,n based on Synthesis Imaging II, Pg. 388
+                        The phase term (as documented in Perley & Cornwell (1992)) calculation requires the delta l,m,n coordinates. 
+                        Through simplification l0,m0,n0 = (0,0,1) (assume dec == dec0 and ra == ra0, and the simplification follows)
+                        l,m,n is then calculated using the new and original phase centres as per the relation on Pg. 388
+                        PRECONDITIONS: the arguements to this method should be measured as arcseconds
+      */
+
       uvw_base_type d_ra = (new_phase_centre_ra - old_phase_centre_ra)* ARCSEC_TO_RAD,
 		    d_dec = (new_phase_centre_dec - old_phase_centre_dec)* ARCSEC_TO_RAD,
 		    c_d_dec = cos(d_dec),
