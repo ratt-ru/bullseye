@@ -342,6 +342,238 @@ private:
 						_mm256_set_pd(conv_weight[3]._imag,conv_weight[3]._imag,
 							      conv_weight[2]._imag,conv_weight[2]._imag)));
   }
+  inline static void mul_vis_with_conv_weights(const vec2< basic_complex<float> > & vis_in, 
+						basic_complex<convolution_base_type> conv_weight[4], 
+						typename active_correlation_gridding_policy::avx_vis_type visses_out){
+    //Do 4 complex multiplications using intrinsics
+    {
+      convolution_base_type min_vis_i = -vis_in._x._imag;
+      __m256 vis_ri_4 = _mm256_set_ps(vis_in._x._imag,vis_in._x._real,vis_in._x._imag,vis_in._x._real,
+				      vis_in._x._imag,vis_in._x._real,vis_in._x._imag,vis_in._x._real);
+      __m256 vis_mir_4 = _mm256_set_ps(vis_in._x._real,min_vis_i,vis_in._x._real,min_vis_i,
+				      vis_in._x._real,min_vis_i,vis_in._x._real,min_vis_i);
+      visses_out[0] = _mm256_add_ps(_mm256_mul_ps(vis_ri_4,
+						  _mm256_set_ps(conv_weight[3]._real,conv_weight[3]._real,
+								conv_weight[2]._real,conv_weight[2]._real,
+								conv_weight[1]._real,conv_weight[1]._real,
+								conv_weight[0]._real,conv_weight[0]._real)),
+				    _mm256_mul_ps(vis_mir_4,
+						  _mm256_set_ps(conv_weight[3]._imag,conv_weight[3]._imag,
+								conv_weight[2]._imag,conv_weight[2]._imag,
+								conv_weight[1]._imag,conv_weight[1]._imag,
+								conv_weight[0]._imag,conv_weight[0]._imag)));
+    }
+    //second correlation
+    {
+      convolution_base_type min_vis_i = -vis_in._y._imag;
+      __m256 vis_ri_4 = _mm256_set_ps(vis_in._y._imag,vis_in._x._real,vis_in._y._imag,vis_in._y._real,
+				      vis_in._y._imag,vis_in._x._real,vis_in._y._imag,vis_in._y._real);
+      __m256 vis_mir_4 = _mm256_set_ps(vis_in._y._real,min_vis_i,vis_in._y._real,min_vis_i,
+				      vis_in._y._real,min_vis_i,vis_in._y._real,min_vis_i);
+      visses_out[1] = _mm256_add_ps(_mm256_mul_ps(vis_ri_4,
+						  _mm256_set_ps(conv_weight[3]._real,conv_weight[3]._real,
+								conv_weight[2]._real,conv_weight[2]._real,
+								conv_weight[1]._real,conv_weight[1]._real,
+								conv_weight[0]._real,conv_weight[0]._real)),
+				    _mm256_mul_ps(vis_mir_4,
+						  _mm256_set_ps(conv_weight[3]._imag,conv_weight[3]._imag,
+								conv_weight[2]._imag,conv_weight[2]._imag,
+								conv_weight[1]._imag,conv_weight[1]._imag,
+								conv_weight[0]._imag,conv_weight[0]._imag)));
+    }
+  }
+  inline static void mul_vis_with_conv_weights(const vec2< basic_complex<double> > & vis_in, 
+						basic_complex<convolution_base_type> conv_weight[4], 
+						typename active_correlation_gridding_policy::avx_vis_type visses_out){
+    //Do 4 complex multiplications using intrinsics
+    {
+	convolution_base_type min_vis_i = -vis_in._x._imag;
+	__m256d vis_ri_2 = _mm256_set_pd(vis_in._x._imag,vis_in._x._real,vis_in._x._imag,vis_in._x._real);
+	__m256d vis_mir_2 = _mm256_set_pd(vis_in._x._real,min_vis_i,vis_in._x._real,min_vis_i);
+	visses_out[0] = _mm256_add_pd(_mm256_mul_pd(vis_ri_2,
+						    _mm256_set_pd(conv_weight[1]._real,conv_weight[1]._real,
+								  conv_weight[0]._real,conv_weight[0]._real)),
+				      _mm256_mul_pd(vis_mir_2,
+						    _mm256_set_pd(conv_weight[1]._imag,conv_weight[1]._imag,
+								  conv_weight[0]._imag,conv_weight[0]._imag)));
+	visses_out[1] = _mm256_add_pd(_mm256_mul_pd(vis_ri_2,
+						    _mm256_set_pd(conv_weight[3]._real,conv_weight[3]._real,
+								  conv_weight[2]._real,conv_weight[2]._real)),
+				      _mm256_mul_pd(vis_mir_2,
+						    _mm256_set_pd(conv_weight[3]._imag,conv_weight[3]._imag,
+								  conv_weight[2]._imag,conv_weight[2]._imag)));
+    }
+    //second correlation
+    {
+	convolution_base_type min_vis_i = -vis_in._y._imag;
+	__m256d vis_ri_2 = _mm256_set_pd(vis_in._y._imag,vis_in._y._real,vis_in._y._imag,vis_in._x._real);
+	__m256d vis_mir_2 = _mm256_set_pd(vis_in._y._real,min_vis_i,vis_in._y._real,min_vis_i);
+	visses_out[2] = _mm256_add_pd(_mm256_mul_pd(vis_ri_2,
+						    _mm256_set_pd(conv_weight[1]._real,conv_weight[1]._real,
+								  conv_weight[0]._real,conv_weight[0]._real)),
+				      _mm256_mul_pd(vis_mir_2,
+						    _mm256_set_pd(conv_weight[1]._imag,conv_weight[1]._imag,
+								  conv_weight[0]._imag,conv_weight[0]._imag)));
+	visses_out[3] = _mm256_add_pd(_mm256_mul_pd(vis_ri_2,
+						    _mm256_set_pd(conv_weight[3]._real,conv_weight[3]._real,
+								  conv_weight[2]._real,conv_weight[2]._real)),
+				      _mm256_mul_pd(vis_mir_2,
+						    _mm256_set_pd(conv_weight[3]._imag,conv_weight[3]._imag,
+								  conv_weight[2]._imag,conv_weight[2]._imag)));
+    }
+  }
+  inline static void mul_vis_with_conv_weights(const vec4< basic_complex<float> > & vis_in, 
+						basic_complex<convolution_base_type> conv_weight[4], 
+						typename active_correlation_gridding_policy::avx_vis_type visses_out){
+    //Do 4 complex multiplications using intrinsics
+    {
+      convolution_base_type min_vis_i = -vis_in._x._imag;
+      __m256 vis_ri_4 = _mm256_set_ps(vis_in._x._imag,vis_in._x._real,vis_in._x._imag,vis_in._x._real,
+				      vis_in._x._imag,vis_in._x._real,vis_in._x._imag,vis_in._x._real);
+      __m256 vis_mir_4 = _mm256_set_ps(vis_in._x._real,min_vis_i,vis_in._x._real,min_vis_i,
+				      vis_in._x._real,min_vis_i,vis_in._x._real,min_vis_i);
+      visses_out[0] = _mm256_add_ps(_mm256_mul_ps(vis_ri_4,
+						  _mm256_set_ps(conv_weight[3]._real,conv_weight[3]._real,
+								conv_weight[2]._real,conv_weight[2]._real,
+								conv_weight[1]._real,conv_weight[1]._real,
+								conv_weight[0]._real,conv_weight[0]._real)),
+				    _mm256_mul_ps(vis_mir_4,
+						  _mm256_set_ps(conv_weight[3]._imag,conv_weight[3]._imag,
+								conv_weight[2]._imag,conv_weight[2]._imag,
+								conv_weight[1]._imag,conv_weight[1]._imag,
+								conv_weight[0]._imag,conv_weight[0]._imag)));
+    }
+    //second correlation
+    {
+      convolution_base_type min_vis_i = -vis_in._y._imag;
+      __m256 vis_ri_4 = _mm256_set_ps(vis_in._y._imag,vis_in._x._real,vis_in._y._imag,vis_in._y._real,
+				      vis_in._y._imag,vis_in._x._real,vis_in._y._imag,vis_in._y._real);
+      __m256 vis_mir_4 = _mm256_set_ps(vis_in._y._real,min_vis_i,vis_in._y._real,min_vis_i,
+				      vis_in._y._real,min_vis_i,vis_in._y._real,min_vis_i);
+      visses_out[1] = _mm256_add_ps(_mm256_mul_ps(vis_ri_4,
+						  _mm256_set_ps(conv_weight[3]._real,conv_weight[3]._real,
+								conv_weight[2]._real,conv_weight[2]._real,
+								conv_weight[1]._real,conv_weight[1]._real,
+								conv_weight[0]._real,conv_weight[0]._real)),
+				    _mm256_mul_ps(vis_mir_4,
+						  _mm256_set_ps(conv_weight[3]._imag,conv_weight[3]._imag,
+								conv_weight[2]._imag,conv_weight[2]._imag,
+								conv_weight[1]._imag,conv_weight[1]._imag,
+								conv_weight[0]._imag,conv_weight[0]._imag)));
+    }
+    //third correlation
+    {
+      convolution_base_type min_vis_i = -vis_in._z._imag;
+      __m256 vis_ri_4 = _mm256_set_ps(vis_in._z._imag,vis_in._z._real,vis_in._z._imag,vis_in._z._real,
+				      vis_in._z._imag,vis_in._z._real,vis_in._z._imag,vis_in._z._real);
+      __m256 vis_mir_4 = _mm256_set_ps(vis_in._z._real,min_vis_i,vis_in._z._real,min_vis_i,
+				      vis_in._z._real,min_vis_i,vis_in._z._real,min_vis_i);
+      visses_out[2] = _mm256_add_ps(_mm256_mul_ps(vis_ri_4,
+						  _mm256_set_ps(conv_weight[3]._real,conv_weight[3]._real,
+								conv_weight[2]._real,conv_weight[2]._real,
+								conv_weight[1]._real,conv_weight[1]._real,
+								conv_weight[0]._real,conv_weight[0]._real)),
+				    _mm256_mul_ps(vis_mir_4,
+						  _mm256_set_ps(conv_weight[3]._imag,conv_weight[3]._imag,
+								conv_weight[2]._imag,conv_weight[2]._imag,
+								conv_weight[1]._imag,conv_weight[1]._imag,
+								conv_weight[0]._imag,conv_weight[0]._imag)));
+    }
+    //fourth correlation
+    {
+      convolution_base_type min_vis_i = -vis_in._y._imag;
+      __m256 vis_ri_4 = _mm256_set_ps(vis_in._w._imag,vis_in._x._real,vis_in._w._imag,vis_in._w._real,
+				      vis_in._w._imag,vis_in._x._real,vis_in._w._imag,vis_in._w._real);
+      __m256 vis_mir_4 = _mm256_set_ps(vis_in._w._real,min_vis_i,vis_in._w._real,min_vis_i,
+				      vis_in._w._real,min_vis_i,vis_in._w._real,min_vis_i);
+      visses_out[3] = _mm256_add_ps(_mm256_mul_ps(vis_ri_4,
+						  _mm256_set_ps(conv_weight[3]._real,conv_weight[3]._real,
+								conv_weight[2]._real,conv_weight[2]._real,
+								conv_weight[1]._real,conv_weight[1]._real,
+								conv_weight[0]._real,conv_weight[0]._real)),
+				    _mm256_mul_ps(vis_mir_4,
+						  _mm256_set_ps(conv_weight[3]._imag,conv_weight[3]._imag,
+								conv_weight[2]._imag,conv_weight[2]._imag,
+								conv_weight[1]._imag,conv_weight[1]._imag,
+								conv_weight[0]._imag,conv_weight[0]._imag)));
+    }
+  }
+  inline static void mul_vis_with_conv_weights(const vec4< basic_complex<double> > & vis_in, 
+						basic_complex<convolution_base_type> conv_weight[4], 
+						typename active_correlation_gridding_policy::avx_vis_type visses_out){
+    //Do 4 complex multiplications using intrinsics
+    {
+	convolution_base_type min_vis_i = -vis_in._x._imag;
+	__m256d vis_ri_2 = _mm256_set_pd(vis_in._x._imag,vis_in._x._real,vis_in._x._imag,vis_in._x._real);
+	__m256d vis_mir_2 = _mm256_set_pd(vis_in._x._real,min_vis_i,vis_in._x._real,min_vis_i);
+	visses_out[0] = _mm256_add_pd(_mm256_mul_pd(vis_ri_2,
+						    _mm256_set_pd(conv_weight[1]._real,conv_weight[1]._real,
+								  conv_weight[0]._real,conv_weight[0]._real)),
+				      _mm256_mul_pd(vis_mir_2,
+						    _mm256_set_pd(conv_weight[1]._imag,conv_weight[1]._imag,
+								  conv_weight[0]._imag,conv_weight[0]._imag)));
+	visses_out[1] = _mm256_add_pd(_mm256_mul_pd(vis_ri_2,
+						    _mm256_set_pd(conv_weight[3]._real,conv_weight[3]._real,
+								  conv_weight[2]._real,conv_weight[2]._real)),
+				      _mm256_mul_pd(vis_mir_2,
+						    _mm256_set_pd(conv_weight[3]._imag,conv_weight[3]._imag,
+								  conv_weight[2]._imag,conv_weight[2]._imag)));
+    }
+    //second correlation
+    {
+	convolution_base_type min_vis_i = -vis_in._y._imag;
+	__m256d vis_ri_2 = _mm256_set_pd(vis_in._y._imag,vis_in._y._real,vis_in._y._imag,vis_in._x._real);
+	__m256d vis_mir_2 = _mm256_set_pd(vis_in._y._real,min_vis_i,vis_in._y._real,min_vis_i);
+	visses_out[2] = _mm256_add_pd(_mm256_mul_pd(vis_ri_2,
+						    _mm256_set_pd(conv_weight[1]._real,conv_weight[1]._real,
+								  conv_weight[0]._real,conv_weight[0]._real)),
+				      _mm256_mul_pd(vis_mir_2,
+						    _mm256_set_pd(conv_weight[1]._imag,conv_weight[1]._imag,
+								  conv_weight[0]._imag,conv_weight[0]._imag)));
+	visses_out[3] = _mm256_add_pd(_mm256_mul_pd(vis_ri_2,
+						    _mm256_set_pd(conv_weight[3]._real,conv_weight[3]._real,
+								  conv_weight[2]._real,conv_weight[2]._real)),
+				      _mm256_mul_pd(vis_mir_2,
+						    _mm256_set_pd(conv_weight[3]._imag,conv_weight[3]._imag,
+								  conv_weight[2]._imag,conv_weight[2]._imag)));
+    }
+    //third correlation
+    {
+	convolution_base_type min_vis_i = -vis_in._z._imag;
+	__m256d vis_ri_2 = _mm256_set_pd(vis_in._z._imag,vis_in._z._real,vis_in._z._imag,vis_in._z._real);
+	__m256d vis_mir_2 = _mm256_set_pd(vis_in._z._real,min_vis_i,vis_in._z._real,min_vis_i);
+	visses_out[4] = _mm256_add_pd(_mm256_mul_pd(vis_ri_2,
+						    _mm256_set_pd(conv_weight[1]._real,conv_weight[1]._real,
+								  conv_weight[0]._real,conv_weight[0]._real)),
+				      _mm256_mul_pd(vis_mir_2,
+						    _mm256_set_pd(conv_weight[1]._imag,conv_weight[1]._imag,
+								  conv_weight[0]._imag,conv_weight[0]._imag)));
+	visses_out[5] = _mm256_add_pd(_mm256_mul_pd(vis_ri_2,
+						    _mm256_set_pd(conv_weight[3]._real,conv_weight[3]._real,
+								  conv_weight[2]._real,conv_weight[2]._real)),
+				      _mm256_mul_pd(vis_mir_2,
+						    _mm256_set_pd(conv_weight[3]._imag,conv_weight[3]._imag,
+								  conv_weight[2]._imag,conv_weight[2]._imag)));
+    }
+    //fourth correlation
+    {
+	convolution_base_type min_vis_i = -vis_in._w._imag;
+	__m256d vis_ri_2 = _mm256_set_pd(vis_in._w._imag,vis_in._w._real,vis_in._w._imag,vis_in._w._real);
+	__m256d vis_mir_2 = _mm256_set_pd(vis_in._w._real,min_vis_i,vis_in._w._real,min_vis_i);
+	visses_out[6] = _mm256_add_pd(_mm256_mul_pd(vis_ri_2,
+						    _mm256_set_pd(conv_weight[1]._real,conv_weight[1]._real,
+								  conv_weight[0]._real,conv_weight[0]._real)),
+				      _mm256_mul_pd(vis_mir_2,
+						    _mm256_set_pd(conv_weight[1]._imag,conv_weight[1]._imag,
+								  conv_weight[0]._imag,conv_weight[0]._imag)));
+	visses_out[7] = _mm256_add_pd(_mm256_mul_pd(vis_ri_2,
+						    _mm256_set_pd(conv_weight[3]._real,conv_weight[3]._real,
+								  conv_weight[2]._real,conv_weight[2]._real)),
+				      _mm256_mul_pd(vis_mir_2,
+						    _mm256_set_pd(conv_weight[3]._imag,conv_weight[3]._imag,
+								  conv_weight[2]._imag,conv_weight[2]._imag)));
+    }
+  }
 public:
     inline static void set_required_rounding_operation(){
       std::fesetround(FE_TONEAREST); 

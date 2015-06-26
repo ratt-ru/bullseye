@@ -158,8 +158,7 @@ namespace imaging {
 			  _mm256_add_ps(_mm256_loadu_ps(&grid_flat_index[0]),
 					accumulator[0]));
     }
-#endif
-#ifdef BULLSEYE_DOUBLE
+#elif BULLSEYE_DOUBLE
     typedef __m256d avx_vis_type[2]  __attribute__((aligned(16)));
     static inline void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
@@ -305,6 +304,59 @@ namespace imaging {
       grid_flat_index_corr2[0] += accumulator._y._real;
       grid_flat_index_corr2[1] += accumulator._y._imag;
     }
+#ifdef __AVX__
+#ifdef BULLSEYE_SINGLE
+    typedef __m256 avx_vis_type[2]  __attribute__((aligned(16)));
+    static inline void grid_visibility (grid_base_type* grid,
+					    size_t slice_size,
+					    size_t nx,
+					    size_t grid_channel_id,
+					    size_t no_polarizations_being_gridded,
+					    size_t pos_u,
+					    size_t pos_v,
+					    avx_vis_type accumulator
+					   ){
+	 grid_base_type* grid_flat_index_corr1 = grid + 
+					      ((grid_channel_id * no_polarizations_being_gridded) * slice_size) + 
+					      ((pos_v * nx + pos_u) << 1);
+	 _mm256_storeu_ps(&grid_flat_index_corr1[0],
+			  _mm256_add_ps(_mm256_loadu_ps(&grid_flat_index_corr1[0]),
+					accumulator[0]));
+	 grid_base_type* grid_flat_index_corr2 = grid_flat_index_corr1 + slice_size;
+	 _mm256_storeu_ps(&grid_flat_index_corr2[0],
+			  _mm256_add_ps(_mm256_loadu_ps(&grid_flat_index_corr2[0]),
+					accumulator[1]));
+    }
+#elif BULLSEYE_DOUBLE
+    typedef __m256d avx_vis_type[4]  __attribute__((aligned(16)));
+    static inline void grid_visibility (grid_base_type* grid,
+					    size_t slice_size,
+					    size_t nx,
+					    size_t grid_channel_id,
+					    size_t no_polarizations_being_gridded,
+					    size_t pos_u,
+					    size_t pos_v,
+					    avx_vis_type accumulator
+					   ){
+      grid_base_type* grid_flat_index_corr1 = grid + 
+					      ((grid_channel_id * no_polarizations_being_gridded) * slice_size) + 
+					      ((pos_v * nx + pos_u) << 1);
+      _mm256_storeu_pd(&grid_flat_index_corr1[0],
+		      _mm256_add_pd(_mm256_loadu_pd(&grid_flat_index_corr1[0]),
+				    accumulator[0]));
+      _mm256_storeu_pd(&grid_flat_index_corr1[4],
+		      _mm256_add_pd(_mm256_loadu_pd(&grid_flat_index_corr1[4]),
+				    accumulator[1]));
+      grid_base_type* grid_flat_index_corr2 = grid_flat_index_corr1 + slice_size;
+      _mm256_storeu_pd(&grid_flat_index_corr2[0],
+		      _mm256_add_pd(_mm256_loadu_pd(&grid_flat_index_corr2[0]),
+				    accumulator[2]));
+      _mm256_storeu_pd(&grid_flat_index_corr2[4],
+		      _mm256_add_pd(_mm256_loadu_pd(&grid_flat_index_corr2[4]),
+				    accumulator[3]));
+    }
+#endif
+#endif
     static void store_normalization_term(gridding_parameters & params,std::size_t channel_grid_index,std::size_t facet_id, 
 						    typename active_trait::normalization_accumulator_type normalization_weight){
       std::size_t channel_norm_term_flat_index = (facet_id * params.cube_channel_dim_size + channel_grid_index) << 1;
@@ -373,6 +425,81 @@ namespace imaging {
       grid_flat_index_corr4[0]+=accumulator._w._real;
       grid_flat_index_corr4[1]+=accumulator._w._imag;
     }
+#ifdef __AVX__
+#ifdef BULLSEYE_SINGLE
+    typedef __m256 avx_vis_type[2]  __attribute__((aligned(16)));
+    static inline void grid_visibility (grid_base_type* grid,
+					    size_t slice_size,
+					    size_t nx,
+					    size_t grid_channel_id,
+					    size_t no_polarizations_being_gridded,
+					    size_t pos_u,
+					    size_t pos_v,
+					    avx_vis_type accumulator
+					   ){
+	 grid_base_type* grid_flat_index_corr1 = grid + 
+					      ((grid_channel_id * no_polarizations_being_gridded) * slice_size) + 
+					      ((pos_v * nx + pos_u) << 1);
+	 grid_base_type* grid_flat_index_corr2 = grid_flat_index_corr1 + slice_size;
+	 grid_base_type* grid_flat_index_corr3 = grid_flat_index_corr2 + slice_size;
+	 grid_base_type* grid_flat_index_corr4 = grid_flat_index_corr3 + slice_size;
+	 _mm256_storeu_ps(&grid_flat_index_corr1[0],
+			  _mm256_add_ps(_mm256_loadu_ps(&grid_flat_index_corr1[0]),
+					accumulator[0]));
+	 _mm256_storeu_ps(&grid_flat_index_corr2[0],
+			  _mm256_add_ps(_mm256_loadu_ps(&grid_flat_index_corr2[0]),
+					accumulator[1]));
+	 _mm256_storeu_ps(&grid_flat_index_corr3[0],
+			  _mm256_add_ps(_mm256_loadu_ps(&grid_flat_index_corr3[0]),
+					accumulator[2]));
+	 _mm256_storeu_ps(&grid_flat_index_corr4[0],
+			  _mm256_add_ps(_mm256_loadu_ps(&grid_flat_index_corr4[0]),
+					accumulator[3]));
+    }
+#elif BULLSEYE_DOUBLE
+    typedef __m256d avx_vis_type[4]  __attribute__((aligned(16)));
+    static inline void grid_visibility (grid_base_type* grid,
+					    size_t slice_size,
+					    size_t nx,
+					    size_t grid_channel_id,
+					    size_t no_polarizations_being_gridded,
+					    size_t pos_u,
+					    size_t pos_v,
+					    avx_vis_type accumulator
+					   ){
+      grid_base_type* grid_flat_index_corr1 = grid + 
+					  ((grid_channel_id * no_polarizations_being_gridded) * slice_size) + 
+					  ((pos_v * nx + pos_u) << 1);
+      grid_base_type* grid_flat_index_corr2 = grid_flat_index_corr1 + slice_size;
+      grid_base_type* grid_flat_index_corr3 = grid_flat_index_corr2 + slice_size;
+      grid_base_type* grid_flat_index_corr4 = grid_flat_index_corr3 + slice_size;
+      _mm256_storeu_pd(&grid_flat_index_corr1[0],
+		      _mm256_add_pd(_mm256_loadu_pd(&grid_flat_index_corr1[0]),
+				    accumulator[0]));
+      _mm256_storeu_pd(&grid_flat_index_corr1[4],
+		      _mm256_add_pd(_mm256_loadu_pd(&grid_flat_index_corr1[4]),
+				    accumulator[1]));
+      _mm256_storeu_pd(&grid_flat_index_corr2[0],
+		      _mm256_add_pd(_mm256_loadu_pd(&grid_flat_index_corr2[0]),
+				    accumulator[2]));
+      _mm256_storeu_pd(&grid_flat_index_corr2[4],
+		      _mm256_add_pd(_mm256_loadu_pd(&grid_flat_index_corr2[4]),
+				    accumulator[3]));
+      _mm256_storeu_pd(&grid_flat_index_corr3[0],
+		      _mm256_add_pd(_mm256_loadu_pd(&grid_flat_index_corr3[0]),
+				    accumulator[4]));
+      _mm256_storeu_pd(&grid_flat_index_corr3[4],
+		      _mm256_add_pd(_mm256_loadu_pd(&grid_flat_index_corr3[4]),
+				    accumulator[5]));
+      _mm256_storeu_pd(&grid_flat_index_corr4[0],
+		      _mm256_add_pd(_mm256_loadu_pd(&grid_flat_index_corr4[0]),
+				    accumulator[6]));
+      _mm256_storeu_pd(&grid_flat_index_corr4[4],
+		      _mm256_add_pd(_mm256_loadu_pd(&grid_flat_index_corr4[4]),
+				    accumulator[7]));
+    }
+#endif
+#endif
     static void store_normalization_term(gridding_parameters & params,std::size_t channel_grid_index,std::size_t facet_id, 
 						    typename active_trait::normalization_accumulator_type normalization_weight){
       std::size_t channel_norm_term_flat_index = (facet_id * params.cube_channel_dim_size + channel_grid_index) << 2;
@@ -442,6 +569,39 @@ namespace imaging {
 										  no_polarizations_being_gridded,
 										  pos_u,pos_v,accumulator);
     }
+#ifdef __AVX__
+#ifdef BULLSEYE_SINGLE
+    typedef __m256 avx_vis_type[2]  __attribute__((aligned(16)));
+    static inline void grid_visibility (grid_base_type* grid,
+					    size_t slice_size,
+					    size_t nx,
+					    size_t grid_channel_id,
+					    size_t no_polarizations_being_gridded,
+					    size_t pos_u,
+					    size_t pos_v,
+					    avx_vis_type accumulator
+					   ){
+	imaging::correlation_gridding_policy<grid_4_correlation>::grid_visibility(grid,slice_size,nx,grid_channel_id,
+										no_polarizations_being_gridded,
+										pos_u,pos_v,accumulator); 
+    }
+#elif BULLSEYE_DOUBLE
+    typedef __m256d avx_vis_type[4]  __attribute__((aligned(16)));
+    static inline void grid_visibility (grid_base_type* grid,
+					    size_t slice_size,
+					    size_t nx,
+					    size_t grid_channel_id,
+					    size_t no_polarizations_being_gridded,
+					    size_t pos_u,
+					    size_t pos_v,
+					    avx_vis_type accumulator
+					   ){
+      imaging::correlation_gridding_policy<grid_4_correlation>::grid_visibility(grid,slice_size,nx,grid_channel_id,
+										no_polarizations_being_gridded,
+										pos_u,pos_v,accumulator);
+    }
+#endif
+#endif
     static void store_normalization_term(gridding_parameters & params,std::size_t channel_grid_index,std::size_t facet_id, 
 						    typename active_trait::normalization_accumulator_type normalization_weight){
       imaging::correlation_gridding_policy<grid_4_correlation>::store_normalization_term(params,channel_grid_index,facet_id,
