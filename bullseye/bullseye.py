@@ -224,29 +224,41 @@ if __name__ == "__main__":
     sampling_function_channel_count = 0
     if parser_args['output_psf'] or (parser_args['sample_weighting'] == 'uniform'):
       sampling_function_channel_grid_index,sampling_function_channel_count = channel_indexer.compute_sampling_function_grid_indicies(data,channels_to_image,enabled_channels)
-
+    '''
+    Work out how many (pixels) to pad the images with. Filtering normally doesn't cut
+    off aliases exactly at the border of the image - we expect some rolloff. Padding helps
+    put this rolloff slightly outside the image.
+    '''
+    padding_per_edge_m = int(np.ceil(parser_args['npix_m'] * (-1.0+parser_args['image_padding']) * 0.5))
+    padding_per_edge_l = int(np.ceil(parser_args['npix_l'] * (-1.0+parser_args['image_padding']) * 0.5))
+    npix_m = parser_args['npix_m'] + padding_per_edge_m * 2
+    npix_l = parser_args['npix_l'] + padding_per_edge_l * 2
+    m_left_margin = padding_per_edge_l
+    m_right_margin = parser_args['npix_m'] + padding_per_edge_m
+    l_left_margin = padding_per_edge_l
+    l_right_margin = parser_args['npix_l'] + padding_per_edge_l
     '''
     allocate enough memory to compute image and or facets (only before gridding the first MS)
     '''
     num_facet_grids = 1 if (num_facet_centres == 0) else num_facet_centres
     if not parser_args['do_jones_corrections']:
 	if gridded_vis == None:
-	  gridded_vis = np.zeros([num_facet_grids,cube_chan_dim_size,len(correlations_to_grid),parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.grid_type)
+	  gridded_vis = np.zeros([num_facet_grids,cube_chan_dim_size,len(correlations_to_grid),npix_l,npix_m],dtype=base_types.grid_type)
     else:
 	if gridded_vis == None:
-	  gridded_vis = np.zeros([num_facet_grids,cube_chan_dim_size,4,parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.grid_type)
+	  gridded_vis = np.zeros([num_facet_grids,cube_chan_dim_size,4,npix_l,npix_m],dtype=base_types.grid_type)
 
     if parser_args['output_psf'] or (parser_args['sample_weighting'] == 'uniform'):
       if sampling_funct == None:
-	sampling_funct = np.zeros([num_facet_grids,sampling_function_channel_count,1,parser_args['npix_l'],parser_args['npix_m']],dtype=base_types.psf_type)
+	sampling_funct = np.zeros([num_facet_grids,sampling_function_channel_count,1,npix_l,npix_m],dtype=base_types.psf_type)
 
     '''
     initiate the backend imaging library
     '''
     params = gridding_parameters.gridding_parameters()
     params.chunk_max_row_count = ctypes.c_size_t(chunk_size)
-    params.nx = ctypes.c_size_t(parser_args['npix_m']) #this ensures a deep copy
-    params.ny = ctypes.c_size_t(parser_args['npix_l']) #this ensures a deep copy
+    params.nx = ctypes.c_size_t(npix_m) #this ensures a deep copy
+    params.ny = ctypes.c_size_t(npix_l) #this ensures a deep copy
     params.cell_size_x = base_types.uvw_ctypes_convert_type(parser_args['cell_m']) #this ensures a deep copy
     params.cell_size_y = base_types.uvw_ctypes_convert_type(parser_args['cell_l']) #this ensures a deep copy
     params.conv = conv._conv_FIR.ctypes.data_as(ctypes.c_void_p) #this won't change between chunks
@@ -415,21 +427,22 @@ if __name__ == "__main__":
   for f in range(0, max(1,num_facet_centres)):
     image_prefix = parser_args['output_prefix'] if num_facet_centres == 0 else parser_args['output_prefix']+"_facet"+str(f)
     if parser_args['output_format'] == 'png':
-      offset = len(correlations_to_grid)*parser_args['npix_l']*parser_args['npix_m']*f*np.dtype(np.float32).itemsize
+      offset = len(correlations_to_grid)*npix_l*npix_l*f*np.dtype(np.float32).itemsize
       dirty = np.ctypeslib.as_array(ctypes.cast(gridded_vis.ctypes.data + offset, ctypes.POINTER(ctypes.c_float)),
-				    shape=(parser_args['npix_l'],parser_args['npix_m']))
-      png_export.png_export(dirty,image_prefix,None)
+				    shape=(npix_l,npix_m))
+      png_export.png_export(dirty[l_left_margin:l_right_margin,m_left_margin:m_right_margin],image_prefix,None)
       if parser_args['open_default_viewer']:
 	os.system("xdg-open %s.png" % image_prefix)
       if parser_args['output_psf']:
 	for i,c in enumerate(channels_to_image):
-	  offset = parser_args['npix_m']*parser_args['npix_l']*f*np.dtype(np.float32).itemsize
+	  offset = npix_m*npix_l*f*np.dtype(np.float32).itemsize
 	  psf = np.ctypeslib.as_array(ctypes.cast(sampling_funct.ctypes.data + offset, ctypes.POINTER(ctypes.c_float)),
-				      shape=(parser_args['npix_l'],parser_args['npix_m']))
+				      shape=(npix_l,npix_m))
 	  psf /= np.max(psf)
 	  spw_no = c / data._no_channels
 	  chan_no = c % data._no_channels
-	  png_export.png_export(psf,image_prefix+('.spw%d.ch%d.psf' % (spw_no,chan_no)),None)
+	  png_export.png_export(psf[l_left_margin:l_right_margin,m_left_margin:m_right_margin],
+				image_prefix+('.spw%d.ch%d.psf' % (spw_no,chan_no)),None)
 
     else: #export to FITS cube
       ra = data._field_centres[parser_args['field_id'],0,0]
@@ -438,9 +451,9 @@ if __name__ == "__main__":
       centre_coord_l = (parser_args['npix_l'] * 0.5 + 1) + offset_coord_l
       offset_coord_m = (0 if num_facet_centres == 0 else facet_centres[f,1] - dec) / parser_args['cell_m']
       centre_coord_m = (parser_args['npix_m'] * 0.5 + 1) - offset_coord_m
-      offset = cube_chan_dim_size*len(correlations_to_grid)*parser_args['npix_l']*parser_args['npix_m']*f*np.dtype(np.float32).itemsize
+      offset = cube_chan_dim_size*len(correlations_to_grid)*npix_l*npix_m*f*np.dtype(np.float32).itemsize
       dirty = np.ctypeslib.as_array(ctypes.cast(gridded_vis.ctypes.data + offset, ctypes.POINTER(ctypes.c_float)),
-				    shape=(cube_chan_dim_size,parser_args['npix_l'],parser_args['npix_m']))
+				    shape=(cube_chan_dim_size,npix_l,npix_m))
 
       fits_export.save_to_fits_image(image_prefix+'.fits',
 				     parser_args['npix_l'],parser_args['npix_m'],
@@ -452,14 +465,14 @@ if __name__ == "__main__":
 				     cube_first_wavelength,
 				     cube_delta_wavelength,
 				     cube_chan_dim_size,
-				     dirty)
+				     dirty[:,l_left_margin:l_right_margin,m_left_margin:m_right_margin])
       if parser_args['open_default_viewer']:
 	os.system("xdg-open %s.fits" % image_prefix)
       if parser_args['output_psf']:
 	for i,c in enumerate(channels_to_image):
-	  offset = i*parser_args['npix_l']*parser_args['npix_m']*f*np.dtype(np.float32).itemsize
+	  offset = i*npix_l*npix_m*f*np.dtype(np.float32).itemsize
 	  psf = np.ctypeslib.as_array(ctypes.cast(sampling_funct.ctypes.data + offset, ctypes.POINTER(ctypes.c_float)),
-				      shape=(1,parser_args['npix_l'],parser_args['npix_m']))
+				      shape=(1,npix_l,npix_m))
 	  psf /= np.max(psf)
 	  spw_no = c / data._no_channels
 	  chan_no = c % data._no_channels
@@ -479,7 +492,7 @@ if __name__ == "__main__":
 					 data._chan_wavelengths[spw_no,chan_no],
 					 0,
 					 1,
-					 psf)
+					 psf[:,l_left_margin:l_right_margin,m_left_margin:m_right_margin])
 
   '''
   attempt to stitch the facets together:
