@@ -90,7 +90,8 @@ namespace imaging {
 			    uvw_lambda._v *= v_scale;
 			    typename active_correlation_gridding_policy::active_trait::normalization_accumulator_type normalization_term = 0;
 			    active_convolution_policy::convolve(params,grid_centre_offset_x,grid_centre_offset_y,
-								facet_output_buffer + ((channel_grid_index * params.number_of_polarization_terms_being_gridded) * grid_size_in_floats),
+								facet_output_buffer + 
+								  active_correlation_gridding_policy::compute_grid_offset(params,channel_grid_index,grid_size_in_floats),
 								channel_grid_index,grid_size_in_floats,
 								conv_full_support,padded_conv_full_support,uvw_lambda,vis,normalization_term);
 			    normalization_term = vector_promotion<visibility_weights_base_type,normalization_base_type>(combined_vis_weight * normalization_term._x);

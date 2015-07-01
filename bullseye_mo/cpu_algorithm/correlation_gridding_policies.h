@@ -64,6 +64,9 @@ namespace imaging {
 						  size_t facet_id,
 						  size_t grid_size_in_floats,
 						  grid_base_type ** facet_grid_starting_ptr);
+    static size_t compute_grid_offset(const gridding_parameters & params,
+					   size_t grid_channel_id,
+					   size_t grid_size_in_floats);
     static void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
@@ -121,6 +124,11 @@ namespace imaging {
 						  grid_base_type ** facet_grid_starting_ptr){
       *facet_grid_starting_ptr = (grid_base_type*)params.output_buffer + grid_size_in_floats * 
 				params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * facet_id;
+    }
+    static size_t compute_grid_offset(const gridding_parameters & params,
+				    size_t grid_channel_id,
+				    size_t grid_size_in_floats){
+      return (grid_channel_id * params.number_of_polarization_terms_being_gridded) * grid_size_in_floats;
     }
     static inline void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
@@ -213,6 +221,11 @@ namespace imaging {
       *facet_grid_starting_ptr = (grid_base_type*)params.sampling_function_buffer + grid_size_in_floats * 
 				params.sampling_function_channel_count * facet_id;
     }
+    static size_t compute_grid_offset(const gridding_parameters & params,
+				      size_t grid_channel_id,
+				      size_t grid_size_in_floats){
+      return grid_channel_id * grid_size_in_floats;
+    }
     static void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
 					    size_t nx,
@@ -270,6 +283,11 @@ namespace imaging {
 						  grid_base_type ** facet_grid_starting_ptr){
       *facet_grid_starting_ptr = (grid_base_type*)params.output_buffer + grid_size_in_floats * 
 				params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * facet_id;
+    }
+    static size_t compute_grid_offset(const gridding_parameters & params,
+				    size_t grid_channel_id,
+				    size_t grid_size_in_floats){
+      return (grid_channel_id * params.number_of_polarization_terms_being_gridded) * grid_size_in_floats;
     }
     static void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
@@ -376,6 +394,11 @@ namespace imaging {
 						  grid_base_type ** facet_grid_starting_ptr){
       *facet_grid_starting_ptr = (grid_base_type*)params.output_buffer + grid_size_in_floats * 
 				params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * facet_id;
+    }
+    static size_t compute_grid_offset(const gridding_parameters & params,
+				    size_t grid_channel_id,
+				    size_t grid_size_in_floats){
+      return (grid_channel_id * params.number_of_polarization_terms_being_gridded) * grid_size_in_floats;
     }
     static void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
@@ -522,6 +545,11 @@ namespace imaging {
 						  size_t grid_size_in_floats,
 						  grid_base_type ** facet_grid_starting_ptr){
 	imaging::correlation_gridding_policy<grid_4_correlation>::compute_facet_grid_ptr(params,facet_id,grid_size_in_floats,facet_grid_starting_ptr);
+    }
+    static size_t compute_grid_offset(const gridding_parameters & params,
+				    size_t grid_channel_id,
+				    size_t grid_size_in_floats){
+      return imaging::correlation_gridding_policy<grid_4_correlation>::compute_grid_offset(params,grid_channel_id,grid_size_in_floats);
     }
     static void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,

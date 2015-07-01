@@ -356,7 +356,7 @@ extern "C" {
             printf("Faceting sampling function on the CPU...\n");
 	    typedef imaging::correlation_gridding_policy<imaging::grid_sampling_function> correlation_gridding_policy;
 	    typedef imaging::baseline_transform_policy<imaging::transform_planar_approx_with_w > baseline_transform_policy;
-	    typedef imaging::phase_transform_policy<imaging::enable_faceting_phase_shift > phase_transform_policy;
+	    typedef imaging::phase_transform_policy<imaging::disable_faceting_phase_shift > phase_transform_policy;
 	    if (params.wplanes <= 1){
 	      typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_AA_1D_precomputed> convolution_policy;
 	      imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
