@@ -120,7 +120,7 @@ if __name__ == "__main__":
     with filter_creation_timer:
       conv = convolution_filter.convolution_filter(parser_args['conv_sup'],
 						   parser_args['conv_oversamp'],parser_args['conv'],
-						   parser_args['wplanes'] > 1,parser_args['wplanes'],
+						   "1D_AA" if parser_args['wplanes'] <= 1 else "1D_WPROJ",parser_args['wplanes'],
 						   parser_args['npix_l'],parser_args['npix_m'],
 						   parser_args['cell_l'],parser_args['cell_m'],
 						   w_max,data._field_centres[parser_args['field_id'],0,0],data._field_centres[parser_args['field_id'],0,1])

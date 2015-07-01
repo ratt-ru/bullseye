@@ -80,14 +80,15 @@ class convolution_filter(object):
   convolution_fir_support is the half support of the filter
   oversampling_factor should be reasonably large to account for interpolation error
   function_to_use can either be sinc, kb, or hamming (these will all be seperable filters and the output will be a real-valued 1D filter if w projection is turned off
-  if use_w_projection == True then
+  if w projection is used then
     - specify wplanes (usually this should be enough to ensure the seperation between planes << 1
     - specify npix_l and npix_m: the number of image pixels in l and m
     - specify cell_l and cell_m: the cell sizes in arcsec
     - w_max must be measured in terms of the lowest lambda and the maximum w in the measurement
     - the output now will be a stack of inseperable 2D complex filters with the AA filter already incorporated
+  filter_type can be one of 1D_AA, 2D_AA, 1D_WPROJ or 2D_WPROJ --- Ensure that the gridding libraries are compiled with the correct policies
   '''
-  def __init__(self, convolution_fir_support, oversampling_factor, function_to_use="sinc", use_w_projection = False, 
+  def __init__(self, convolution_fir_support, oversampling_factor, function_to_use="sinc", filter_type = "1D_AA",
 	       wplanes = 1, npix_l=1,npix_m=1,celll=1,cellm=1,w_max=1,ra_0=0,dec_0=0):
     convolution_func = { "sinc" : self.unity, "kb" : self.kb, "hamming" : self.hamming }
 
@@ -117,22 +118,38 @@ class convolution_filter(object):
 		      np.cos(dec_max*0.5 + dec_0)*np.cos(dec_0)*np.cos(ra_max*0.5) - 
 		      (phase_error_threshold)/(2*np.pi*w_max)) # same as n - ni for small angles
     num_facets_needed = np.ceil(np.sqrt(max(celll*npix_l,cellm*npix_m) / (2*np.arccos(epsilon_max)))*2)
+    
     print "The recommended number of facets (using no w-projection) along each direction of the image is approximately", num_facets_needed
-    if not use_w_projection:
+    image_diam = np.sqrt(ra_max**2 + dec_max**2)
+    #Recommended support as per Tasse (Applying full polarization A-projection to very wide field of view instruments: an imager for LOFAR)
+    recommended_half_support_image = int(np.ceil(((4 * np.pi * w_max * image_diam**2) / np.sqrt(2 - image_diam**2)) * 0.5))
+    recommended_half_support = int(np.ceil(1 / float(oversampling_factor) * recommended_half_support_image))
+    print "The recommended half support region for the convolution kernel in image space is (Nyquest):", recommended_half_support_image
+    print "The recommended half support region for the convolution kernel in fourier space at specified oversampling rate is (recommended input to imager):", recommended_half_support
+    epsilon_max = abs(np.sin(dec_max*0.5 + dec_0) * np.sin(dec_0) + np.cos(dec_max*0.5 + dec_0)*np.cos(dec_0)*np.cos(ra_max*0.5) - 1) # same as n - 1
+    recommended_nplanes = int(np.ceil(2*np.pi*w_max*epsilon_max/phase_error_threshold)) #this is half the number of planes required... the other half need not be calculated because we grid the conjugate vis
+    print "The recommended number of w-planes (using no faceting) are", recommended_nplanes, "to obtain a maximum seperation of", phase_error_threshold, "between planes"
+      
+    if filter_type == "1D_AA":
       self._conv_FIR = AA.astype(base_types.fir_type) #Seperable 1D AA filter (correct policy must be called in the gridder code
       print "WARNING: DISABLING W-PROJECTION"
-    else:
+    elif filter_type == "2D_AA":
+      self._conv_FIR = np.outer(AA,AA).astype(base_types.fir_type) #Seperable 1D AA filter (correct policy must be called in the gridder code
+      print "WARNING: DISABLING W-PROJECTION"
+    elif filter_type == "1D_WPROJ":
+      print "WARNING: USING SMALL ANGLE APPROXIMATION FOR W (SEPERABLE FILTERS). THIS IS NOT ACCURATE FOR MASSIVE IMAGES"
+      FAA = np.fft.fftshift(np.fft.fft(np.fft.ifftshift(AA))) / (AA.shape[0])
+      lm = x / float(oversample_image_space) / float(sup_image_space_scale) * (max(npix_l * celll * 0.5,npix_m * cellm * 0.5))
+      W_bar_kernels = np.empty([wplanes,
+				convolution_size],dtype=base_types.w_fir_type)
+      plane_step = w_max / float(wplanes - 1)
+      for w in range(0,wplanes):
+	W_kernel = FAA*np.exp(2*np.pi*1.0j*(lm**2)*0.5*((w)*plane_step)) 
+	W_bar_kernels[w,:] = np.fft.fftshift(np.fft.fft(np.fft.ifftshift(W_kernel))) / (W_kernel.shape[0])
+      self._conv_FIR = W_bar_kernels.astype(base_types.w_fir_type)
+    elif filter_type == "2D_WPROJ":
       AA_2D = np.outer(AA,AA) #the outer product is probably the fastest way to generate the 2D anti-aliasing filter from our 1D version
       F_AA_2D = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(AA_2D))) / (convolution_size**2)
-      image_diam = np.sqrt(ra_max**2 + dec_max**2)
-      #Recommended support as per Tasse (Applying full polarization A-projection to very wide field of view instruments: an imager for LOFAR)
-      recommended_half_support_image = int(np.ceil(((4 * np.pi * w_max * image_diam**2) / np.sqrt(2 - image_diam**2)) * 0.5))
-      recommended_half_support = int(np.ceil(1 / float(oversampling_factor) * recommended_half_support_image))
-      print "The recommended half support region for the convolution kernel in image space is (Nyquest):", recommended_half_support_image
-      print "The recommended half support region for the convolution kernel in fourier space at specified oversampling rate is (recommended input to imager):", recommended_half_support
-      epsilon_max = abs(np.sin(dec_max*0.5 + dec_0) * np.sin(dec_0) + np.cos(dec_max*0.5 + dec_0)*np.cos(dec_0)*np.cos(ra_max*0.5) - 1) # same as n - 1
-      recommended_nplanes = int(np.ceil(2*np.pi*w_max*epsilon_max/phase_error_threshold)) #this is half the number of planes required... the other half need not be calculated because we grid the conjugate vis
-      print "The recommended number of w-planes (using no faceting) are", recommended_nplanes, "to obtain a maximum seperation of", phase_error_threshold, "between planes"
       '''
       generate the filter over theta and phi where
       l = cos(dec)*sin(ra-ra0)
