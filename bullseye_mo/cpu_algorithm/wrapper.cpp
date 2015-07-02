@@ -174,10 +174,10 @@ extern "C" {
 		  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
 		} else {
 		  #ifdef __AVX__
-		  typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_w_projection_1D_precomputed> convolution_policy;
+		  typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_w_projection_precomputed> convolution_policy;
 		  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
 		  #else
-		  typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_w_projection_1D_precomputed> convolution_policy;
+		  typedef imaging::convolution_policy<correlation_gridding_policy,imaging::convolution_w_projection_precomputed> convolution_policy;
 		  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy,convolution_policy>(params);
 		  #endif
 		}
