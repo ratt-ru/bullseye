@@ -83,6 +83,9 @@ namespace imaging {
 							    size_t conv_u_id,
 							    size_t conv_v_id);
   };
+  /**
+   * Grid single correlation
+   */
   template <>
   class correlation_gridding_policy<grid_single_correlation> {
   public:
@@ -113,7 +116,7 @@ namespace imaging {
 						  size_t grid_size_in_floats,
 						  grid_base_type ** facet_grid_starting_ptr){
       *facet_grid_starting_ptr = (grid_base_type*)params.output_buffer + grid_size_in_floats * 
-				params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * facet_id;
+				1 * params.cube_channel_dim_size * facet_id;
     }
     __device__ static void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
@@ -143,6 +146,9 @@ namespace imaging {
       atomicAdd(params.normalization_terms + (flat_index_up_to_corr * reduction_step_size + current_reduction_step_flat_index),accumulator._x);
     }
   };
+  /**
+   * Grid sampling function
+   */
   template <>
   class correlation_gridding_policy<grid_sampling_function>{
   public:
@@ -198,6 +204,9 @@ namespace imaging {
 							    size_t conv_v_id){
     }
   };
+  /**
+   * Grid duel correlation
+   */
   template <>
   class correlation_gridding_policy<grid_duel_correlation> {
   public:
@@ -228,7 +237,7 @@ namespace imaging {
 						  size_t grid_size_in_floats,
 						  grid_base_type ** facet_grid_starting_ptr){
       *facet_grid_starting_ptr = (grid_base_type*)params.output_buffer + grid_size_in_floats * 
-				params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * facet_id;
+				2 * params.cube_channel_dim_size * facet_id;
     }
     __device__ static void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
@@ -263,6 +272,9 @@ namespace imaging {
       atomicAdd(params.normalization_terms + ((flat_index_up_to_corr + 1) * reduction_step_size + current_reduction_step_flat_index), accumulator._y);
     }
   };
+  /**
+   * Grid 4 correlations
+   */
   template <>
   class correlation_gridding_policy<grid_4_correlation> {
   public:
@@ -294,7 +306,7 @@ namespace imaging {
 						  size_t grid_size_in_floats,
 						  grid_base_type ** facet_grid_starting_ptr){
       *facet_grid_starting_ptr = (grid_base_type*)params.output_buffer + grid_size_in_floats * 
-				params.number_of_polarization_terms_being_gridded * params.cube_channel_dim_size * facet_id;
+				4 * params.cube_channel_dim_size * facet_id;
     }
     __device__ static void grid_visibility (grid_base_type* grid,
 					    size_t slice_size,
@@ -337,6 +349,9 @@ namespace imaging {
       atomicAdd(params.normalization_terms + ((flat_index_up_to_corr + 3) * reduction_step_size + current_reduction_step_flat_index), accumulator._w);
     }
   };
+  /**
+   * Grid 4 correlations with jones terms
+   */
   template <>
   class correlation_gridding_policy<grid_4_correlation_with_jones_corrections> {
   private:

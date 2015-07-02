@@ -150,7 +150,10 @@ extern "C" {
 	  cudaSafeCall(cudaMemcpy(gpu_params.sampling_function_buffer,params.sampling_function_buffer,sizeof(std::complex<grid_base_type>) * params.nx * params.ny * 
 						    params.sampling_function_channel_count * params.num_facet_centres,cudaMemcpyHostToDevice));
 	}
-	size_t size_of_convolution_function = (params.conv_support * 2 + 1 + 2) * params.conv_oversample; //see algorithms/convolution_policies.h for the reason behind the padding
+	//the filter looks something like |...|...|...|...| where the last oversample worth of taps at both ends are the necessary extra samples 
+	//required for improved interpolation in the gridding
+	size_t padded_full_support = params.conv_support * 2 + 1 + 2;
+	size_t size_of_convolution_function = (padded_full_support) + (padded_full_support - 1) * (params.conv_oversample - 1);
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.conv, sizeof(convolution_base_type) * size_of_convolution_function));
 	cudaSafeCall(cudaMemcpy(gpu_params.conv, params.conv, sizeof(convolution_base_type) * size_of_convolution_function,cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1)));
@@ -465,7 +468,10 @@ extern "C" {
 	typedef imaging::correlation_gridding_policy<imaging::grid_single_correlation> correlation_gridding_policy;
 	typedef imaging::baseline_transform_policy<imaging::transform_disable_facet_rotation > baseline_transform_policy;
 	typedef imaging::phase_transform_policy<imaging::disable_faceting_phase_shift> phase_transform_policy;
-	imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
+	if (params.wplanes > 1)
+	  throw std::runtime_error("GPU gridder currently doesn't support w projection options");
+	else
+	  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
       }
       //swap buffers device -> host when gridded last chunk
       copy_back_grid_if_last_stamp(params,gpu_params);
@@ -540,7 +546,10 @@ extern "C" {
 	typedef imaging::correlation_gridding_policy<imaging::grid_single_correlation> correlation_gridding_policy;
 	typedef imaging::baseline_transform_policy<imaging::transform_planar_approx_with_w > baseline_transform_policy;
 	typedef imaging::phase_transform_policy<imaging::enable_faceting_phase_shift> phase_transform_policy;
-	imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
+	if (params.wplanes > 1)
+	  throw std::runtime_error("GPU gridder currently doesn't support w projection options");
+	else
+	  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
       }
       //swap buffers device -> host when gridded last chunk
       copy_back_grid_if_last_stamp(params,gpu_params);
@@ -617,7 +626,10 @@ extern "C" {
 	  typedef imaging::correlation_gridding_policy<imaging::grid_duel_correlation> correlation_gridding_policy;
 	  typedef imaging::baseline_transform_policy<imaging::transform_disable_facet_rotation > baseline_transform_policy;
 	  typedef imaging::phase_transform_policy<imaging::disable_faceting_phase_shift> phase_transform_policy;
-	  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
+	  if (params.wplanes > 1)
+	    throw std::runtime_error("GPU gridder currently doesn't support w projection options");
+	  else
+	    imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
 	}
 	//swap buffers device -> host when gridded last chunk
 	copy_back_grid_if_last_stamp(params,gpu_params);    
@@ -695,7 +707,10 @@ extern "C" {
 	  typedef imaging::correlation_gridding_policy<imaging::grid_duel_correlation> correlation_gridding_policy;
 	  typedef imaging::baseline_transform_policy<imaging::transform_planar_approx_with_w > baseline_transform_policy;
 	  typedef imaging::phase_transform_policy<imaging::enable_faceting_phase_shift> phase_transform_policy;
-	  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
+	  if (params.wplanes > 1)
+	    throw std::runtime_error("GPU gridder currently doesn't support w projection options");
+	  else
+	    imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
 	}
 	//swap buffers device -> host when gridded last chunk
 	copy_back_grid_if_last_stamp(params,gpu_params);    
@@ -755,7 +770,10 @@ extern "C" {
 	  typedef imaging::correlation_gridding_policy<imaging::grid_4_correlation> correlation_gridding_policy;
 	  typedef imaging::baseline_transform_policy<imaging::transform_disable_facet_rotation > baseline_transform_policy;
 	  typedef imaging::phase_transform_policy<imaging::disable_faceting_phase_shift> phase_transform_policy;
-	  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
+	  if (params.wplanes > 1)
+	    throw std::runtime_error("GPU gridder currently doesn't support w projection options");
+	  else
+	    imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
 	}
 	//swap buffers device -> host when gridded last chunk
 	copy_back_grid_if_last_stamp(params,gpu_params);    
@@ -815,7 +833,10 @@ extern "C" {
 	  typedef imaging::correlation_gridding_policy<imaging::grid_4_correlation> correlation_gridding_policy;
 	  typedef imaging::baseline_transform_policy<imaging::transform_planar_approx_with_w > baseline_transform_policy;
 	  typedef imaging::phase_transform_policy<imaging::enable_faceting_phase_shift> phase_transform_policy;
-	  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
+	  if (params.wplanes > 1)
+	    throw std::runtime_error("GPU gridder currently doesn't support w projection options");
+	  else
+	    imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
 	}
 	//swap buffers device -> host when gridded last chunk
 	copy_back_grid_if_last_stamp(params,gpu_params);    
@@ -963,7 +984,10 @@ extern "C" {
 	  typedef imaging::correlation_gridding_policy<imaging::grid_4_correlation> correlation_gridding_policy;
 	  typedef imaging::baseline_transform_policy<imaging::transform_planar_approx_with_w > baseline_transform_policy;
 	  typedef imaging::phase_transform_policy<imaging::enable_faceting_phase_shift> phase_transform_policy;
-	  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
+	  if (params.wplanes > 1)
+	    throw std::runtime_error("GPU gridder currently doesn't support w projection options");
+	  else
+	    imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
 	}
 	//swap buffers device -> host when gridded last chunk
 	copy_back_grid_if_last_stamp(params,gpu_params);    
@@ -1011,7 +1035,10 @@ extern "C" {
 	typedef imaging::correlation_gridding_policy<imaging::grid_sampling_function> correlation_gridding_policy;
 	typedef imaging::baseline_transform_policy<imaging::transform_disable_facet_rotation > baseline_transform_policy;
 	typedef imaging::phase_transform_policy<imaging::disable_faceting_phase_shift> phase_transform_policy;
-	imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
+	if (params.wplanes > 1)
+	  throw std::runtime_error("GPU gridder currently doesn't support w projection options");
+	else
+	  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
       }
       //swap buffers device -> host when gridded last chunk
       copy_back_sampling_function_if_last_stamp(params,gpu_params);
@@ -1058,7 +1085,10 @@ extern "C" {
 	typedef imaging::correlation_gridding_policy<imaging::grid_sampling_function> correlation_gridding_policy;
 	typedef imaging::baseline_transform_policy<imaging::transform_facet_lefthanded_ra_dec > baseline_transform_policy;
 	typedef imaging::phase_transform_policy<imaging::enable_faceting_phase_shift> phase_transform_policy;
-	imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
+	if (params.wplanes > 1)
+	  throw std::runtime_error("GPU gridder currently doesn't support w projection options");
+	else
+	  imaging::templated_gridder<correlation_gridding_policy,baseline_transform_policy,phase_transform_policy><<<no_blocks_per_grid,no_threads_per_block,size_of_convolution_function,compute_stream>>>(gpu_params);
       }
       //swap buffers device -> host when gridded last chunk
       copy_back_sampling_function_if_last_stamp(params,gpu_params);
