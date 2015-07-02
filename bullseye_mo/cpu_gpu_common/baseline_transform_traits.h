@@ -1,4 +1,4 @@
-'''
+/********************************************************************************************
 Bullseye:
 An accelerated targeted facet imager
 Category: Radio Astronomy / Widefield synthesis imaging
@@ -35,25 +35,31 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-'''
-import ctypes
-import os
+********************************************************************************************/
 
-def load_library(architecture,precision):
-  if architecture not in ['CPU','GPU']:
-    raise Exception("Invalid architecture, only CPU or GPU allowed")
-  if precision not in ['single','double']:
-    raise Exception("Invalid precision mode selected, only single or double allowed")
-  mod_path = os.path.dirname(__file__)
-  libimaging = None
-  if architecture == 'CPU':
-    if precision == 'single':
-      libimaging = ctypes.pydll.LoadLibrary("%s/cbuild/cpu_algorithm/single/libcpu_imaging32.so" % mod_path)
-    else:
-      libimaging = ctypes.pydll.LoadLibrary("%s/cbuild/cpu_algorithm/double/libcpu_imaging64.so" % mod_path)
-  elif architecture == 'GPU':
-    if precision == 'single':
-      libimaging = ctypes.pydll.LoadLibrary("%s/cbuild/gpu_algorithm/single/libgpu_imaging32.so" % mod_path)
-    else:
-      libimaging = ctypes.pydll.LoadLibrary("%s/cbuild/gpu_algorithm/double/libgpu_imaging64.so" % mod_path)
-  return libimaging
+#pragma once
+
+#include "gridding_parameters.h"
+namespace imaging {
+  class transform_facet_lefthanded_ra_dec {};
+  class transform_disable_facet_rotation {};
+  class transform_planar_approx_with_w {};
+
+  template <typename policy>
+  struct baseline_transform {};
+
+  template <>
+  struct baseline_transform<transform_disable_facet_rotation> {};
+
+  template <>
+  struct baseline_transform<transform_facet_lefthanded_ra_dec> {
+    uvw_base_type mat_11, mat_12, mat_13,
+		  mat_21, mat_22, mat_23,
+		  mat_31, mat_32, mat_33;
+  };
+
+  template <>
+  struct baseline_transform<transform_planar_approx_with_w> {
+    uvw_base_type u_term,v_term;
+  };
+}

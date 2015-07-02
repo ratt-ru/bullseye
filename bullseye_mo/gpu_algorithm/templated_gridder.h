@@ -42,6 +42,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "gridding_parameters.h"
 #include "baseline_transform_policies.h"
 #include "phase_transform_policies.h"
+#include "baseline_transform_traits.h"
 
 namespace imaging {
 	/*
@@ -62,8 +63,8 @@ namespace imaging {
 		size_t padded_conv_full_support = conv_full_support + 2; //remember we need to reserve some of the support for +/- frac on both sides
 		if (tid >= params.num_facet_centres * params.baseline_count * conv_full_support_sq) return;
 		size_t conv_theadid_flat_index = tid % conv_full_support_sq;
-		size_t my_conv_v = (conv_theadid_flat_index / conv_full_support) + 1;
-		size_t my_conv_u = (conv_theadid_flat_index % conv_full_support) + 1;
+		size_t my_conv_v = (conv_theadid_flat_index / conv_full_support);
+		size_t my_conv_u = (conv_theadid_flat_index % conv_full_support);
 		size_t facet_mul_baseline_index = tid / conv_full_support_sq; //this is baseline_id * facet_id
 		size_t my_facet_id = facet_mul_baseline_index / params.baseline_count;
 		size_t my_baseline = facet_mul_baseline_index % params.baseline_count;
@@ -75,14 +76,13 @@ namespace imaging {
 		uvw_base_type u_scale=params.nx*params.cell_size_x * ARCSEC_TO_RAD;
 		uvw_base_type v_scale=-(params.ny*params.cell_size_y * ARCSEC_TO_RAD);
 		
-		uvw_base_type conv_offset = (padded_conv_full_support) / 2.0; 
-		uvw_base_type grid_centre_offset_x = params.nx/2 - conv_offset + my_conv_u;
-		uvw_base_type grid_centre_offset_y = params.ny/2 - conv_offset + my_conv_v;
+		uvw_base_type grid_centre_offset_x = params.nx/2 - params.conv_support + my_conv_u;
+		uvw_base_type grid_centre_offset_y = params.ny/2 - params.conv_support + my_conv_v;
 		size_t grid_size_in_floats = params.nx * params.ny << 1;
 		grid_base_type* facet_output_buffer;
 		active_correlation_gridding_policy::compute_facet_grid_ptr(params,my_facet_id,grid_size_in_floats,&facet_output_buffer);
 		//Compute the transformation necessary to distort the baseline and phase according to the new facet delay centre (Cornwell & Perley, 1991)
-		baseline_rotation_mat baseline_transformation;
+		typename active_baseline_transformation_policy::baseline_transform_type baseline_transformation;
 		lmn_coord phase_offset;
 		uvw_base_type new_delay_ra;
 		uvw_base_type new_delay_dec;
@@ -102,8 +102,6 @@ namespace imaging {
 		}
 		__syncthreads(); //wait for the first thread to put the entire filter into shared memory
 		
-// 		size_t channel_loop_ubound = params.channel_count >> 1;
-// 		size_t channel_loop_rem_lbound = channel_loop_ubound << 1;
 		//we must keep seperate accumulators per channel, so we need to bring these loops outward (contrary to Romein's paper)
 		{
 		    typename active_correlation_gridding_policy::active_trait::accumulator_type my_grid_accum;
@@ -127,6 +125,8 @@ namespace imaging {
 				imaging::uvw_coord<uvw_base_type> uvw = params.uvw_coords[row];
 				bool row_flagged = params.flagged_rows[row];
 				bool row_is_in_field_being_imaged = (params.field_array[row] == params.imaging_field);
+				//either all threads in the filter take this branch or not, its better than doing uneccesary accesses to global memory
+				if (!(channel_enabled && row_is_in_field_being_imaged && row_is_in_current_spw) || row_flagged) continue;
 				typename active_correlation_gridding_policy::active_trait::vis_type vis;
 				typename active_correlation_gridding_policy::active_trait::vis_weight_type vis_weight;
 				typename active_correlation_gridding_policy::active_trait::vis_flag_type visibility_flagged;
@@ -135,10 +135,9 @@ namespace imaging {
 				  assuming small fields of view. Weighting is a scalar and can be apply in any order, so lets just first 
 				  apply the corrections*/
 				active_correlation_gridding_policy::read_and_apply_antenna_jones_terms(params,row,vis);
-				//compute the weighted visibility and promote the flags to integers so that we don't have unnecessary branch diversion here
-				typename active_correlation_gridding_policy::active_trait::vis_flag_type vis_flagged = !(visibility_flagged || row_flagged) && 
-														       channel_enabled && row_is_in_field_being_imaged &&
-														       row_is_in_current_spw;
+				//compute the weighted visibility and promote the flags to integers so that we don't have unnecessary complex logic to deal with gridding
+				//all or some of the correlations here
+				typename active_correlation_gridding_policy::active_trait::vis_flag_type vis_flagged = !(visibility_flagged);
  				typename active_correlation_gridding_policy::active_trait::vis_weight_type combined_vis_weight = 
 					 vis_weight * vector_promotion<int,visibility_base_type>(vector_promotion<bool,int>(vis_flagged));
 				uvw._u *= ref_wavelength;
@@ -154,12 +153,12 @@ namespace imaging {
 				//account for interpolation error (we select the closest sample from the oversampled convolution filter)
 				uvw_base_type cont_current_u = uvw._u + grid_centre_offset_x;
 				uvw_base_type cont_current_v = uvw._v + grid_centre_offset_y;
-				int my_current_u = cont_current_u;
-				int my_current_v = cont_current_v;
-				uvw_base_type frac_u = -cont_current_u + (uvw_base_type)my_current_u;
-				uvw_base_type frac_v = -cont_current_v + (uvw_base_type)my_current_v;
-				size_t closest_conv_u = ((uvw_base_type)my_conv_u + frac_u)*params.conv_oversample;
-				size_t closest_conv_v = ((uvw_base_type)my_conv_v + frac_v)*params.conv_oversample;
+				size_t my_current_u = (signbit(cont_current_u) == 0) ? round(cont_current_u) : params.nx; //underflow of size_t seems to be always == 0 in nvcc
+				size_t my_current_v = (signbit(cont_current_v) == 0) ? round(cont_current_v) : params.ny; //underflow of size_t seems to be always == 0 in nvcc
+				size_t frac_u_offset = (1-uvw._u + round(uvw._u)) * params.conv_oversample; //1 + frac_u in filter samples
+				size_t frac_v_offset = (1-uvw._v + round(uvw._v)) * params.conv_oversample; //1 + frac_u in filter samples
+				size_t closest_conv_u = frac_u_offset + my_conv_u * params.conv_oversample;
+				size_t closest_conv_v = frac_v_offset + my_conv_v * params.conv_oversample;
 				//if this is the first timestamp for this baseline initialize previous_u and previous_v
 				if (t == 0) {
 					my_previous_u = my_current_u;
@@ -169,7 +168,7 @@ namespace imaging {
 				//if u and v have changed we must dump everything to memory at previous_u and previous_v and reset
 				if ((my_current_u != my_previous_u || my_current_v != my_previous_v) && channel_enabled){
 					//don't you dare go off the grid:
-					if (my_previous_v + conv_full_support  < params.ny && my_previous_u + conv_full_support  < params.nx &&
+					if (my_previous_v + conv_full_support < params.ny && my_previous_u + conv_full_support < params.nx &&
 					    my_previous_v < params.ny && my_previous_u < params.nx){
 						active_correlation_gridding_policy::grid_visibility(facet_output_buffer,
 												    grid_size_in_floats,
@@ -207,8 +206,8 @@ namespace imaging {
 												     my_facet_id,
 												     channel_grid_index,
 												     conv_full_support,
-												     my_conv_u - 1,
-												     my_conv_v - 1);
+												     my_conv_u,
+												     my_conv_v);
 			    }//dumping last accumulation
 			}//channel
 		    }//spw

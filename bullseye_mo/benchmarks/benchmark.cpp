@@ -51,7 +51,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "uvw_coord.h"
 #include "wrapper.h"
 #include "gridding_parameters.h"
-
+#include "base_types.h"
 
 
 const double TO_GIB = 1.0/(1024.0*1024.0*1024.0);
@@ -95,49 +95,67 @@ const uvw_coord<uvw_base_type> antenna_coords[] = {{-1601710.017000f , -5042006.
 };
 
 int main (int argc, char ** argv) {
-    if (argc != 11)
-        throw runtime_error("Expected args num_threads,num_timestamps,nx,ny,num_chans,num_pols,conv_support_size,conv_times_oversample,observation_length_in_hours,ra_0,dec_0");
+    if (argc != 14)
+        throw runtime_error("Expected args num_threads,dataset_(int)_size_in_MiB,nx,ny,num_chans,num_corr,conv_half_support_size,conv_times_oversample,num_wplanes,observation_length_in_hours,ra_0,dec_0,num_facets");
     size_t no_threads = atol(argv[1]);
-    size_t no_timestamps = atol(argv[2]);
-    size_t row_count = no_timestamps * NO_BASELINES;
+    size_t dataset_size = atol(argv[2]);
     size_t nx = atol(argv[3]);
     size_t ny = atol(argv[4]);
     size_t chan_no = atol(argv[5]);
-    size_t pol_count = 1;
-    size_t conv_support = atol(argv[6]);
-    size_t conv_oversample = atol(argv[7]);
-    float hrs = atof(argv[8]);
+    size_t pol_count = atol(argv[6]);
+    if (pol_count != 1 && pol_count != 2 && pol_count != 4)
+      throw std::invalid_argument("Expected 1,2 or 4 correlations in argument");
+    size_t conv_support = atol(argv[7]);
+    size_t conv_oversample = atol(argv[8]);
+    size_t num_wplanes = atol(argv[9]);
+    if (num_wplanes <= 1) printf("WARNING: DISABLING WPROJECTION CONVOLUTIONS\n");
+    size_t conv_full_support = conv_support * 2 + 1;
+    size_t conv_padded_full_support = conv_full_support + 2;
+    size_t convolution_size_dim = conv_padded_full_support + (conv_padded_full_support - 1) * (conv_oversample - 1);
+    size_t convolution_slice_size = convolution_size_dim * convolution_size_dim;
+    size_t convolution_cube_size = convolution_slice_size * num_wplanes;
+    printf("------------------------------------\nGRIDDER BENCHMARK\n(USING %ld THREADS)\n------------------------------------\n",no_threads);
+    omp_set_num_threads((int)no_threads);
+    gridding_parameters params;
+    size_t row_size = sizeof(bool)*chan_no*4+
+		      sizeof(visibility_weights_base_type)*chan_no*4+
+		      sizeof(complex<visibility_base_type>)*chan_no*4+
+		      sizeof(uvw_coord<uvw_base_type>)+
+		      sizeof(bool)+
+		      sizeof(unsigned int)+
+		      sizeof(unsigned int);
+    size_t no_timestamps = (dataset_size * 1024 * 1024) / (row_size * NO_BASELINES);
+    size_t row_count = no_timestamps * NO_BASELINES;
+    float hrs = atof(argv[10]);
     float time_step = (hrs / 24.0 * 2 * M_PI) / no_timestamps; //time step in radians
-    float ra = atof(argv[9]) * M_PI / 180;
-    float declination = atof(argv[10]) * M_PI / 180;
-
+    float ra = atof(argv[11]) * M_PI / 180;
+    float declination = atof(argv[12]) * M_PI / 180;
+    size_t num_facets = atol(argv[13]);
+    if (num_facets == 0) printf("WARNING: DISABLING FACETING\n");
+    void (*gridding_function)(gridding_parameters &) = num_facets == 0 ? ((pol_count == 1) ? grid_single_pol : (pol_count == 2) ? grid_duel_pol : grid_4_cor) :
+									 ((pol_count == 1) ? facet_single_pol : (pol_count == 2) ? facet_duel_pol : facet_4_cor);
+    std::unique_ptr<uvw_base_type[]> facet_centre_list(new uvw_base_type[num_facets*2]);
+    for (size_t f = 0; f < num_facets*2; f += 2){
+      facet_centre_list.get()[f] = ra;
+      facet_centre_list.get()[f+1] = declination;
+    }
     reference_wavelengths_base_type ref_wavelength = 0.245;
     float cell_size_l = 2;
     float cell_size_m = 2;
-
-    printf("------------------------------------\nGRIDDER BENCHMARK\n(USING %ld THREADS)\n------------------------------------\n",no_threads);
-    omp_set_num_threads((int)no_threads);
-    
-    printf("ALLOCATING MEMORY FOR %ld ROWS (%ld chan, %ld pol EACH) (%f GiB)\n",row_count,chan_no,pol_count,
-           (sizeof(bool)+
-            sizeof(visibility_weights_base_type)*chan_no*pol_count+
-            sizeof(complex<visibility_base_type>)*chan_no*pol_count+
-            sizeof(uvw_coord<uvw_base_type>)+
-            sizeof(bool)+
-            sizeof(unsigned int)+
-            sizeof(unsigned int))*row_count*TO_GIB);
-    std::unique_ptr<complex<visibility_base_type> > visibilities(new complex<visibility_base_type>[row_count*chan_no*pol_count]);
-    std::unique_ptr<visibility_weights_base_type> visibility_weights(new visibility_weights_base_type[row_count*chan_no*pol_count]);
-    std::unique_ptr<bool> flags(new bool[row_count*chan_no*pol_count]()); //init all to false
-    std::unique_ptr<bool> flagged_rows(new bool[row_count]()); //init all to false
-    std::unique_ptr<reference_wavelengths_base_type> reference_wavelengths(new reference_wavelengths_base_type[chan_no]);
+    printf("ALLOCATING MEMORY FOR %ld ROWS (%ld chan, %d pol EACH) (%f GiB)\n",row_count,chan_no,4,
+           row_size*row_count*TO_GIB);
+    std::unique_ptr<complex<visibility_base_type>[] > visibilities(new complex<visibility_base_type>[row_count*chan_no*4]);
+    std::unique_ptr<visibility_weights_base_type[]> visibility_weights(new visibility_weights_base_type[row_count*chan_no*4]);
+    std::unique_ptr<bool[]> flags(new bool[row_count*chan_no*4]()); //init all to false
+    std::unique_ptr<bool[]> flagged_rows(new bool[row_count]()); //init all to false
+    std::unique_ptr<reference_wavelengths_base_type[]> reference_wavelengths(new reference_wavelengths_base_type[chan_no]);
     std::generate(reference_wavelengths.get(),reference_wavelengths.get() + chan_no, [ref_wavelength]() {
         return ref_wavelength;
     });
-    std::unique_ptr<unsigned int > field_array(new unsigned int[row_count]()); //init all to 0
-    std::unique_ptr<unsigned int > spw_array(new unsigned int[row_count]()); //init all to 0
-    std::unique_ptr<std::size_t> chan_grid_indicies(new std::size_t[chan_no*1]()); //init all to 0
-    std::unique_ptr<bool> enabled_chans(new bool[chan_no*1]);
+    std::unique_ptr<unsigned int[] > field_array(new unsigned int[row_count]()); //init all to 0
+    std::unique_ptr<unsigned int[] > spw_array(new unsigned int[row_count]()); //init all to 0
+    std::unique_ptr<std::size_t[] > chan_grid_indicies(new std::size_t[chan_no*1]()); //init all to 0
+    std::unique_ptr<bool[] > enabled_chans(new bool[chan_no*1]);
     std::generate(enabled_chans.get(),enabled_chans.get() + chan_no*1, []() {
         return true;
     });
@@ -149,7 +167,7 @@ int main (int argc, char ** argv) {
      * sence that the rotation of the earth sweep out eliptical uv paths through a plane parellel to the rotation of the earth (ie. the
      * coordinates paths are circular when viewed at NCP
      */
-    std::unique_ptr<uvw_coord<uvw_base_type> > uvw_coords(new uvw_coord<uvw_base_type>[row_count]);
+    std::unique_ptr<uvw_coord<uvw_base_type>[] > uvw_coords(new uvw_coord<uvw_base_type>[row_count]);
     printf("COMPUTING UVW COORDINATES\n");
     std::generate(uvw_coords.get(),uvw_coords.get() + row_count,
     [ra,declination,time_step]() {
@@ -185,24 +203,17 @@ int main (int argc, char ** argv) {
         ++row;
         return uvw_coord<uvw_base_type>(u,v,w);
     });
-    printf("ALLOCATING MEMORY FOR %ld x %ld COMPLEX GRID (%f GiB)\n",nx,ny,nx*ny*sizeof(grid_base_type)*TO_GIB);
-    std::unique_ptr<complex<grid_base_type> > output_buffer(new complex<grid_base_type>[nx*ny]);
-    printf("ALLOCATING MEMORY FOR CONVOLUTION KERNEL WITH %ld CELL SUPPORT, OVERSAMPLED BY FACTOR OF %ld (%f GiB)\n",
-           conv_support,conv_oversample,conv_support*conv_oversample*sizeof(convolution_base_type)*TO_GIB);
-    std::unique_ptr<convolution_base_type> conv(new convolution_base_type[conv_oversample*conv_support*conv_oversample*conv_support]);
-    std::generate(conv.get(),conv.get() + conv_oversample*conv_support*conv_oversample*conv_support, [ref_wavelength]() {
-        return 1;
-    });
-    
-    gridding_parameters params;
-   
+    printf("ALLOCATING MEMORY FOR %ld x %ld COMPLEX GRID FOR %ld FACETS (%f GiB)\n",nx,ny,num_facets,std::max<size_t>(1,num_facets)*pol_count*nx*ny*sizeof(complex<grid_base_type>)*TO_GIB);
+    std::unique_ptr<complex<grid_base_type>[] > output_buffer(new complex<grid_base_type>[std::max<size_t>(1,num_facets)*pol_count*nx*ny]());
     params.antenna_count = NO_ANTENNAE;
     params.baseline_count = NO_BASELINES;
     params.cell_size_x = cell_size_l;
     params.cell_size_y = cell_size_m;
+    params.num_facet_centres = num_facets;
+    params.facet_centres = facet_centre_list.get();
     params.channel_count = chan_no;
     params.channel_grid_indicies = chan_grid_indicies.get();
-    params.conv = conv.get();
+    params.cube_channel_dim_size = 1;
     params.conv_oversample = conv_oversample;
     params.conv_support = conv_support;
     params.cube_channel_dim_size = 1;
@@ -212,7 +223,7 @@ int main (int argc, char ** argv) {
     params.flags = flags.get();
     params.imaging_field = 0;
     params.no_timestamps_read = no_timestamps;
-    params.num_facet_centres = 0;
+    params.num_facet_centres = std::max<size_t>(1,num_facets);
     params.number_of_polarization_terms = pol_count;
     params.nx = nx;
     params.ny = ny;
@@ -220,6 +231,9 @@ int main (int argc, char ** argv) {
     params.phase_centre_dec = declination;
     params.phase_centre_ra = ra;
     params.polarization_index = 0;
+    params.second_polarization_index = 2;
+    params.number_of_polarization_terms = 4;
+    params.number_of_polarization_terms_being_gridded = pol_count;
     params.reference_wavelengths = reference_wavelengths.get();
     params.row_count = row_count;
     params.spw_count = 1;
@@ -227,11 +241,48 @@ int main (int argc, char ** argv) {
     params.uvw_coords = uvw_coords.get();
     params.visibilities = visibilities.get();
     params.visibility_weights = visibility_weights.get();
-    
-    initLibrary(params);
-    grid_single_pol(params);  
-    releaseLibrary();
-    
+    params.wplanes = num_wplanes;
+    params.wmax_est = 6500;
+    if (num_wplanes > 1){
+      printf("ALLOCATING MEMORY FOR %ld CONVOLUTION KERNELS WITH %ld CELL SUPPORT, OVERSAMPLED BY FACTOR OF %ld (%f GiB)\n",
+	    num_wplanes,conv_support,conv_oversample,convolution_cube_size*sizeof(std::complex<convolution_base_type>)*TO_GIB);
+      std::unique_ptr<std::complex<convolution_base_type>[] > conv(new std::complex<convolution_base_type>[convolution_cube_size]);
+      #pragma omp parallel for
+      for (size_t w = 0; w < num_wplanes; ++w){
+	size_t w_offset = w * convolution_slice_size;
+	for (size_t cv = 0; cv < conv_full_support; ++cv){
+	  double PI_X = M_PI * (cv / (convolution_base_type)(conv_oversample)) - ((convolution_base_type) conv_support);
+	  convolution_base_type sinc_v = (PI_X != 0) ? sin(PI_X) / PI_X : 1.0;
+	  for (size_t cu = 0; cu < conv_full_support; ++cu){
+	    double PI_X = M_PI * (cu / (convolution_base_type)(conv_oversample)) - ((convolution_base_type) conv_support);
+	    convolution_base_type sinc_u = (PI_X != 0) ? sin(PI_X) / PI_X : 1.0;
+	    conv.get()[w_offset + cv * convolution_size_dim + cu] = std::complex<convolution_base_type>(sinc_u * sinc_v,0);
+	  }
+	}
+      }
+      params.conv = (convolution_base_type *)(conv.get());
+      initLibrary(params);
+      gridding_function(params);  
+      releaseLibrary();
+    } else {
+      printf("ALLOCATING MEMORY FOR %ld CONVOLUTION KERNELS WITH %ld CELL SUPPORT, OVERSAMPLED BY FACTOR OF %ld (%f GiB)\n",
+	    num_wplanes,conv_support,conv_oversample,convolution_cube_size/convolution_size_dim*sizeof(convolution_base_type)*TO_GIB);
+      std::unique_ptr<convolution_base_type[]> conv(new convolution_base_type[convolution_cube_size/convolution_size_dim]);
+      #pragma omp parallel for
+      for (size_t w = 0; w < num_wplanes; ++w){
+	size_t w_offset = w * convolution_slice_size;
+	for (size_t x = 0; x < conv_full_support; ++x){
+	  double PI_X = M_PI * (x / (convolution_base_type)(conv_oversample)) - ((convolution_base_type) conv_support);
+	  convolution_base_type sinc = (PI_X != 0) ? sin(PI_X) / PI_X : 1.0;
+	  conv.get()[w_offset + x] = sinc;
+	}
+      }
+      params.conv = (convolution_base_type *)(conv.get());
+      initLibrary(params);
+      gridding_function(params);  
+      releaseLibrary();
+    }
+        
     printf("COMPUTE COMPLETED IN %f SECONDS\n",get_gridding_walltime());
     printf("BENCHMARK TERMINATED SUCCESSFULLY\n");
     return 0;

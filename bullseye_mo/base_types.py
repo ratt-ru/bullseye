@@ -44,6 +44,8 @@ global psf_type
 psf_type = None
 global fir_type
 fir_type = None
+global w_fir_type
+w_fir_type = None
 global detaper_type
 detaper_type = None
 global visibility_type
@@ -67,6 +69,8 @@ def force_precision(precision):
     psf_type = grid_type
     global fir_type
     fir_type = np.float32
+    global w_fir_type
+    w_fir_type = np.complex64
     global detaper_type
     detaper_type = np.float32
     global visibility_type
@@ -88,6 +92,8 @@ def force_precision(precision):
     psf_type = grid_type
     global fir_type
     fir_type = np.float64
+    global w_fir_type
+    w_fir_type = np.complex128
     global detaper_type
     detaper_type = np.float64
     global visibility_type
