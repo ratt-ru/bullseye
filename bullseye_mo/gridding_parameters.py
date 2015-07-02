@@ -100,6 +100,13 @@ gridding_parameters._fields_ = [
   ("sampling_function_channel_count",c_size_t),
   #Finalization steps
   ("is_final_data_chunk",c_bool),
+  #w-projection related terms
+  ("wplanes",c_size_t),
+  ("wmax_est",base_types.uvw_ctypes_convert_type),
   #baseline indexes needed for Romeins distribution strategy
-  ("baseline_starting_indexes",c_void_p) #this has to be n(n-1)/2 + n + 1 long because we need to compute the length of the last baseline
+  ("baseline_starting_indexes",c_void_p), #this has to be n(n-1)/2 + n + 1 long because we need to compute the length of the last baseline
+  #The following will be allocated and released in the C libraries
+  ("antenna_jones_starting_indexes",c_void_p), #this has to be n + 1 long because we need to be able to compute the number of jones terms at the last antenna
+  ("jones_time_indicies_per_antenna",c_void_p), #this will be the same length as the repacked jones matrix array
+  ("normalization_terms",c_void_p) #this has to be threads_bins x #facets x #channel_accumulation_grids x #polarization_being_gridded
 ]

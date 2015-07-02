@@ -75,5 +75,7 @@ def build_command_line_options_parser():
   parser.add_argument('--open_default_viewer',help='Uses \'xdg-open\' to fire up the user\'s image viewer of choice.',default=False)
   parser.add_argument('--use_back_end',help='Switch between \'CPU\' or \'GPU\' imaging library.', choices=['CPU','GPU'], default='CPU')
   parser.add_argument('--precision',help='Force bullseye to use single / double precision when gridding', choices=['single','double'], default='single')
+  parser.add_argument('--wplanes',help='Number of w-planes to use (1 disables w-projection)', type=int, default=1)
+  parser.add_argument('--image_padding',help='Sets the FFT edge padding factor (the edge of the image should be ignored/cut)', type=float, default=1.20)
   parser_args = vars(parser.parse_args())
   return (parser,parser_args)

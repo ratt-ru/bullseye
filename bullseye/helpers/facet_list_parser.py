@@ -54,14 +54,12 @@ def compute_number_of_facet_centres(parser_args):
 def create_facet_centre_list(parser_args,data,num_facet_centres):
   #remember fastest changing to the right (C ordering):l,m,n is written n,m,l
   facet_centres = np.empty([parser_args['n_facets_m'],parser_args['n_facets_l'],2],dtype=base_types.uvw_type)
-  offset_l = np.ceil(parser_args['n_facets_l']/2.0)
-  offset_m = np.ceil(parser_args['n_facets_m']/2.0)
   field_centre_l = data._field_centres[parser_args['field_id'],0,0]
   field_centre_m = data._field_centres[parser_args['field_id'],0,1]
   size_in_arcsec_l = parser_args['npix_l']*parser_args['cell_l']
   size_in_arcsec_m = parser_args['npix_m']*parser_args['cell_m']
-  range_of_l_coords = (np.arange(1,parser_args['n_facets_l']+1) - offset_l)*size_in_arcsec_l + field_centre_l
-  range_of_m_coords = (np.arange(1,parser_args['n_facets_m']+1) - offset_m)*size_in_arcsec_m + field_centre_m
+  range_of_l_coords = field_centre_l + parser_args['cell_l']*((np.arange(0,parser_args['n_facets_l'])*2 + 1) - parser_args['n_facets_l']) * parser_args['npix_l'] * 0.5
+  range_of_m_coords = field_centre_m + parser_args['cell_m']*((np.arange(0,parser_args['n_facets_m'])*2 + 1) - parser_args['n_facets_m']) * parser_args['npix_m'] * 0.5
   #each element in the range of l coordinates repeat m times in the l dim
   facet_centres[:parser_args['n_facets_m'],:parser_args['n_facets_l'],0] = np.repeat(range_of_l_coords,parser_args['n_facets_m']).reshape(parser_args['n_facets_m'],parser_args['n_facets_l'])
   #the range of m coordinates repeat l times in the m dim
@@ -124,45 +122,45 @@ def output_mosaic(output_prefix,num_facet_centres):
 			       montage_projected_img_table
 			      )
 	   )
-  montage_diffs_table = dirname(output_prefix) + '/overlap.tbl'
-  os.system('mOverlaps -e %s %s' % (montage_projected_img_table,
-				 montage_diffs_table
-				)
-	   )
-  diffs_dir = dirname(output_prefix) + '/overlaps'
-  if exists(diffs_dir):
-    shutil.rmtree(diffs_dir)
-  os.makedirs(diffs_dir)
-  os.system('mDiffExec -p %s %s %s %s' % (proj_dir,
-					  montage_diffs_table,
-					  montage_proj_template_hdr,
-					  diffs_dir
-					 )
-	   )
-  montage_fit_table = dirname(output_prefix) + '/fit.tbl'
-  os.system('mFitExec %s %s %s' % (montage_diffs_table,
-				   montage_fit_table,
-				   diffs_dir,
-				   )
-	   )
-  montage_corrections_table = dirname(output_prefix) + '/combine.tbl'
-  os.system('mBgModel %s %s %s' % (montage_projected_img_table,
-				   montage_fit_table,
-				   montage_corrections_table
-				  )
-	   )
-  corrections_dir = dirname(output_prefix) + '/corrections'
-  if exists(corrections_dir):
-    shutil.rmtree(corrections_dir)
-  os.makedirs(corrections_dir)
-  os.system('mBgExec -p %s %s %s %s' % (proj_dir,
-					montage_projected_img_table,
-					montage_corrections_table,
-					corrections_dir
-				       )
-	   )
+  #montage_diffs_table = dirname(output_prefix) + '/overlap.tbl'
+  #os.system('mOverlaps %s %s' % (montage_projected_img_table,
+				 #montage_diffs_table
+				#)
+	   #)
+  #diffs_dir = dirname(output_prefix) + '/overlaps'
+  #if exists(diffs_dir):
+    #shutil.rmtree(diffs_dir)
+  #os.makedirs(diffs_dir)
+  #os.system('mDiffExec -p %s %s %s %s' % (proj_dir,
+					  #montage_diffs_table,
+					  #montage_proj_template_hdr,
+					  #diffs_dir
+					 #)
+	   #)
+  #montage_fit_table = dirname(output_prefix) + '/fit.tbl'
+  #os.system('mFitExec %s %s %s' % (montage_diffs_table,
+				   #montage_fit_table,
+				   #diffs_dir,
+				   #)
+	   #)
+  #montage_corrections_table = dirname(output_prefix) + '/combine.tbl'
+  #os.system('mBgModel %s %s %s' % (montage_projected_img_table,
+				   #montage_fit_table,
+				   #montage_corrections_table
+				  #)
+	   #)
+  #corrections_dir = dirname(output_prefix) + '/corrections'
+  #if exists(corrections_dir):
+    #shutil.rmtree(corrections_dir)
+  #os.makedirs(corrections_dir)
+  #os.system('mBgExec -p %s %s %s %s' % (proj_dir,
+					#montage_projected_img_table,
+					#montage_corrections_table,
+					#corrections_dir
+				       #)
+	   #)
   montage_combined_img = output_prefix + '.combined.fits'
-  os.system('mAdd -a mean -p %s %s %s %s' % (corrections_dir,
+  os.system('mAdd -a mean -p %s %s %s %s' % (proj_dir,
 					     montage_projected_img_table,
 					     montage_proj_template_hdr,
 					     montage_combined_img

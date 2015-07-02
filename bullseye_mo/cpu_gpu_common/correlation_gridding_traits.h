@@ -37,8 +37,8 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 ********************************************************************************************/
 #pragma once
+#include <x86intrin.h>
 #include "cu_common.h"
-#include "gpu_wrapper.h"
 #include "cu_vec.h"
 #include "cu_basic_complex.h"
 #include "jones_2x2.h"
@@ -111,6 +111,25 @@ namespace imaging {
 				   basic_complex<T>(visibilities._y._real*scalars._y,visibilities._y._imag*scalars._y),
 				   basic_complex<T>(visibilities._z._real*scalars._z,visibilities._z._imag*scalars._z),
 				   basic_complex<T>(visibilities._w._real*scalars._w,visibilities._w._imag*scalars._w));
+  }
+  /**
+   * Define conjugates for the different correlations
+   */
+  template <typename T>
+  __device__ __host__ void conj(vec1< basic_complex<T> > & visibilities){
+    visibilities._x._imag *= -1;
+  }
+  template <typename T>
+  __device__ __host__ void conj(vec2< basic_complex<T> > & visibilities){
+    visibilities._x._imag *= -1;
+    visibilities._y._imag *= -1;
+  }
+  template <typename T>
+  __device__ __host__ void conj(vec4< basic_complex<T> > & visibilities){
+    visibilities._x._imag *= -1;
+    visibilities._y._imag *= -1;
+    visibilities._z._imag *= -1;
+    visibilities._w._imag *= -1;
   }
   /**
    * Multiply jones_2x2 matrix with vec4< basic_complex < T > >
