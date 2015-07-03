@@ -175,7 +175,7 @@ class data_set_loader(object):
     
     '''
       Read data from the MS
-      Arguements:
+      Arguments:
       start_row moves the reading cursor in the primary table
       no_rows specifies the number of rows to read (-1 == "read all")
       Assumes read_head has been called prior to this call
@@ -184,7 +184,7 @@ class data_set_loader(object):
 	print "READING UVW VALUES, DATA, WEIGHTS AND FLAGS"
         casa_ms_table = table(self._MSName,ack=False,readonly=True)        
         time_ordered_ms_table = None
-        if self._should_read_jones_terms:
+        if self._should_read_jones_terms or do_romein_baseline_ordering:
 	  with data_set_loader.time_to_load_chunks:
 	    try:
 	      chopped_ms_table = taql("SELECT UVW,"+data_column+",WEIGHT_SPECTRUM,FLAG,FLAG_ROW,DATA_DESC_ID,ANTENNA1,ANTENNA2,FIELD_ID,TIME FROM $casa_ms_table LIMIT $no_rows OFFSET $start_row")
@@ -195,7 +195,7 @@ class data_set_loader(object):
 	      chopped_ms_table = taql("SELECT UVW,"+data_column+",WEIGHT,FLAG,FLAG_ROW,DATA_DESC_ID,ANTENNA1,ANTENNA2,FIELD_ID,TIME FROM $casa_ms_table LIMIT $no_rows OFFSET $start_row")
 	      time_ordered_ms_table = taql("SELECT UVW,"+data_column+",WEIGHT,FLAG,FLAG_ROW,DATA_DESC_ID,ANTENNA1,ANTENNA2,FIELD_ID,TIME FROM $chopped_ms_table ORDERBY TIME")
 	      chopped_ms_table.close()
-	else: #since we're not doing jones corrections let's leave the table unordered (shaves a lot of time off the data loading)
+	else: #since we're not doing jones corrections or gpu imaging let's leave the table unordered (shaves a lot of time off the data loading)
 	  with data_set_loader.time_to_load_chunks:
 	    try:
 	      time_ordered_ms_table = taql("SELECT UVW,"+data_column+",WEIGHT_SPECTRUM,FLAG,FLAG_ROW,DATA_DESC_ID,ANTENNA1,ANTENNA2,FIELD_ID,TIME FROM $casa_ms_table LIMIT $no_rows OFFSET $start_row")
