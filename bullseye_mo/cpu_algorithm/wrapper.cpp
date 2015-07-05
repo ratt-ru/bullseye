@@ -84,6 +84,7 @@ extern "C" {
       printf(" >Double precision mode: enabled \n");
       #endif
       #ifdef __AVX__
+      #pragma message("Enabling AVX in compilation")
       printf(" >AVX Vectorization for w-projection modes: enabled\n");
       #else
       printf(" >AVX Vectorization for w-projection modes: disabled\n");

@@ -17,7 +17,6 @@ namespace imaging {
 	__global__ void templated_gridder(gridding_parameters & params){
 		active_convolution_policy::set_required_rounding_operation();
 		size_t conv_full_support = (params.conv_support << 1) + 1;
-		size_t conv_full_support_sq = conv_full_support * conv_full_support;
 		size_t padded_conv_full_support = conv_full_support + 2; //remember we need to reserve some of the support for +/- frac on both sides
 		
 		//Scale the IFFT by the simularity theorem to the correct FOV
