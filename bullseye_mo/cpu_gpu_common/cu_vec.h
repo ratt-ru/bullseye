@@ -48,10 +48,10 @@ struct vec1 {
     _x = rhs._x;
     return *this;
   }
-  __device__ __host__ vec1<T> operator*(const T scalar){
+  __device__ __host__ vec1<T> operator*(const T scalar) const{
     return vec1<T>(_x * scalar);
   }
-  __device__ __host__ vec1<T> operator*(const vec1<T> scalar){
+  __device__ __host__ vec1<T> operator*(const vec1<T> scalar) const{
     return vec1<T>(_x * scalar._x);
   }
   __device__ __host__ vec1<T>& operator+=(const vec1<T> & rhs){
@@ -85,13 +85,13 @@ struct vec2 {
     _y = rhs._y;
     return *this;
   }
-  __device__ __host__ vec2<T> operator*(const T scalar){
+  __device__ __host__ vec2<T> operator*(const T scalar) const{
     return vec2<T>(_x * scalar, _y * scalar);
   }
-  __device__ __host__ vec2<T> operator*(const vec1<T> scalar){
+  __device__ __host__ vec2<T> operator*(const vec1<T> scalar) const{
     return vec2<T>(_x * scalar._x, _y * scalar._x);
   }
-  __device__ __host__ vec2<T> operator*(const vec2<T> element_wise_by_vector){
+  __device__ __host__ vec2<T> operator*(const vec2<T> element_wise_by_vector) const{
     return vec2<T>(_x * element_wise_by_vector._x, _y * element_wise_by_vector._y);
   }
   __device__ __host__ vec2<T>& operator+=(const vec2<T> & rhs){
@@ -128,13 +128,13 @@ struct vec4 {
     _w = rhs._w;
     return *this;
   }
-  __device__ __host__ vec4<T> operator*(const T scalar){
+  __device__ __host__ vec4<T> operator*(const T scalar) const{
     return vec4<T>(_x * scalar, _y * scalar, _z * scalar, _w * scalar);
   }
-  __device__ __host__ vec4<T> operator*(const vec1<T> scalar){
+  __device__ __host__ vec4<T> operator*(const vec1<T> scalar) const{
     return vec4<T>(_x * scalar._x, _y * scalar._x, _z * scalar._x, _w * scalar._x);
   }
-  __device__ __host__ vec4<T> operator*(const vec4<T> element_wise_by_vector){
+  __device__ __host__ vec4<T> operator*(const vec4<T> element_wise_by_vector) const{
     return vec4<T>(_x * element_wise_by_vector._x, _y * element_wise_by_vector._y,
 		   _z * element_wise_by_vector._z, _w * element_wise_by_vector._w);
   }
