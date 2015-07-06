@@ -1,5 +1,5 @@
 #pragma once
-#include <immintrin.h>
+#include <x86intrin.h>
 #include "uvw_coord.h"
 #include "gridding_parameters.h"
 #include <cmath>
@@ -292,7 +292,6 @@ public:
  * This is an AVX-vectorized 2D w-projection kernel
  */
 #ifdef __AVX__
-#pragma message("Compiling AVX-vectorized 2D w-projection kernel")
 template <typename active_correlation_gridding_policy>
 class convolution_policy <active_correlation_gridding_policy,convolution_w_projection_precomputed_vectorized> {
 protected:
@@ -715,7 +714,6 @@ public:
  * This is a vectorized 1D w-projection kernel
  */
 #ifdef __AVX__
-#pragma message("Compiling AVX-vectorized 1D w-projection kernel")
 template <typename active_correlation_gridding_policy>
 class convolution_policy <active_correlation_gridding_policy,convolution_w_projection_1D_precomputed_vectorized> :
       convolution_policy <active_correlation_gridding_policy,convolution_w_projection_precomputed_vectorized> {

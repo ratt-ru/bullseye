@@ -143,7 +143,6 @@ namespace imaging {
       grid_flat_index[1] += accumulator._x._imag;
     }
 #ifdef __AVX__
-#pragma message("Compiling single correlation AVX gridding instructions")
 #ifdef BULLSEYE_SINGLE
     typedef __m256 avx_vis_type[1]  __attribute__((aligned(16)));
     static inline void grid_visibility (grid_base_type* grid,
@@ -307,7 +306,6 @@ namespace imaging {
       grid_flat_index_corr2[1] += accumulator._y._imag;
     }
 #ifdef __AVX__
-#pragma message("Compiling duel correlation AVX gridding instructions")
 #ifdef BULLSEYE_SINGLE
     typedef __m256 avx_vis_type[2]  __attribute__((aligned(16)));
     static inline void grid_visibility (grid_base_type* grid,
@@ -425,7 +423,6 @@ namespace imaging {
       grid_flat_index_corr4[1]+=accumulator._w._imag;
     }
 #ifdef __AVX__
-#pragma message("Compiling quad correlation AVX gridding instructions")
 #ifdef BULLSEYE_SINGLE
     typedef __m256 avx_vis_type[2]  __attribute__((aligned(16)));
     static inline void grid_visibility (grid_base_type* grid,
@@ -565,7 +562,6 @@ namespace imaging {
 										  pos_u,pos_v,accumulator);
     }
 #ifdef __AVX__
-#pragma message("Compiling quad correlation with jones corrections AVX gridding instructions")
 #ifdef BULLSEYE_SINGLE
     typedef __m256 avx_vis_type[2]  __attribute__((aligned(16)));
     static inline void grid_visibility (grid_base_type* grid,

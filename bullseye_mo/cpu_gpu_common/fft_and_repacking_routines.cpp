@@ -105,10 +105,12 @@ namespace imaging{
 	{
 	  grid_base_type * __restrict__ grid_ptr_gridtype = (grid_base_type *)params.output_buffer;
 	  float * __restrict__ grid_ptr_single = (float *)params.output_buffer;
+	  std::size_t image_size = (params.nx*params.ny);
 	  for (std::size_t f = 0; f < params.num_facet_centres; ++f) {
 	      std::size_t casting_lbound = offset*f;
 	      std::size_t casting_ubound = casting_lbound + params.nx*params.ny*params.cube_channel_dim_size;
 	      for (std::size_t i = casting_lbound; i < casting_ubound; ++i){
+		  std::size_t detapering_flat_index = i % image_size;
 		  grid_ptr_single[i] = (float)(grid_ptr_gridtype[i*2]); //extract all the reals
 	      }
 	  }
@@ -135,10 +137,12 @@ namespace imaging{
 	{
 	  grid_base_type * __restrict__ grid_ptr_gridtype = (grid_base_type *)params.sampling_function_buffer;
 	  float * __restrict__ grid_ptr_single = (float *)params.sampling_function_buffer;
+	  std::size_t image_size = (params.nx*params.ny);
 	  for (std::size_t f = 0; f < params.num_facet_centres; ++f) {
 	      std::size_t casting_lbound = offset*f;
 	      std::size_t casting_ubound = casting_lbound + params.nx*params.ny*params.sampling_function_channel_count;
 	      for (std::size_t i = casting_lbound; i < casting_ubound; ++i){
+		  std::size_t detapering_flat_index = i % image_size;
 		  grid_ptr_single[i] = (float)(grid_ptr_gridtype[i*2]); //extract all the reals
 	      }
 	  }
