@@ -51,16 +51,15 @@ namespace imaging {
 			block dimensions: {THREADS_PER_BLOCK,1,1}
 			blocks per grid: {minimum number of blocks required to run baselines*(conv_support_size^2)*num_facets threads,
 					  1,1}
-			shared memory: sizeof(conv_base_type) * (2*conv_support + 1 + 2) * conv_oversample
 	 */
 	template <typename active_correlation_gridding_policy,
 		  typename active_baseline_transformation_policy,
-		  typename active_phase_transformation>
+		  typename active_phase_transformation_policy,
+		  typename active_convolution_policy>
 	__global__ void templated_gridder(gridding_parameters params){
 		size_t tid = cu_indexing_schemes::getGlobalIdx_1D_1D(gridDim,blockIdx,blockDim,threadIdx);
 		size_t conv_full_support = (params.conv_support << 1) + 1;
 		size_t conv_full_support_sq = conv_full_support * conv_full_support;
-		size_t padded_conv_full_support = conv_full_support + 2; //remember we need to reserve some of the support for +/- frac on both sides
 		if (tid >= params.num_facet_centres * params.baseline_count * conv_full_support_sq) return;
 		size_t conv_theadid_flat_index = tid % conv_full_support_sq;
 		size_t my_conv_v = (conv_theadid_flat_index / conv_full_support);
@@ -86,22 +85,11 @@ namespace imaging {
 		lmn_coord phase_offset;
 		uvw_base_type new_delay_ra;
 		uvw_base_type new_delay_dec;
-		active_phase_transformation::read_facet_ra_dec(params,my_facet_id,new_delay_ra,new_delay_dec);
+		active_phase_transformation_policy::read_facet_ra_dec(params,my_facet_id,new_delay_ra,new_delay_dec);
 		active_baseline_transformation_policy::compute_transformation_matrix(params.phase_centre_ra,params.phase_centre_dec,
 										     new_delay_ra,new_delay_dec,baseline_transformation);
-		active_phase_transformation::compute_delta_lmn(params.phase_centre_ra,params.phase_centre_dec,
-							       new_delay_ra,new_delay_dec,phase_offset);
-		//load the convolution filter into shared memory
-		extern __shared__ convolution_base_type shared_conv[];
-		if (threadIdx.x == 0){
-		  size_t fir_ubound = ((params.conv_oversample * padded_conv_full_support));
-		  
-		  for (size_t x = 0; x < fir_ubound; ++x){
-		    shared_conv[x] = params.conv[x];
-		  }
-		}
-		__syncthreads(); //wait for the first thread to put the entire filter into shared memory
-		
+		active_phase_transformation_policy::compute_delta_lmn(params.phase_centre_ra,params.phase_centre_dec,
+								      new_delay_ra,new_delay_dec,phase_offset);
 		//we must keep seperate accumulators per channel, so we need to bring these loops outward (contrary to Romein's paper)
 		{
 		    typename active_correlation_gridding_policy::active_trait::accumulator_type my_grid_accum;
@@ -144,21 +132,20 @@ namespace imaging {
 				uvw._v *= ref_wavelength;
 				uvw._w *= ref_wavelength;
 				//Do phase rotation in accordance with Cornwell & Perley (1992)
-				active_phase_transformation::apply_phase_transform(phase_offset,uvw,vis);
+				active_phase_transformation_policy::apply_phase_transform(phase_offset,uvw,vis);
 				//DO baseline rotation in accordance with Cornwell & Perley (1992)
 				active_baseline_transformation_policy::apply_transformation(uvw,baseline_transformation);
 				//scale the uv coordinates (measured in wavelengths) to the correct FOV by the fourier simularity theorem (pg 146-148 Synthesis Imaging in Radio Astronomy II)
 				uvw._u *= u_scale; 
 				uvw._v *= v_scale;
 				//account for interpolation error (we select the closest sample from the oversampled convolution filter)
-				uvw_base_type cont_current_u = uvw._u + grid_centre_offset_x;
-				uvw_base_type cont_current_v = uvw._v + grid_centre_offset_y;
-				size_t my_current_u = (signbit(cont_current_u) == 0) ? round(cont_current_u) : params.nx; //underflow of size_t seems to be always == 0 in nvcc
-				size_t my_current_v = (signbit(cont_current_v) == 0) ? round(cont_current_v) : params.ny; //underflow of size_t seems to be always == 0 in nvcc
-				size_t frac_u_offset = (1-uvw._u + round(uvw._u)) * params.conv_oversample; //1 + frac_u in filter samples
-				size_t frac_v_offset = (1-uvw._v + round(uvw._v)) * params.conv_oversample; //1 + frac_u in filter samples
-				size_t closest_conv_u = frac_u_offset + my_conv_u * params.conv_oversample;
-				size_t closest_conv_v = frac_v_offset + my_conv_v * params.conv_oversample;
+				size_t my_current_u = 0,my_current_v = 0,closest_conv_u = 0,closest_conv_v = 0;
+				active_convolution_policy::compute_closest_uv_in_conv_kernel(params,vis,uvw,
+											     grid_centre_offset_x,
+											     grid_centre_offset_y,
+											     my_conv_u,my_conv_v,
+											     my_current_u,my_current_v,
+											     closest_conv_u,closest_conv_v);
 				//if this is the first timestamp for this baseline initialize previous_u and previous_v
 				if (t == 0) {
 					my_previous_u = my_current_u;
@@ -183,13 +170,14 @@ namespace imaging {
 					my_grid_accum = active_correlation_gridding_policy::active_trait::vis_type::zero();
 					my_previous_u = my_current_u;
 					my_previous_v = my_current_v;
-				}
-				//Lets read the convolution weights from the the precomputed filter
-				convolution_base_type conv_weight = shared_conv[closest_conv_u] * shared_conv[closest_conv_v];
-				//then multiply-add into the accumulator
-				typename active_correlation_gridding_policy::active_trait::vis_weight_type conv_weighted_vis_weight = combined_vis_weight * conv_weight;
-				my_grid_accum += vis * conv_weighted_vis_weight;
-				normalization_term += vector_promotion<visibility_weights_base_type,normalization_base_type>(conv_weighted_vis_weight);
+				}				
+				//read convolution weight and then multiply-add into the accumulator
+				active_convolution_policy::convolve(params,
+								    uvw,vis,
+								    my_grid_accum,
+								    normalization_term,
+								    combined_vis_weight,
+								    closest_conv_u,closest_conv_v);
 			    } //time
 			    //Okay time to dump everything since the last uv shift
 			    if (my_previous_u + conv_full_support < params.ny && my_previous_u + conv_full_support  < params.nx &&
