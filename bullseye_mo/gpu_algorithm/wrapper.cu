@@ -64,7 +64,11 @@ extern "C" {
     bool initialized = false;
     normalization_base_type * normalization_counts;
     cudaArray* conv_array;
-    surface<void, cudaSurfaceType2D> cached_convolution_functions;
+    #ifndef BULLSEYE_DISABLE_GPU_FILTER_CACHING
+      surface<void, cudaSurfaceType2D> cached_convolution_functions;
+    #else
+      #pragma message("Disabling gpu filter caching as requested")
+    #endif
     double get_gridding_walltime(){
       return gridding_walltime->duration();
     }
@@ -120,12 +124,16 @@ extern "C" {
             printf("Compute capability %d.%d with %f GiB global memory (%f GiB free)\n",properties.major,
                    properties.minor,mem_tot/1024.0/1024.0/1024.0,mem_free/1024.0/1024.0/1024.0);
             printf("%d SMs are available\n",properties.multiProcessorCount);
-	    printf("Using %f / %f KiB available surface memory for convolution kernel and %lu / %d available storage for kernel w-layers\n",
-		   size_of_convolution_function_in_bytes/1024.0,properties.maxSurface2D[0]/1024.0,
-		   std::max<size_t>(1,params.wplanes),properties.maxSurface2D[1]);
-	    if (size_of_convolution_function > properties.maxSurface2D[0] ||
-		std::min<size_t>(1,params.wplanes) > properties.maxSurface2D[1])
-	      throw std::runtime_error("Convolution kernel to big to fit in fast surface memory. Use fewer samples or w layers\n");
+	    #ifndef BULLSEYE_DISABLE_GPU_FILTER_CACHING
+	      printf("Using %f / %f KiB available surface memory for convolution kernel and %lu / %d available storage for kernel w-layers\n",
+		    size_of_convolution_function_in_bytes/1024.0,properties.maxSurface2D[0]/1024.0,
+		    std::max<size_t>(1,params.wplanes),properties.maxSurface2D[1]);
+	      if (size_of_convolution_function > properties.maxSurface2D[0] ||
+		  std::min<size_t>(1,params.wplanes) > properties.maxSurface2D[1])
+		throw std::runtime_error("Convolution kernel to big to fit in fast surface memory. Use fewer samples or w layers\n");
+	    #else
+	      #pragma message("Disabling gpu filter caching as requested")
+	    #endif
             printf("-----------------------------------------------------------------------------------------------------------\n");
         } else 
             throw std::runtime_error("Cannot find suitable GPU device. Giving up");
@@ -166,27 +174,35 @@ extern "C" {
 	}
 	//the filter looks something like |...|...|...|...| where the last oversample worth of taps at both ends are the necessary extra samples 
 	//required for improved interpolation in the gridding
-	cudaChannelFormatDesc channelDesc;
-	#ifdef BULLSEYE_SINGLE
-	  if (params.wplanes <= 1)
-	    channelDesc = cudaCreateChannelDesc(32,0,0,0,cudaChannelFormatKindFloat);//one float32
-	  else
-	    channelDesc = cudaCreateChannelDesc(32,32,0,0,cudaChannelFormatKindFloat);//r & i float32
-	#elif BULLSEYE_DOUBLE
-	  if (params.wplanes <= 1)
-	    channelDesc = cudaCreateChannelDesc(32,32,0,0,cudaChannelFormatKindFloat); //one float64 when cast
-	  else
-	    channelDesc = cudaCreateChannelDesc(32,32,32,32,cudaChannelFormatKindFloat); //r & i float64 when cast
+	#ifdef BULLSEYE_DISABLE_GPU_FILTER_CACHING
+	  #pragma message("Disabling gpu filter caching as requested")
+	  cudaSafeCall(cudaMalloc((void**)&gpu_params.conv, 
+				  size_of_convolution_function_in_bytes * std::max<size_t>(1,params.wplanes)));
+	  cudaSafeCall(cudaMemcpy(gpu_params.conv, params.conv, 
+				  size_of_convolution_function_in_bytes * std::max<size_t>(1,params.wplanes),
+				  cudaMemcpyHostToDevice));  
+	#else
+	  cudaChannelFormatDesc channelDesc;
+	  #ifdef BULLSEYE_SINGLE
+	    if (params.wplanes <= 1)
+	      channelDesc = cudaCreateChannelDesc(32,0,0,0,cudaChannelFormatKindFloat);//one float32
+	    else
+	      channelDesc = cudaCreateChannelDesc(32,32,0,0,cudaChannelFormatKindFloat);//r & i float32
+	  #elif BULLSEYE_DOUBLE
+	    if (params.wplanes <= 1)
+	      channelDesc = cudaCreateChannelDesc(32,32,0,0,cudaChannelFormatKindFloat); //one float64 when cast
+	    else
+	      channelDesc = cudaCreateChannelDesc(32,32,32,32,cudaChannelFormatKindFloat); //r & i float64 when cast
+	  #endif
+	  cudaSafeCall(cudaMallocArray(&conv_array, &channelDesc, 
+			  size_of_convolution_function_in_bytes, std::max<size_t>(1,params.wplanes),
+			  cudaArraySurfaceLoadStore));
+	  cudaSafeCall(cudaMemcpy2DToArray(conv_array,0,0,
+					  params.conv,size_of_convolution_function_in_bytes,
+					  size_of_convolution_function_in_bytes,std::max<size_t>(1,params.wplanes),
+					  cudaMemcpyHostToDevice));
+	  cudaBindSurfaceToArray(imaging::cached_convolution_functions, conv_array);
 	#endif
-	cudaSafeCall(cudaMallocArray(&conv_array, &channelDesc, 
-			size_of_convolution_function_in_bytes, std::max<size_t>(1,params.wplanes),
-			cudaArraySurfaceLoadStore));
-	cudaSafeCall(cudaMemcpy2DToArray(conv_array,0,0,
-					 params.conv,size_of_convolution_function_in_bytes,
-					 size_of_convolution_function_in_bytes,std::max<size_t>(1,params.wplanes),
-					 cudaMemcpyHostToDevice));
-	cudaBindSurfaceToArray(imaging::cached_convolution_functions, conv_array);
-	
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.baseline_starting_indexes, sizeof(size_t) * (params.baseline_count+1)));
 	cudaSafeCall(cudaMalloc((void**)&gpu_params.facet_centres, sizeof(uvw_base_type) * params.num_facet_centres * 2)); //enough space to store ra,dec coordinates of facet delay centres
 	cudaSafeCall(cudaMemcpy(gpu_params.facet_centres,params.facet_centres, sizeof(uvw_base_type) * params.num_facet_centres * 2,cudaMemcpyHostToDevice));
@@ -232,7 +248,12 @@ extern "C" {
       cudaSafeCall(cudaFree(gpu_params.flagged_rows));
       cudaSafeCall(cudaFree(gpu_params.field_array));
       cudaSafeCall(cudaFree(gpu_params.flags));
-      cudaSafeCall(cudaFreeArray(conv_array));
+      #ifdef BULLSEYE_DISABLE_GPU_FILTER_CACHING
+	#pragma message("Disabling gpu filter caching as requested")
+	cudaSafeCall(cudaFree(gpu_params.conv));
+      #else
+	cudaSafeCall(cudaFreeArray(conv_array));
+      #endif
       cudaSafeCall(cudaFree(gpu_params.baseline_starting_indexes));
       cudaSafeCall(cudaFree(gpu_params.facet_centres));
       if (gpu_params.should_invert_jones_terms){

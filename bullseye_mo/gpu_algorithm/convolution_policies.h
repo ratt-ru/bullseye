@@ -43,8 +43,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "uvw_coord.h"
 #include "cu_basic_complex.h"
 namespace imaging {
-  extern surface<void, cudaSurfaceType2D> cached_convolution_functions;
-  
+  #ifndef BULLSEYE_DISABLE_GPU_FILTER_CACHING
+      extern surface<void, cudaSurfaceType2D> cached_convolution_functions;
+  #else
+      #pragma message("Disabling gpu filter caching as requested")
+  #endif
+      
   class AA_1D_precomputed {};
   class W_projection_1D_precomputed {};
   
@@ -103,8 +107,14 @@ namespace imaging {
     {
       convolution_base_type conv_u;
       convolution_base_type conv_v;
+#ifdef BULLSEYE_DISABLE_GPU_FILTER_CACHING
+#pragma message("Disabling gpu filter caching as requested")
+      conv_u = params.conv[closest_conv_u];
+      conv_v = params.conv[closest_conv_v];
+#else
       surf2Dread<convolution_base_type>(&conv_u,cached_convolution_functions,closest_conv_u * sizeof(convolution_base_type),0,cudaBoundaryModeTrap);
       surf2Dread<convolution_base_type>(&conv_v,cached_convolution_functions,closest_conv_v * sizeof(convolution_base_type),0,cudaBoundaryModeTrap);
+#endif
       convolution_base_type conv_weight = conv_u * conv_v;
       typename active_correlation_gridding_policy::active_trait::vis_weight_type convolve_weight = weight * conv_weight; //compute the weighted convolution weight from seperable 1D filter
       //then multiply-add into the accumulator
@@ -165,12 +175,21 @@ namespace imaging {
       basic_complex<convolution_base_type> conv_u;
       basic_complex<convolution_base_type> conv_v;
       size_t best_fit_w_plane = round(abs(uvw._w)/(float)params.wmax_est*(params.wplanes-1));
+#ifdef BULLSEYE_DISABLE_GPU_FILTER_CACHING
+#pragma message("Disabling gpu filter caching as requested")
+      size_t filter_padded_full_support = (2 * params.conv_support + 3); // support taps on both sides and centred on a tap
+      size_t filter_dim_size = filter_padded_full_support + (filter_padded_full_support - 1) * (params.conv_oversample - 1);
+      size_t filter_offset = filter_dim_size * best_fit_w_plane;
+      conv_u = ((basic_complex<convolution_base_type>*)params.conv)[filter_offset + closest_conv_u];
+      conv_v = ((basic_complex<convolution_base_type>*)params.conv)[filter_offset + closest_conv_v];
+#else
       surf2Dread<basic_complex<convolution_base_type> >(&conv_u,cached_convolution_functions,
 							closest_conv_u * sizeof(basic_complex<convolution_base_type>),best_fit_w_plane,
 							cudaBoundaryModeTrap);
       surf2Dread<basic_complex<convolution_base_type> >(&conv_v,cached_convolution_functions,
 							closest_conv_v * sizeof(basic_complex<convolution_base_type>),best_fit_w_plane,
 							cudaBoundaryModeTrap);
+#endif
       basic_complex<convolution_base_type> conv_weight = conv_u * conv_v;
       //then multiply-add into the accumulator
       my_grid_accum += vis * conv_weight * weight;
