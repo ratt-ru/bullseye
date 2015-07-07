@@ -1263,7 +1263,7 @@ extern "C" {
 	dim3 no_blocks_per_grid(total_blocks_needed_per_dim,1,1);
 	size_t size_of_convolution_function = padded_conv_support_size * params.conv_oversample * sizeof(convolution_base_type); //see algorithms/convolution_policies.h for the reason behind the padding
 	typedef imaging::correlation_gridding_policy<imaging::grid_sampling_function> correlation_gridding_policy;
-	typedef imaging::baseline_transform_policy<imaging::transform_facet_lefthanded_ra_dec > baseline_transform_policy;
+	typedef imaging::baseline_transform_policy<imaging::transform_planar_approx_with_w > baseline_transform_policy;
 	typedef imaging::phase_transform_policy<imaging::disable_faceting_phase_shift> phase_transform_policy;
 	if (params.wplanes > 1){
 	    typedef imaging::convolution_policy<correlation_gridding_policy,imaging::W_projection_1D_precomputed> convolution_policy;
