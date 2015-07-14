@@ -51,6 +51,7 @@ namespace imaging {
 			    //read all the stuff that is only dependent on the current spw and channel    
 			    size_t flat_indexed_spw_channel = spw * params.channel_count + c;
 			    bool channel_enabled = params.enabled_channels[flat_indexed_spw_channel];
+			    if (!channel_enabled) continue;
 			    size_t channel_grid_index;
 			    active_correlation_gridding_policy::read_channel_grid_index(params,flat_indexed_spw_channel,channel_grid_index);
 			    reference_wavelengths_base_type ref_wavelength = 1 / params.reference_wavelengths[flat_indexed_spw_channel];
@@ -75,7 +76,7 @@ namespace imaging {
 			    active_correlation_gridding_policy::read_and_apply_antenna_jones_terms(params,row,my_facet_id,spw,c,vis);
 			    //compute the weighted visibility and promote the flags to integers so that we don't have unnecessary branch diversion here
 			    typename active_correlation_gridding_policy::active_trait::vis_flag_type vis_flagged = !(visibility_flagged || row_flagged) && 
-														     channel_enabled && row_is_in_field_being_imaged;
+														     row_is_in_field_being_imaged;
 			    typename active_correlation_gridding_policy::active_trait::vis_weight_type combined_vis_weight = vis_weight * 
 												       vector_promotion<int,visibility_base_type>(vector_promotion<bool,int>(vis_flagged));
 			    vis = vis * combined_vis_weight;
