@@ -42,7 +42,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "cu_vec.h"
 #include "cu_basic_complex.h"
 #include "uvw_coord.h"
-
+#include "sincos.h"
 namespace imaging {
   class disable_faceting_phase_shift {};
   class enable_faceting_phase_shift {};
@@ -109,24 +109,39 @@ namespace imaging {
       result._m = -s_d_dec;
       result._n = 1-c_d_dec*c_d_ra;
     }
-    __device__ __host__ static void apply_phase_transform(const lmn_coord & delta_lmn, const uvw_coord<uvw_base_type> & uvw, vec1< basic_complex<visibility_base_type> > & single_correlation){
-      uvw_base_type x = 2 * M_PI * (uvw._u * delta_lmn._l + uvw._v * delta_lmn._m + uvw._w * delta_lmn._n); //as in Perley & Cornwell (1992)
-      basic_complex<visibility_base_type> phase_shift_term(cos(x),sin(x)); //by Euler's identity
-      single_correlation._x *= phase_shift_term;      
-    }
-    __device__ __host__ static void apply_phase_transform(const lmn_coord & delta_lmn, const uvw_coord<uvw_base_type> & uvw, vec2< basic_complex<visibility_base_type> >& duel_correlation){
-      uvw_base_type x = 2 * M_PI * (uvw._u * delta_lmn._l + uvw._v * delta_lmn._m + uvw._w * delta_lmn._n); //as in Perley & Cornwell (1992)
-      basic_complex<visibility_base_type> phase_shift_term(cos(x),sin(x)); //by Euler's identity
-      duel_correlation._x *= phase_shift_term;
-      duel_correlation._y *= phase_shift_term;
-    }
-    __device__ __host__ static void apply_phase_transform(const lmn_coord & delta_lmn, const uvw_coord<uvw_base_type> & uvw, vec4< basic_complex<visibility_base_type> > & quad_correlation){
-      uvw_base_type x = 2 * M_PI * (uvw._u * delta_lmn._l + uvw._v * delta_lmn._m + uvw._w * delta_lmn._n); //as in Perley & Cornwell (1992)
-      basic_complex<visibility_base_type> phase_shift_term(cos(x),sin(x)); //by Euler's identity
-      quad_correlation._x *= phase_shift_term;
-      quad_correlation._y *= phase_shift_term;
-      quad_correlation._z *= phase_shift_term;
-      quad_correlation._w *= phase_shift_term;
-    }
+#ifdef __CUDACC__ 
+__device__ 
+#endif 
+      static void apply_phase_transform(const lmn_coord & delta_lmn, const uvw_coord<uvw_base_type> & uvw, vec1< basic_complex<visibility_base_type> > & single_correlation){
+	uvw_base_type x = 2 * M_PI * (uvw._u * delta_lmn._l + uvw._v * delta_lmn._m + uvw._w * delta_lmn._n); //as in Perley & Cornwell (1992)
+	uvw_base_type c,s;
+	custom_sincos(x,&s,&c); //this should not make that much of a difference in terms of gridding accuracy since we snap to grid positions and the oversampling factor is never excessively good
+	basic_complex<visibility_base_type> phase_shift_term(c,s); //by Euler's identity
+	single_correlation._x *= phase_shift_term;      
+      }
+#ifdef __CUDACC__ 
+__device__
+#endif 
+      static void apply_phase_transform(const lmn_coord & delta_lmn, const uvw_coord<uvw_base_type> & uvw, vec2< basic_complex<visibility_base_type> >& duel_correlation){
+	uvw_base_type x = 2 * M_PI * (uvw._u * delta_lmn._l + uvw._v * delta_lmn._m + uvw._w * delta_lmn._n); //as in Perley & Cornwell (1992)
+	uvw_base_type c,s;
+	custom_sincos(x,&s,&c); //this should not make that much of a difference in terms of gridding accuracy since we snap to grid positions and the oversampling factor is never excessively good
+	basic_complex<visibility_base_type> phase_shift_term(c,s); //by Euler's identity
+	duel_correlation._x *= phase_shift_term;
+	duel_correlation._y *= phase_shift_term;
+      }
+#ifdef __CUDACC__ 
+__device__
+#endif
+      static void apply_phase_transform(const lmn_coord & delta_lmn, const uvw_coord<uvw_base_type> & uvw, vec4< basic_complex<visibility_base_type> > & quad_correlation){
+	uvw_base_type x = 2 * M_PI * (uvw._u * delta_lmn._l + uvw._v * delta_lmn._m + uvw._w * delta_lmn._n); //as in Perley & Cornwell (1992)
+	uvw_base_type c,s;
+	custom_sincos(x,&s,&c); //this should not make that much of a difference in terms of gridding accuracy since we snap to grid positions and the oversampling factor is never excessively good
+	basic_complex<visibility_base_type> phase_shift_term(c,s); //by Euler's identity
+	quad_correlation._x *= phase_shift_term;
+	quad_correlation._y *= phase_shift_term;
+	quad_correlation._z *= phase_shift_term;
+	quad_correlation._w *= phase_shift_term;
+      }
   };
 }
