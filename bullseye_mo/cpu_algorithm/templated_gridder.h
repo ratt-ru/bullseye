@@ -26,7 +26,7 @@ namespace imaging {
 		uvw_base_type grid_centre_offset_y = params.ny/2 - params.conv_support;
 		size_t grid_size_in_floats = params.nx * params.ny << 1;
 		
-		#pragma omp parallel for
+		#pragma omp parallel for schedule(static)
 		for (size_t my_facet_id = 0; my_facet_id < params.num_facet_centres; ++my_facet_id){
 		  grid_base_type* facet_output_buffer;
 		  active_correlation_gridding_policy::compute_facet_grid_ptr(params,my_facet_id,grid_size_in_floats,&facet_output_buffer);
