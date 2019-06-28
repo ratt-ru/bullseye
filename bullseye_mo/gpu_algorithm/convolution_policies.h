@@ -88,10 +88,18 @@ namespace imaging {
     {
       uvw_base_type cont_current_u = out_uvw._u + grid_centre_offset_x;
       uvw_base_type cont_current_v = out_uvw._v + grid_centre_offset_y;
-      out_my_current_u = (signbit(cont_current_u) == 0) ? round(cont_current_u) : params.nx; //underflow of size_t seems to be always == 0 in nvcc
-      out_my_current_v = (signbit(cont_current_v) == 0) ? round(cont_current_v) : params.ny; //underflow of size_t seems to be always == 0 in nvcc
-      size_t frac_u_offset = (1-out_uvw._u + round(out_uvw._u)) * params.conv_oversample; //1 + frac_u in filter samples
-      size_t frac_v_offset = (1-out_uvw._v + round(out_uvw._v)) * params.conv_oversample; //1 + frac_u in filter samples
+      #ifdef BULLSEYE_SINGLE
+	out_my_current_u = (signbit(cont_current_u) == 0) ? rintf(cont_current_u) : params.nx; //underflow of size_t seems to be always == 0 in nvcc
+	out_my_current_v = (signbit(cont_current_v) == 0) ? rintf(cont_current_v) : params.ny; //underflow of size_t seems to be always == 0 in nvcc
+	size_t frac_u_offset = (1-out_uvw._u + rintf(out_uvw._u)) * params.conv_oversample; //1 + frac_u in filter samples
+	size_t frac_v_offset = (1-out_uvw._v + rintf(out_uvw._v)) * params.conv_oversample; //1 + frac_u in filter samples
+      #elif BULLSEYE_DOUBLE
+	out_my_current_u = (signbit(cont_current_u) == 0) ? rint(cont_current_u) : params.nx; //underflow of size_t seems to be always == 0 in nvcc
+	out_my_current_v = (signbit(cont_current_v) == 0) ? rint(cont_current_v) : params.ny; //underflow of size_t seems to be always == 0 in nvcc
+	size_t frac_u_offset = (1-out_uvw._u + rint(out_uvw._u)) * params.conv_oversample; //1 + frac_u in filter samples
+	size_t frac_v_offset = (1-out_uvw._v + rint(out_uvw._v)) * params.conv_oversample; //1 + frac_u in filter samples
+      #endif
+
       out_closest_conv_u = frac_u_offset + my_conv_u * params.conv_oversample;
       out_closest_conv_v = frac_v_offset + my_conv_v * params.conv_oversample;
     }
