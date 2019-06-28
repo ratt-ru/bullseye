@@ -56,9 +56,11 @@ from gi.repository import Gtk
 from gi.repository import Gdk
 from gi.repository import GLib
 from multiprocessing import Process
+import bullseye
+BULLSEYE_PATH = os.path.dirname(bullseye.__file__)
 
-from helpers import data_set_loader
-from viewcontrollers import frmFacetDisplay
+from bullseye.helpers import data_set_loader
+from bullseye.viewcontrollers import frmFacetDisplay
 class frmMain:
 	IMAGE_TMP_FILE_NAME = "/tmp/bullseye_temp"
 	FACET_TMP_FILE_NAME = "/tmp/bullseye_facet_temp"
@@ -122,10 +124,11 @@ class frmMain:
 	  itr = model.iter_next(itr)
 	  self._field_id = int(model.get_value(itr,1))
 	  self._busy_msg = Gtk.MessageDialog(None,0,Gtk.MessageType.INFO,Gtk.ButtonsType.NONE,"Hang on!")
-	  cmd_string = ("python bullseye.py \"%s\" --output_prefix \"%s\" --output_format png --npix_l %d --npix_m %d --cell_l %d --cell_m %d"
+	  cmd_string = ("bullseye_pipeliner.py \"%s\" --output_prefix \"%s\" --output_format png --npix_l %d --npix_m %d --cell_l %d --cell_m %d"
 			" --pol %s --conv_sup %d --conv_oversamp %d --field_id %d  --average_all 1" % (self._ms_name,
 			self.IMAGE_TMP_FILE_NAME,self._img_size_l,self._img_size_m,self._img_cell_l,self._img_cell_m,
 			self._polarization,conv_support,conv_oversample,self._field_id))
+	  print cmd_string
 	  threading.Thread(target=self.cmd_call,args=(cmd_string,self.on_finished_loading_low_res)).start()
 	  
 	def on_cvsLowRes_draw(self,widget,cr):
@@ -262,11 +265,12 @@ class frmMain:
                         facet_dec = quantity(self._phase_centres[self._field_id,0,1],"rad").get_value("arcsec") + (-int(event.y/float(rect.height) * img_height) + img_height/2)*self._img_cell_m	
 			facet_centres = np.array([[facet_ra,facet_dec]],dtype=np.float32)
 			
-			cmd_string = ("python bullseye.py \"%s\" --output_prefix \"%s\" --output_format png --npix_l %d --npix_m %d --cell_l %d"
+			cmd_string = ("bullseye_pipeliner.py \"%s\" --output_prefix \"%s\" --output_format png --npix_l %d --npix_m %d --cell_l %d"
 				      " --cell_m %d --pol %s --conv_sup %d --conv_oversamp %d --facet_centres \(%f,%f\) --field_id %d --average_all 1" % (
 				      self._ms_name,self.FACET_TMP_FILE_NAME,facet_size_l,facet_size_m,facet_cell_l,
 				      facet_cell_m,self._polarization,conv_support,conv_oversample,
 				      int(facet_ra),int(facet_dec),self._field_id))
+			print cmd_string
 			threading.Thread(target=self.cmd_call,args=(cmd_string,self.on_finished_faceting)).start()
 			
 
@@ -288,7 +292,7 @@ class frmMain:
 							    		 quantity(quantity(self._phase_centres[self._field_id,0,1],"rad").get_value("arcsec") + (-self._m_pos + img_height/2)*self._img_cell_m,"arcsec").get("deg").formatted("[+-]dd.mm.ss.t..")))
 	def __init__(self):
 		self._builder = Gtk.Builder()
-		self._builder.add_from_file("viewcontrollers/main.glade")
+		self._builder.add_from_file(os.path.join(BULLSEYE_PATH, "viewcontrollers/main.glade"))
 		self._builder.connect_signals(self)
 		self._builder.connect_signals(self._builder.get_object("dlgAbout"))
 		self._builder.get_object("frmMain").connect("destroy", Gtk.main_quit)

@@ -41,7 +41,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <cuda.h>
 //The following function is taken directly from the
 //Nvidia toolkit documentation
-__device__ double atomicAdd(double* address, double val)
+template <typename T>
+__device__ __forceinline__ T atomicAdd(T* address, T val);
+template <>
+__device__ __forceinline__ double atomicAdd<double>(double* address, double val)
 {
     unsigned long long int* address_as_ull =
                               (unsigned long long int*)address;
@@ -58,3 +61,4 @@ __device__ double atomicAdd(double* address, double val)
 
     return __longlong_as_double(old);
 }
+

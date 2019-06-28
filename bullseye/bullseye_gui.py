@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python2.7
 '''
 Bullseye:
 An accelerated targeted facet imager
@@ -38,8 +38,11 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 '''
 
+import matplotlib
+matplotlib.use('Agg')
+
 from gi.repository import Gtk,Gdk, GLib
-from viewcontrollers import frmMain
+from bullseye.viewcontrollers import frmMain
 import threading
 
 if __name__ == "__main__":

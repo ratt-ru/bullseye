@@ -1,49 +1,80 @@
 import os
+import sys
+import warnings
 from os.path import join as pjoin
 from setuptools import setup
 import subprocess
-pkg='bullseye_mo'
+from setuptools.command.install import install
+from setuptools.command.sdist import sdist
+from distutils.command.build import build
+pkg='bullseye'
+pkg_backend='bullseye_mo'
+__version__ = "0.4.1.0"
+build_root=os.path.dirname(__file__)
 
 def readme():
     with open('README.md') as f:
         return f.read()
 
-def bullseye_pkg_dirs():
-    """
-    Recursively provide package_data directories for
-    bullseye's measurement operator.
-    """
-    pkg_dirs = []
 
-    #print '-'*80, '\n'
-    
-    path = pjoin(pkg, 'cbuild')
-    subprocess.call(["mkdir",path])
-    subprocess.check_call(["cd %s && cmake .. && make -j4" % path,""],shell=True)
-    # Ignore
-    exclude = ['docs', '.git', '.svn', 'CMakeFiles']
+    install.user_options = install.user_options + [
+        ('compopts=', None, 'Any additional compile options passed to CMake')
+    ]
+    def initialize_options(self):
+        install.initialize_options(self)
+        self.compopts = None
 
-    # Walk 'bullseye_mo'
-    for root, dirs, files in os.walk(path, topdown=True):
-        #print '-'*20, 'ROOTS %s' % root
-        #print '-'*20, 'DIRS %s' % dirs
-        #print '-'*20, 'FILES %s' % files
+def backend(compile_options):
+    if compile_options is not None:
+        print >> sys.stderr, "Compiling extension libraries with user defined options: '%s'"%compile_options
+    path = pjoin(build_root, pkg_backend, 'cbuild')
+    try:
+        subprocess.check_call(["mkdir", path])
+    except:
+        warnings.warn("%s already exists in your source folder. We will not create a fresh build folder, but you "
+                      "may want to remove this folder if the configuration has changed significantly since the "
+                      "last time you run setup.py" % path)
+    subprocess.check_call(["cd %s && cmake %s .. && make" %
+                           (path, compile_options if compile_options is not None else ""), ""], shell=True)
 
-        # Prune out everything we're not interested in
-        # from os.walk's next yield.
-        dirs[:] = [d for d in dirs if d not in exclude]
+class custom_install(install):
+    install.user_options = install.user_options + [
+        ('compopts=', None, 'Any additional compile options passed to CMake')
+    ]
+    def initialize_options(self):
+        install.initialize_options(self)
+        self.compopts = None
 
-        for d in dirs:
-            pkg_dirs.append(pjoin(root, d, '*.*'))
+    def run(self):
+        backend(self.compopts)
+        install.run(self)
 
+class custom_build(build):
+    build.user_options = build.user_options + [
+        ('compopts=', None, 'Any additional compile options passed to CMake')
+    ]
+    def initialize_options(self):
+        build.initialize_options(self)
+        self.compopts = None
 
-    print 'pkgdirs %s' % pkg_dirs
+    def run(self):
+        backend(self.compopts)
+        build.run(self)
 
-    return pkg_dirs
+class custom_sdist(sdist):
+    def run(self):
+        bpath = pjoin(build_root, pkg, 'cbuild')
+        if os.path.isdir(bpath):
+            subprocess.check_call(["rm", "-rf", bpath])
+        sdist.run(self)
 
+def define_scripts():
+    #these must be relative to setup.py according to setuputils
+    DDF_scripts = [os.path.join("bullseye", script_name) for script_name in ['bullseye_pipeliner.py', 'bullseye_gui.py']]
+    return DDF_scripts
 
 setup(name=pkg,
-    version='0.0.1',
+    version=__version__,
     description='Bullseye Measurement Operator',
     long_description=readme(),
     url='https://github.com/ratt-ru/bullseye.git',
@@ -59,8 +90,12 @@ setup(name=pkg,
     author='Benjamin Hugo',
     author_email='bennahugo@aol.com',
     license='MIT',
-    packages=['bullseye_mo'],
-    install_requires=['numpy','matplotlib','scipy'],
-    package_data={pkg : bullseye_pkg_dirs()},
+    cmdclass={'install': custom_install,
+              'sdist': custom_sdist,
+              'build': custom_build
+             },
+    packages=['bullseye', 'bullseye_mo'],
+    scripts=define_scripts(),
+    install_requires=['numpy','matplotlib<=1.5.0','scipy','python-casacore<=3.0.0','astropy<=3.0','pycairo','PyGObject'],
     include_package_data=True,
     zip_safe=False)

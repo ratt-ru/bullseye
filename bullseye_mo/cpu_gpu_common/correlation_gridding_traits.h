@@ -37,7 +37,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 ********************************************************************************************/
 #pragma once
-#include <x86intrin.h>
 #include "cu_common.h"
 #include "cu_vec.h"
 #include "cu_basic_complex.h"

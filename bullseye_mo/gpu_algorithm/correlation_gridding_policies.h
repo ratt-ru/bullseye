@@ -43,6 +43,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "cu_vec.h"
 #include "cu_common.h"
 #include "cu_double_atomic.h"
+
 namespace imaging {
   template <typename correlation_gridding_mode>
   class correlation_gridding_policy {

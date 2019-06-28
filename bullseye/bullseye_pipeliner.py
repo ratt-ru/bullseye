@@ -1,3 +1,4 @@
+#!/usr/bin/env python2.7
 '''
 Bullseye:
 An accelerated targeted facet imager
@@ -36,8 +37,9 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 '''
+import matplotlib
+matplotlib.use('Agg')
 
-#!/usr/bin/python
 import argparse
 import numpy as np
 from pyparsing import commaSeparatedList
@@ -47,14 +49,14 @@ import os
 from pyrap.quanta import quantity
 import ctypes
 
-import helpers.channel_indexer as channel_indexer
-import helpers.command_line_options as command_line_options
-import helpers.facet_list_parser as facet_list_parser
-import helpers.stokes as stokes
+import bullseye.helpers.channel_indexer as channel_indexer
+import bullseye.helpers.command_line_options as command_line_options
+import bullseye.helpers.facet_list_parser as facet_list_parser
+import bullseye.helpers.stokes as stokes
 import bullseye_mo.library_loader as library_loader
-from helpers import timer
-from helpers import png_export
-from helpers import fits_export 
+from bullseye.helpers import timer
+from bullseye.helpers import png_export
+from bullseye.helpers import fits_export 
 if __name__ == "__main__":
   total_run_time = timer.timer()
   total_run_time.start()
@@ -70,7 +72,7 @@ if __name__ == "__main__":
   libimaging = library_loader.load_library(parser_args['use_back_end'],parser_args['precision'])
   from bullseye_mo import base_types
   base_types.force_precision(parser_args['precision'])
-  from helpers import data_set_loader
+  from bullseye.helpers import data_set_loader
   from bullseye_mo import convolution_filter
   from bullseye_mo import gridding_parameters
  

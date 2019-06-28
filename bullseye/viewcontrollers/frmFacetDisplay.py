@@ -39,10 +39,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 from gi.repository import Gtk
 from gi.repository import Gdk
+import os
+import bullseye
+BULLSEYE_PATH = os.path.dirname(bullseye.__file__)
+
 class frmFacetDisplay:
   def __init__(self,image_name):
 	self._builder = Gtk.Builder()
-	self._builder.add_from_file("viewcontrollers/facetDisplay.glade")
+	self._builder.add_from_file(os.path.join(BULLSEYE_PATH, "viewcontrollers/facetDisplay.glade"))
 	self._builder.connect_signals(self)
 	self._builder.get_object("frmFacetDisplay").show_all()
 	self._builder.get_object("imgFacetDisplay").set_from_file(image_name)

@@ -32,8 +32,8 @@ Build instructions (outputs CPU and GPU single and double precision libraries an
 
 Run instructions
 - Navigate to the bullseye/bullseye directory
-- "./bullseye.py --help" to display a full list of options
+- "./bullseye_pipeliner.py --help" to display a full list of options
 - Enjoy
 
 Toy GUI is available (proof of concept demonstrator for targeted faceting)
-- "./bullseye_frontend.py"
+- "./bullseye_gui.py"
