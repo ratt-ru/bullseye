@@ -75,11 +75,11 @@ Cyril Tasse</property>
       </row>
       <row>
         <col id="0" translatable="yes">Cell size l (arcsec)</col>
-        <col id="1">18</col>
+        <col id="1">1.6</col>
       </row>
       <row>
         <col id="0" translatable="yes">Cell size m (arcsec)</col>
-        <col id="1">18</col>
+        <col id="1">1.6</col>
       </row>
       <row>
         <col id="0" translatable="yes">Convolution support (px)</col>
@@ -109,11 +109,11 @@ Cyril Tasse</property>
       </row>
       <row>
         <col id="0" translatable="yes">Cell size l (arcsec)</col>
-        <col id="1">18</col>
+        <col id="1">1.6</col>
       </row>
       <row>
         <col id="0" translatable="yes">Cell size m (arcsec)</col>
-        <col id="1">18</col>
+        <col id="1">1.6</col>
       </row>
       <row>
         <col id="0" translatable="yes">Convolution support (px)</col>

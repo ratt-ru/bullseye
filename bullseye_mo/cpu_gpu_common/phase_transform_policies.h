@@ -120,14 +120,17 @@ public:
       */
 
     uvw_base_type d_ra = (new_phase_centre_ra - old_phase_centre_ra) * ARCSEC_TO_RAD,
-                  d_dec = (new_phase_centre_dec - old_phase_centre_dec) * ARCSEC_TO_RAD,
+                  d_dec = (new_phase_centre_dec) * ARCSEC_TO_RAD,
+                  d_decp = (old_phase_centre_dec) * ARCSEC_TO_RAD,
                   c_d_dec = cos(d_dec),
                   s_d_dec = sin(d_dec),
                   s_d_ra = sin(d_ra),
-                  c_d_ra = cos(d_ra);
-    result._l = -c_d_dec * s_d_ra;
-    result._m = -s_d_dec;
-    result._n = 1 - c_d_dec * c_d_ra;
+                  c_d_ra = cos(d_ra),
+                  c_d_decp = cos(d_decp),
+                  s_d_decp = sin(d_decp);
+    result._l = - c_d_dec * s_d_ra;
+    result._m = - (s_d_dec * c_d_decp - c_d_dec * s_d_decp * c_d_ra);
+    result._n = 1 - sqrt(1 - result._l * result._l - result._m * result._m);
   }
 #ifdef __CUDACC__
   __device__
@@ -135,7 +138,7 @@ public:
       static void
       apply_phase_transform(const lmn_coord &delta_lmn, const uvw_coord<uvw_base_type> &uvw, vec1<basic_complex<visibility_base_type> > &single_correlation)
   {
-    uvw_base_type x = 2 * M_PI * (uvw._u * delta_lmn._l + uvw._v * delta_lmn._m + uvw._w * delta_lmn._n); //as in Perley & Cornwell (1992)
+    uvw_base_type x = 2 * M_PI * (uvw._u * delta_lmn._l + uvw._v * delta_lmn._m + uvw._w * (delta_lmn._n)); //as in Perley & Cornwell (1992)
     uvw_base_type c, s;
     custom_sincos(x, &s, &c);                                   //this should not make that much of a difference in terms of gridding accuracy since we snap to grid positions and the oversampling factor is never excessively good
     basic_complex<visibility_base_type> phase_shift_term(c, s); //by Euler's identity
@@ -147,7 +150,7 @@ public:
       static void
       apply_phase_transform(const lmn_coord &delta_lmn, const uvw_coord<uvw_base_type> &uvw, vec2<basic_complex<visibility_base_type> > &duel_correlation)
   {
-    uvw_base_type x = 2 * M_PI * (uvw._u * delta_lmn._l + uvw._v * delta_lmn._m + uvw._w * delta_lmn._n); //as in Perley & Cornwell (1992)
+    uvw_base_type x = 2 * M_PI * (uvw._u * delta_lmn._l + uvw._v * delta_lmn._m + uvw._w * (delta_lmn._n)); //as in Perley & Cornwell (1992)
     uvw_base_type c, s;
     custom_sincos(x, &s, &c);                                   //this should not make that much of a difference in terms of gridding accuracy since we snap to grid positions and the oversampling factor is never excessively good
     basic_complex<visibility_base_type> phase_shift_term(c, s); //by Euler's identity
@@ -160,7 +163,7 @@ public:
       static void
       apply_phase_transform(const lmn_coord &delta_lmn, const uvw_coord<uvw_base_type> &uvw, vec4<basic_complex<visibility_base_type> > &quad_correlation)
   {
-    uvw_base_type x = 2 * M_PI * (uvw._u * delta_lmn._l + uvw._v * delta_lmn._m + uvw._w * delta_lmn._n); //as in Perley & Cornwell (1992)
+    uvw_base_type x = 2 * M_PI * (uvw._u * delta_lmn._l + uvw._v * delta_lmn._m + uvw._w * (delta_lmn._n)); //as in Perley & Cornwell (1992)
     uvw_base_type c, s;
     custom_sincos(x, &s, &c);                                   //this should not make that much of a difference in terms of gridding accuracy since we snap to grid positions and the oversampling factor is never excessively good
     basic_complex<visibility_base_type> phase_shift_term(c, s); //by Euler's identity

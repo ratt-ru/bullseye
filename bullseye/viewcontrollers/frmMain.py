@@ -56,6 +56,9 @@ from gi.repository import Gtk
 from gi.repository import Gdk
 from gi.repository import GLib
 from multiprocessing import Process
+from astropy import wcs as pywcs
+from astropy.coordinates import Angle
+from astropy import units as u
 import bullseye
 BULLSEYE_PATH = os.path.dirname(bullseye.__file__)
 
@@ -94,7 +97,24 @@ class frmMain:
 	    message = Gtk.MessageDialog(self._builder.get_object("frmMain"),0,Gtk.MessageType.ERROR,Gtk.ButtonsType.OK,"Problem running imager with given arguements\n"+traceback.format_exc())
 	    message.run()
 	    message.destroy()
-	
+
+		# Initialize WCS frame
+	  wcs = pywcs.WCS(naxis=2)
+		# note half a pixel will correspond to even sized image projection poles
+	  img_height = self._low_res_image.get_height()
+	  img_width = self._low_res_image.get_width()
+	  l0m0 = [(img_width + 1) * 0.5, (img_height + 1) * 0.5]
+	  wcs.wcs.crpix = l0m0
+	  # remember that the WCS frame uses degrees
+	  wcs.wcs.cdelt = [-np.rad2deg(quantity(self._img_cell_l, "arcsec").get_value("rad")),
+      					  	 np.rad2deg(quantity(self._img_cell_m, "arcsec").get_value("rad"))]
+	  # assume SIN image projection
+	  wcs.wcs.ctype = ["RA---SIN","DEC--SIN"]
+
+	  wcs.wcs.crval = [np.rad2deg(self._phase_centres[self._field_id,0,0]),
+	    							 np.rad2deg(self._phase_centres[self._field_id,0,1])]
+	  self._wcs = wcs
+
 	def cmd_call(self,cmd_string,callback):
 	  cmd = subprocess.Popen(cmd_string, stderr=subprocess.PIPE, shell=True)
 	  cmd_std,cmd_err = cmd.communicate()
@@ -124,7 +144,7 @@ class frmMain:
 	  itr = model.iter_next(itr)
 	  self._field_id = int(model.get_value(itr,1))
 	  self._busy_msg = Gtk.MessageDialog(None,0,Gtk.MessageType.INFO,Gtk.ButtonsType.NONE,"Hang on!")
-	  cmd_string = ("bullseye_pipeliner.py \"%s\" --output_prefix \"%s\" --output_format png --npix_l %d --npix_m %d --cell_l %d --cell_m %d"
+	  cmd_string = ("bullseye_pipeliner.py \"%s\" --output_prefix \"%s\" --output_format png --npix_l %d --npix_m %d --cell_l %.3f --cell_m %.3f"
 			" --pol %s --conv_sup %d --conv_oversamp %d --field_id %d  --average_all 1" % (self._ms_name,
 			self.IMAGE_TMP_FILE_NAME,self._img_size_l,self._img_size_m,self._img_cell_l,self._img_cell_m,
 			self._polarization,conv_support,conv_oversample,self._field_id))
@@ -259,14 +279,14 @@ class frmMain:
 			conv_oversample = int(model.get_value(itr,1))
 			
 			rect = self._builder.get_object("cvsLowRes").get_allocation()
-                        img_height = self._low_res_image.get_height()
-                        img_width = self._low_res_image.get_width()
-                        facet_ra = quantity(self._phase_centres[self._field_id,0,0],"rad").get_value("arcsec") + (-int(event.x/float(rect.width) * img_width) + img_width/2)*self._img_cell_l
-                        facet_dec = quantity(self._phase_centres[self._field_id,0,1],"rad").get_value("arcsec") + (-int(event.y/float(rect.height) * img_height) + img_height/2)*self._img_cell_m	
+			img_height = self._low_res_image.get_height()
+			img_width = self._low_res_image.get_width()
+			facet_ra = np.rad2deg(self._ra_pos) * 3600
+			facet_dec = np.rad2deg(self._dec_pos) * 3600
 			facet_centres = np.array([[facet_ra,facet_dec]],dtype=np.float32)
 			
-			cmd_string = ("bullseye_pipeliner.py \"%s\" --output_prefix \"%s\" --output_format png --npix_l %d --npix_m %d --cell_l %d"
-				      " --cell_m %d --pol %s --conv_sup %d --conv_oversamp %d --facet_centres \(%f,%f\) --field_id %d --average_all 1" % (
+			cmd_string = ("bullseye_pipeliner.py \"%s\" --output_prefix \"%s\" --output_format png --npix_l %d --npix_m %d --cell_l %.3f"
+				      " --cell_m %.3f --pol %s --conv_sup %d --conv_oversamp %d --facet_centres \(%f,%f\) --field_id %d --average_all 1" % (
 				      self._ms_name,self.FACET_TMP_FILE_NAME,facet_size_l,facet_size_m,facet_cell_l,
 				      facet_cell_m,self._polarization,conv_support,conv_oversample,
 				      int(facet_ra),int(facet_dec),self._field_id))
@@ -281,15 +301,16 @@ class frmMain:
 			handle = self._builder.get_object("cvsLowRes")
 			handle.queue_draw()
 			rect = handle.get_allocation()
-                        img_height = self._low_res_image.get_height()
-                        img_width = self._low_res_image.get_width()
-                        
-                        self._l_pos = int(event.x/float(rect.width) * img_width) 
-			self._m_pos = int(event.y/float(rect.height) * img_height) 
+			img_height = self._low_res_image.get_height()
+			img_width = self._low_res_image.get_width()
 			
+			self._l_pos = int(event.x/float(rect.width) * img_width) 
+			self._m_pos = int(event.y/float(rect.height) * img_height) 
+			c = (self._l_pos, self._m_pos)
+			self._ra_pos, self._dec_pos = np.deg2rad(self._wcs.wcs_pix2world(np.asarray([c]), 1))[0]
 			sbrMain.push(sbrMain.get_context_id("CursorPos"),"Pixel position: (x,y) = (%d,%d), (ra,dec) = (%s,%s)" % (self._l_pos, self._m_pos,
-							    		 quantity(quantity(self._phase_centres[self._field_id,0,0],"rad").get_value("arcsec") + (-self._l_pos + img_width/2)*self._img_cell_l,"arcsec").get("deg").formatted("[+-]dd.mm.ss.t.."),
-							    		 quantity(quantity(self._phase_centres[self._field_id,0,1],"rad").get_value("arcsec") + (-self._m_pos + img_height/2)*self._img_cell_m,"arcsec").get("deg").formatted("[+-]dd.mm.ss.t..")))
+							    		 Angle(self._ra_pos, unit=u.rad).to_string(unit=u.hour),
+							    		 quantity(self._dec_pos,"rad").get("deg").formatted("[+-]dd.mm.ss.t..")))
 	def __init__(self):
 		self._builder = Gtk.Builder()
 		self._builder.add_from_file(os.path.join(BULLSEYE_PATH, "viewcontrollers/main.glade"))
