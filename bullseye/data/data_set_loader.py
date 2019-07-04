@@ -47,9 +47,9 @@ import math
 import time
 import datetime
 import pylab
-import bullseye_mo.base_types as base_types 
+import bullseye.mo.base_types as base_types 
 import traceback
-from timer import timer
+from bullseye.helpers.timer import timer
 class data_set_loader(object):
     time_to_load_chunks = timer()
     '''

@@ -37,7 +37,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 '''
 
-import bullseye_mo.base_types as base_types
+import bullseye.mo.base_types as base_types
 from pyrap.quanta import quantity
 import numpy as np
 import sys

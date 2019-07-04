@@ -1,7 +1,7 @@
-recursive-include bullseye_mo/cbuild/cpu_algorithm/single lib*
-recursive-include bullseye_mo/cbuild/cpu_algorithm/double lib*
-recursive-include bullseye_mo/cbuild/gpu_algorithm/single lib*
-recursive-include bullseye_mo/cbuild/gpu_algorithm/double lib*
-recursive-include bullseye_mo/ *.py
+recursive-include bullseye/mo/cbuild/cpu_algorithm/single lib*
+recursive-include bullseye/mo/cbuild/cpu_algorithm/double lib*
+recursive-include bullseye/mo/cbuild/gpu_algorithm/single lib*
+recursive-include bullseye/mo/cbuild/gpu_algorithm/double lib*
+recursive-include bullseye/mo/ *.py
 
 recursive-include bullseye/ *.py *.glade *.png

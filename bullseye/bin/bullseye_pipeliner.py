@@ -49,14 +49,14 @@ import os
 from pyrap.quanta import quantity
 import ctypes
 
-import bullseye.helpers.channel_indexer as channel_indexer
-import bullseye.helpers.command_line_options as command_line_options
+import bullseye.parameter_handlers.channel_indexer as channel_indexer
+import bullseye.parameter_handlers.command_line_options as command_line_options
 import bullseye.helpers.facet_list_parser as facet_list_parser
-import bullseye.helpers.stokes as stokes
-import bullseye_mo.library_loader as library_loader
+import bullseye.data.stokes as stokes
+import bullseye.mo.library_loader as library_loader
 from bullseye.helpers import timer
-from bullseye.helpers import png_export
-from bullseye.helpers import fits_export 
+from bullseye.data import png_export
+from bullseye.data import fits_export 
 if __name__ == "__main__":
   total_run_time = timer.timer()
   total_run_time.start()
@@ -70,11 +70,11 @@ if __name__ == "__main__":
   Pick a backend to use
   '''
   libimaging = library_loader.load_library(parser_args['use_back_end'],parser_args['precision'])
-  from bullseye_mo import base_types
+  from bullseye.mo import base_types
   base_types.force_precision(parser_args['precision'])
-  from bullseye.helpers import data_set_loader
-  from bullseye_mo import convolution_filter
-  from bullseye_mo import gridding_parameters
+  from bullseye.data import data_set_loader
+  from bullseye.mo import convolution_filter
+  from bullseye.mo import gridding_parameters
  
   '''
   initially the output grids must be set to NONE. Memory will only be allocated before the first MS is read.

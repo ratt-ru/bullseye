@@ -62,7 +62,7 @@ from astropy import units as u
 import bullseye
 BULLSEYE_PATH = os.path.dirname(bullseye.__file__)
 
-from bullseye.helpers import data_set_loader
+from bullseye.data import data_set_loader
 from bullseye.viewcontrollers import frmFacetDisplay
 class frmMain:
 	IMAGE_TMP_FILE_NAME = "/tmp/bullseye_temp"

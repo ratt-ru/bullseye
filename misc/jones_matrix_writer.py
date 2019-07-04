@@ -42,7 +42,7 @@ import numpy as np
 import pylab
 import math
 from pyrap.tables import *
-from bullseye.helpers import data_set_loader
+from bullseye.data import data_set_loader
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="A small utility to write out a set of jones matricies to a new casa table")
 	parser.add_argument("input_ms", help="Name of MS to modify", type=str)

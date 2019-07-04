@@ -8,7 +8,6 @@ from setuptools.command.install import install
 from setuptools.command.sdist import sdist
 from distutils.command.build import build
 pkg='bullseye'
-pkg_backend='bullseye_mo'
 __version__ = "0.4.1.0"
 build_root=os.path.dirname(__file__)
 
@@ -27,7 +26,7 @@ def readme():
 def backend(compile_options):
     if compile_options is not None:
         print >> sys.stderr, "Compiling extension libraries with user defined options: '%s'"%compile_options
-    path = pjoin(build_root, pkg_backend, 'cbuild')
+    path = pjoin(build_root, pkg, "mo", 'cbuild')
     try:
         subprocess.check_call(["mkdir", path])
     except:
@@ -63,14 +62,14 @@ class custom_build(build):
 
 class custom_sdist(sdist):
     def run(self):
-        bpath = pjoin(build_root, pkg, 'cbuild')
+        bpath = pjoin(build_root, pkg, 'mo', 'cbuild')
         if os.path.isdir(bpath):
             subprocess.check_call(["rm", "-rf", bpath])
         sdist.run(self)
 
 def define_scripts():
     #these must be relative to setup.py according to setuputils
-    DDF_scripts = [os.path.join("bullseye", script_name) for script_name in ['bullseye_pipeliner.py', 'bullseye_gui.py']]
+    DDF_scripts = [os.path.join("bullseye", "bin", script_name) for script_name in ['bullseye_pipeliner.py', 'bullseye_gui.py']]
     return DDF_scripts
 
 setup(name=pkg,
@@ -94,7 +93,7 @@ setup(name=pkg,
               'sdist': custom_sdist,
               'build': custom_build
              },
-    packages=['bullseye', 'bullseye_mo'],
+    packages=['bullseye'],
     scripts=define_scripts(),
     install_requires=['numpy','matplotlib<=1.5.0','scipy','python-casacore<=3.0.0','astropy<=3.0','pycairo','PyGObject'],
     include_package_data=True,

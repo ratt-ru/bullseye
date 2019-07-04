@@ -38,9 +38,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 '''
 
 import argparse
-from bullseye.helpers.coord_extractor import *
-from bullseye.helpers.stokes import *
-from bullseye.helpers.channel_list_extractor import *
+from bullseye.parameter_handlers.coord_extractor import *
+from bullseye.data.stokes import *
+from bullseye.parameter_handlers.channel_list_extractor import *
 
 def build_command_line_options_parser():
   parser = argparse.ArgumentParser(description='Bullseye: An implementation of targetted facet-based synthesis imaging in radio astronomy.')
@@ -57,7 +57,7 @@ def build_command_line_options_parser():
   parser.add_argument('--conv_sup', help='Specify gridding convolution function half support area (number of convolution function cells)', type=int, default=5)
   parser.add_argument('--conv_oversamp', help='Specify gridding convolution function oversampling multiplier', type=int, default=63)
   parser.add_argument('--output_format', help='Specify image output format', choices=["fits","png"], default="fits")
-  parser.add_argument('--no_chunks', help='Specify number of chunks to split measurement set into (useful to handle large measurement sets / overlap io and compute)', type=int, default=10)
+  parser.add_argument('--no_chunks', help='Specify number of chunks to split measurement set into (useful to handle large measurement sets / overlap io and compute)', type=int, default=25)
   parser.add_argument('--field_id', help='Specify the id of the field (pointing) to image', type=int, default=0)
   parser.add_argument('--data_column', help='Specify the measurement set data column being imaged', type=str, default='DATA')
   parser.add_argument('--do_jones_corrections',help='Enables applying corrective jones terms per facet. Requires number of'
