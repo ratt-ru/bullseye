@@ -107,7 +107,7 @@ class frmMain:
 	  wcs.wcs.crpix = l0m0
 	  # remember that the WCS frame uses degrees
 	  wcs.wcs.cdelt = [-np.rad2deg(quantity(self._img_cell_l, "arcsec").get_value("rad")),
-      					  	 np.rad2deg(quantity(self._img_cell_m, "arcsec").get_value("rad"))]
+      					  	 -np.rad2deg(quantity(self._img_cell_m, "arcsec").get_value("rad"))]
 	  # assume SIN image projection
 	  wcs.wcs.ctype = ["RA---SIN","DEC--SIN"]
 

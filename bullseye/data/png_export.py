@@ -39,6 +39,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 import pylab
 def png_export(image,output_prefix,freq_dim_frequencies):
-  i = pylab.imshow(image[::-1,:],interpolation='nearest',cmap = pylab.get_cmap('hot'))
+  i = pylab.imshow(image[:, :],interpolation='nearest',cmap = pylab.get_cmap('cubehelix'))
   i.write_png(output_prefix+'.png',noscale=True)
   pylab.close('all')
